@@ -1,0 +1,14 @@
+# Static site: no build step, the files are served as they are.
+[build]
+  publish = "."
+
+# Always check for a newer app version, so a change reaches every phone
+# the next time it opens the app.
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/config.js"
+  [headers.values]
+    Cache-Control = "no-cache"
