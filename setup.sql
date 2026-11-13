@@ -118,3 +118,21 @@ grant execute on function public.is_member()                       to authentica
 
 -- The workshop login allowed in. Add more lines like this for more logins.
 insert into public.members (email) values ('kunal@motoreez.com') on conflict do nothing;
+
+-- -- STORAGE START --
+-- Walk-round photos and videos: a private folder ("bucket") that only the
+-- workshop login can read or add to. Up to 150 MB a file, for the video.
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('media', 'media', false, 157286400)
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit;
+
+drop policy if exists "motoreez media read" on storage.objects;
+create policy "motoreez media read" on storage.objects for select to authenticated
+  using (bucket_id = 'media' and public.is_member());
+drop policy if exists "motoreez media add" on storage.objects;
+create policy "motoreez media add" on storage.objects for insert to authenticated
+  with check (bucket_id = 'media' and public.is_member());
+drop policy if exists "motoreez media replace" on storage.objects;
+create policy "motoreez media replace" on storage.objects for update to authenticated
+  using (bucket_id = 'media' and public.is_member()) with check (bucket_id = 'media' and public.is_member());
+-- -- STORAGE END --

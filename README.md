@@ -5,7 +5,7 @@ The Motoreez workshop app: job cards, store, billing, ledgers, staff and job cha
 - `index.html`: the whole app
 - `sw.js`: shows the phone's own notifications; caches nothing
 - `config.js`: which Supabase project the app talks to (URL and publishable key only)
-- `setup.sql`: the database setup, already run once in Supabase
+- `setup.sql`: the database setup. Safe to run again; the V2 update adds the private photo and video store at the end
 - `netlify.toml`: tells Netlify to serve the files as they are
 
 Every push to `main` goes live on Netlify automatically. The workshop's data lives
