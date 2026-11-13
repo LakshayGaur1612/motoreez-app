@@ -532,6 +532,9 @@ body.thermal{--tap:44px}
 .phonebox select.ccsel{flex:0 0 150px; min-width:0}
 .phonebox input{flex:1; min-width:0}
 @media(max-width:480px){ .phonebox select.ccsel{flex-basis:118px} }
+.btn.warn{border-color:var(--amber); background:var(--amber-bg); color:var(--ink)}
+.grid4{display:grid; grid-template-columns:repeat(4,1fr); gap:10px}
+@media(max-width:700px){ .grid4{grid-template-columns:repeat(2,1fr)} }
 /* ---------- walk-round photo slots ---------- */
 .mgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:10px}
 .mslot{position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
@@ -1195,7 +1198,7 @@ var WRITES=['saveIntake','saveJobEdit','sendPricing','sendEstDo','ownerOkDo','cu
   'countCashDo','advanceDo','saveSalary','saveWorkshop','addUserDo','restoreDo','fitsSave','fitAdd',
   'verifyExp','verifyPay','reversePayDo','autoFit','sendAddDo','dropAddDo','custOkTop',
   'bookNew','bookArrive','bookDrop','remindMark','voidReturnDo','salesReturnDo','purchReturnDo',
-  'dviDone','dviSet','readyDo','advDo','plateRenewDo','newSale','saleShip','saleDiscardDo','saleParty','saleNoParty','saleBike','finAddDo','finDone','sendInvDo','invPdf','fitAdd','kitAdd','kitAll','kitsSave','loadReal','loadDemo','loadParts','backupAll',
+  'dviDone','dviSet','readyDo','advDo','advDelDo','labNewDo','labDelDo','updDo','plateRenewDo','newSale','saleShip','saleDiscardDo','saleParty','saleNoParty','saleBike','finAddDo','finDone','sendInvDo','invPdf','fitAdd','kitAdd','kitAll','kitsSave','loadReal','loadDemo','loadParts','backupAll',
   'toggleReq','toggleLine','billOpt','attTap','toggleUser','clearParts','clearStore','importRun','pinSave',
   'chatSend','chatDel','techSave','kitsReset','soldYes','soldUndo'];
 "use strict";
@@ -2247,12 +2250,14 @@ function billSplit(job){
 }
 /* what this customer still owes on this job: before billing, against what
    they approved; once billed, against the bills */
+/* before the customer approves, the estimate is everything on the card */
+function estimateTotal(job){ return (job.approvals&&job.approvals.customer)?approvedTotal(job):sumLines(mainLines(job)); }
 function jobDue(job){
   var paidAdv=(job.advance&&job.advance.paise)||0;
   var fin=(job.bills||[]).filter(function(b){ return b.status==='final'; });
   var billed=fin.reduce(function(a,b){ return a+billCalc(job,b).grand; },0);
   var paid=fin.reduce(function(a,b){ return a+(b.payments||[]).reduce(function(x,p){ return x+p.paise; },0); },0);
-  var due=(billed||approvedTotal(job))+(fin.length?sumLines(unbilledApproved(job)):0);
+  var due=(billed||estimateTotal(job))+(fin.length?sumLines(unbilledApproved(job)):0);
   return due-paidAdv-paid;
 }
 function liveBills(job){ return (job.bills||[]).filter(function(b){return b.status!=='cancelled';}); }
@@ -3286,8 +3291,11 @@ function viewIntake(){
      '<input type="text" id="f_modelother" name="modelother" placeholder="Model name"></div></div>'+
      '<div class="two"><div class="field"><label>Engine cc</label>'+
      '<input type="text" name="cc" id="f_cc" inputmode="numeric" placeholder="fills itself" value="'+esc(d.cc||'')+'"></div>'+
-     '<div class="field"><label class="req">Odometer (km)</label>'+
-     '<input type="number" name="odo" inputmode="numeric" placeholder="18420" value="'+esc(d.odo||'')+'"></div></div>'+
+     '<div class="field"><label class="req" id="odolabel">Odometer (km)</label>'+
+     '<input type="number" name="odo" inputmode="numeric" placeholder="18420" value="'+esc(d.odo||'')+'">'+
+     '<div class="btn-row" style="margin-top:8px">'+
+     '<button type="button" class="chip" data-act="tog" data-v="meterbad" aria-pressed="false">Meter not working</button>'+
+     '<button type="button" class="chip" data-act="tog" data-v="meterrep" aria-pressed="false">Meter replaced</button></div></div></div>'+
      '<div class="field"><label>Fuel in tank</label><div class="seg" id="fuelseg">'+
      ['E','1/4','1/2','3/4','F'].map(function(f){
        return '<button data-act="fuel" data-v="'+f+'" aria-pressed="'+((d.fuel||'1/2')===f)+'">'+f+'</button>'; }).join('')+
@@ -3409,6 +3417,7 @@ function applyDraft(){
     var k=b.dataset.act+':'+(b.dataset.v||b.textContent.trim());
     if(o.tiles[k]) b.setAttribute('aria-pressed','true');
   });
+  paintOdo();
   if(document.getElementById('jobtypes')) reorderReq(pickedTypes());
   toast('Picked up where you left off','good');
 }
@@ -3528,9 +3537,9 @@ function doLookup(){
         'Ask if the permanent number has arrived.<div class="btn-row" style="margin-top:8px">'+
         '<button class="btn sm" data-act="plateRenew" data-k="'+esc(k)+'">The number has changed</button></div></div>':'')+
     '<div class="banner" style="margin-bottom:14px"><div class="eyebrow" style="color:var(--ink)">We know this bike</div>'+
-    '<div style="font-size:19px;font-weight:800;margin:4px 0">'+esc((bike&&bike.make)||visits[0].make)+' '+esc((bike&&bike.model)||visits[0].model)+'</div>'+
-    '<div style="font-weight:700">'+esc((bike&&bike.name)||visits[0].name)+
-    (seePhone()?' · <span class="mono">'+esc(fmtPhone((bike&&bike.phone)||visits[0].phone||''))+'</span>':'')+'</div>'+
+    '<div style="font-size:19px;font-weight:800;margin:4px 0">'+esc((bike&&bike.make)||(visits[0]||{}).make||'')+' '+esc((bike&&bike.model)||(visits[0]||{}).model||'')+'</div>'+
+    '<div style="font-weight:700">'+esc((bike&&bike.name)||(visits[0]||{}).name||'')+
+    (seePhone()?' · <span class="mono">'+esc(fmtPhone((bike&&bike.phone)||(visits[0]||{}).phone||''))+'</span>':'')+'</div>'+
     (bike&&bike.lastOdo?'<div class="small" style="margin-top:4px">Last odometer here: <b class="mono">'+esc(bike.lastOdo)+' km</b></div>':'')+
     '<button class="btn sm" style="margin-top:10px;background:var(--surface)" data-act="useKnown">Fill in these details</button></div>';
   if(visits.length){
@@ -3736,6 +3745,12 @@ function mediaSlots(){
   var extras=Object.keys(MEDIA_DRAFT).filter(function(k){ return k.indexOf('extra')===0; }).sort();
   return {extras:extras};
 }
+function paintOdo(){
+  var bad=tilePressed('meterbad'), o=document.querySelector('#intakeform [name="odo"]'), l=document.getElementById('odolabel');
+  if(o){ o.disabled=bad; if(bad) o.value=''; o.placeholder=bad?'Not working':'18420'; }
+  if(l) l.className=bad?'':'req';
+}
+function tilePressed(v){ var b=document.querySelector('#intakeform [data-act="tog"][data-v="'+v+'"]'); return !!(b&&b.getAttribute('aria-pressed')==='true'); }
 function intakeMediaMissing(){
   var miss=[];
   MEDIA_SIDES.forEach(function(s){ if(!MEDIA_DRAFT[s[0]]) miss.push(s[1].toLowerCase()); });
@@ -4456,12 +4471,15 @@ async function saveIntake(){
   if(ptype==='none'&&!reg) reg='NOPLATE'+Date.now().toString(36).toUpperCase();
   var plateErr=plateProblem(ptype,reg);
   var known=S.core.bikes[reg];
+  var meterBad=tilePressed('meterbad'), meterRep=tilePressed('meterrep');
   var ownerClash=(known&&known.phone&&ph.ok&&phoneKey(known.phone)!==phoneKey(ph.e164)&&g('newowner')!=='1')?known:null;
   var need=[
     ['registration number', '#f_reg',                       reg.length<4&&!plateErr],
     ['make',                other?'#f_makeother':'#f_make', !make],
     ['model',               (other||rawModel==='__other')?'#f_modelother':'#f_model', !model],
-    ['odometer',            '[name="odo"]',                 !g('odo')],
+    ['odometer (or tick \u201cMeter not working\u201d)', '[name="odo"]', !g('odo')&&!meterBad],
+    ['odometer \u2014 lower than last time ('+(known&&known.lastOdo)+' km). Check it, or tick \u201cMeter replaced\u201d',
+                            '[name="odo"]', !!(g('odo')&&known&&known.lastOdo&&+g('odo')<+known.lastOdo&&!meterRep)],
     ['customer name',       '[name="cname"]',               !g('cname')],
     ['phone'+(ph.why&&!ph.empty?' \u2014 '+ph.why:''), '[name="cphone"]', !ph.ok],
     ['registration number \u2014 '+(plateErr||''), '#f_reg', !!plateErr],
@@ -4501,6 +4519,8 @@ async function saveIntake(){
   var fsel=document.querySelector('#fuelseg [aria-pressed="true"]');
   j.fuel=fsel?fsel.dataset.v:'1/2';
   j.plateType=ptype; if(ptype==='foreign') j.plateCountry=g('platecountry');
+  if(meterBad){ j.meterBad=true; j.odo=''; }
+  if(meterRep) j.meterReplaced=true;
   j.cust={name:titleCase(g('cname')),phone:ph.e164,gstin:gi&&gi.ok?gi.raw:'',
     address:titleCase(g('caddr'))};
   var party=findOrMakeCustomer(j.cust.name, j.cust.phone, {gstin:j.cust.gstin, address:j.cust.address});
@@ -4526,7 +4546,7 @@ async function saveIntake(){
   var prevBike=S.core.bikes[reg]||{};
   if(g('newowner')==='1'&&prevBike.phone) logIt(j,'Bike has a new owner','Was '+(prevBike.name||'')+' \u00B7 '+fmtPhone(prevBike.phone));
   S.core.bikes[reg]=Object.assign(prevBike,{reg:reg,make:j.make,model:j.model,cc:j.cc,name:j.cust.name,phone:j.cust.phone,
-    gstin:j.cust.gstin,address:j.cust.address,lastOdo:j.odo,lastVisit:Date.now(),plateType:ptype,
+    gstin:j.cust.gstin,address:j.cust.address,lastOdo:(j.meterBad?prevBike.lastOdo:j.odo)||'',lastVisit:Date.now(),plateType:ptype,
     plateCountry:ptype==='foreign'?g('platecountry'):(prevBike.plateCountry||'')});
   await saveCore();
   var saved=await saveJob(j);
@@ -4582,7 +4602,7 @@ function viewJob(){
        : esc(j.cust.name)))+
      (seePhone()?kv('Phone','<a href="tel:'+esc(j.cust.phone)+'" class="mono">'+esc(fmtPhone(j.cust.phone))+'</a>'):'')+
      (j.cust.gstin?kv('GSTIN','<span class="mono">'+esc(j.cust.gstin)+'</span>'):'')+
-     kv('Odometer','<span class="mono">'+esc(j.odo)+' km</span>')+
+     kv('Odometer',j.meterBad?'<span class="tag t-amber">Meter not working</span>':'<span class="mono">'+esc(j.odo)+' km</span>'+(j.meterReplaced?' <span class="small muted">meter replaced</span>':''))+
      kv('Fuel',esc(j.fuel))+
      kv('Came in for',esc(jobTypesOf(j).map(titleCase).join(' + ')||'\u2014'))+
      kv('Taken in',dts(j.createdAt)+'<br><span class="small muted">by '+esc(coreUser(j.createdBy).name)+'</span>')+
@@ -4590,7 +4610,7 @@ function viewJob(){
      kv('Technician',(j.mechanicId?esc(coreUser(j.mechanicId).name):'<span class="tag t-amber">To be allocated</span>')+
        (can('tech.assign')&&j.stage!=='closed'?' <button class="btn sm" style="margin-left:8px" data-act="techModal">'+(j.mechanicId?'Change':'Allocate')+'</button>':''))+
      (seeMoney()?kv('Advance received',(j.advance&&j.advance.paise?'<span class="money">'+money(j.advance.paise)+'</span>':'<span class="muted">none</span>')+
-        (can('pay.take')&&j.stage!=='closed'?' <button class="btn sm" style="margin-left:8px" data-act="advModal">+ Add</button>':''))+
+        (can('pay.take')&&j.stage!=='closed'?' <button class="btn sm" style="margin-left:8px" data-act="advModal">+ Add</button>':''))+advList(j)+
       kv('Balance against this job','<b class="money" style="color:'+(jobDue(j)>0?'var(--red)':'var(--green)')+'">'+money(Math.max(0,jobDue(j)))+'</b>'+
         (jobDue(j)<0?' <span class="small muted">'+money(-jobDue(j))+' paid ahead</span>':'')):'')+
      '</div></div>';
@@ -5061,6 +5081,10 @@ function jobActionBar(j){
   if(st==='customer_ok'&&!j.mechanicId){
     b.push(can('tech.assign')?P('Allocate a technician','techModal'):'<button class="btn lg" disabled>Waiting for a technician</button>');
   } else if(st==='customer_ok'&&can('work.tick')) b.push(P('Start work','startWork'));
+  if(st!=='closed'&&can('estimate.send')&&!j.direct){
+    var nc=updChanges(j);
+    b.push('<button class="btn lg'+(nc?' warn':'')+'" data-act="updModal">'+(nc?'Send update \u00B7 '+nc+' new':'Send update')+'</button>');
+  }
   var askFin=(st==='in_progress'||st==='work_done')&&can('job.edit')&&finCanAsk(j).length&&!finPending(j).length;
   if(st==='in_progress'){
     var waiting=pendingAdditions(j)[0];
@@ -5115,7 +5139,7 @@ function viewJobMechanic(j){
   h+='<div class="card"><div class="card-h"><h2>Customer complaint</h2></div><div class="card-b">'+
     '<div style="font-size:18px;font-weight:600;line-height:1.5;border-left:5px solid var(--hivis);padding-left:12px">'+esc(j.complaint)+'</div>'+
     (j.voice?'<button class="btn" style="margin-top:12px;width:100%" data-act="playVoice">\u25B6 Hear the customer \u00B7 '+vTime(j.voice.ms)+'</button><div id="voiceplay"></div>':'')+
-    '<div class="sub" style="margin:14px -14px -14px">'+kv('Odometer','<span class="mono">'+esc(j.odo)+' km</span>')+kv('Fuel',esc(j.fuel))+
+    '<div class="sub" style="margin:14px -14px -14px">'+kv('Odometer',j.meterBad?'Meter not working':'<span class="mono">'+esc(j.odo)+' km</span>')+kv('Fuel',esc(j.fuel))+
     (j.damage?kv('Damage noted','<span style="color:var(--red)">'+esc(j.damage)+'</span>'):'')+'</div></div></div>';
   h+=sectionChat(j);
   h+=sectionMedia(j);
@@ -5187,6 +5211,8 @@ var CATEGORIES=['Engine','Brakes','Suspension','Transmission','Electrical','Body
 
 /* ---------- lookups ---------- */
 function pkey(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+/* the things that sit on a shelf; labour lives only under Labour rates */
+function shelfParts(){ return PARTS.filter(function(p){ return !isLabour(p); }); }
 function partById(id){ for(var i=0;i<PARTS.length;i++) if(PARTS[i].id===id) return PARTS[i]; return null; }
 function partByNo(no){
   var k=pkey(no);
@@ -5252,7 +5278,7 @@ function stockValue(){
 /* Parts the books say you have less than none of. The shelf is the truth,
    so nothing is blocked \u2014 but somebody has to go and count these. */
 function negativeStock(){
-  return PARTS.map(function(p){ return {part:p, qty:stockOf(p.id)}; })
+  return shelfParts().map(function(p){ return {part:p, qty:stockOf(p.id)}; })
     .filter(function(x){ return x.qty<0; })
     .sort(function(a,b){ return a.qty-b.qty; });
 }
@@ -7015,9 +7041,9 @@ function suggestFits(part){
   return out.slice(0,24);
 }
 function fitCoverage(){
-  var mapped=PARTS.filter(function(p){ return (p.fits||[]).length; }).length;
-  return {mapped:mapped, total:PARTS.length,
-    pct:PARTS.length?Math.round(mapped*100/PARTS.length):0};
+  var sp=shelfParts(), mapped=sp.filter(function(p){ return (p.fits||[]).length; }).length;
+  return {mapped:mapped, total:sp.length,
+    pct:sp.length?Math.round(mapped*100/sp.length):0};
 }
 async function setFits(partId,keys){
   var p=partById(partId); if(!p) return;
@@ -8537,17 +8563,17 @@ function repStaffSales(R){
 
 /* ---------- items ---------- */
 function repStock(){
-  var rows=PARTS.map(function(p){
+  var rows=shelfParts().map(function(p){
     var q=stockOf(p.id), c=costOf(p.id);
     return {name:p.name, no:p.no, cat:p.category||'', qty:q, unit:p.unit,
       cost:money(c), value:money(q>0?Math.round(q*c):0)};
   }).sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
   return repTable([{k:'no',label:'Part number',mono:1},{k:'name',label:'Name'},{k:'cat',label:'Category'},
     {k:'qty',label:'On the shelf',num:1},{k:'unit',label:'Unit'},{k:'cost',label:'Cost',num:1},
-    {k:'value',label:'Value',num:1}],rows,{no:'',name:PARTS.length+' items',value:money(stockValue())});
+    {k:'value',label:'Value',num:1}],rows,{no:'',name:shelfParts().length+' items',value:money(stockValue())});
 }
 function repLowStock(){
-  var rows=PARTS.map(function(p){ return {p:p,q:stockOf(p.id)}; })
+  var rows=shelfParts().map(function(p){ return {p:p,q:stockOf(p.id)}; })
     .filter(function(x){ return x.q<=0||(x.p.minQty&&x.q<=x.p.minQty); })
     .sort(function(a,b){ return a.q-b.q; })
     .map(function(x){ return {no:x.p.no, name:x.p.name, qty:x.q, unit:x.p.unit,
@@ -10785,13 +10811,13 @@ function printLedger(partyId){
    THE DESK — purchases, the parts master, stock and suppliers.
    A different room from the shop floor: sat down, both hands, keyboard.
    ===================================================================== */
-var DESKTABS=[['purch','Purchases'],['parts','Parts'],['stock','Stock'],['supp','Suppliers']];
+var DESKTABS=[['purch','Purchases'],['parts','Parts'],['labour','Labour rates'],['stock','Stock'],['supp','Suppliers']];
 
 function viewDesk(){
   var tab=S.view.tab||'purch';
   var h='<div style="display:flex;align-items:center;gap:12px;margin:16px 0 4px;flex-wrap:wrap">'+
     '<h1>The store</h1>'+
-    '<span class="muted small">'+PARTS.length+' parts \u00B7 '+SUPPLIERS.length+' suppliers'+
+    '<span class="muted small">'+shelfParts().length+' parts \u00B7 '+labourItems().length+' labour jobs \u00B7 '+SUPPLIERS.length+' suppliers'+
     (seeMoney()?' \u00B7 stock worth <b class="money">'+money(stockValue())+'</b>':'')+'</span></div>';
   if(can('reports')&&PURCHASES.length){
     var bought=0, credit=0;
@@ -10806,14 +10832,84 @@ function viewDesk(){
   if(tab==='parts') h+=deskParts();
   if(tab==='stock') h+=deskStock();
   if(tab==='supp')  h+=deskSuppliers();
+  if(tab==='labour') h+=deskLabour();
   h+='<div class="actionbar"><div class="actionbar-in">'+
           (tab==='purch'?'<button class="btn primary lg" data-act="newPurchase">+ New Purchase Bill</button>':'')+
      (tab==='parts'?'<button class="btn primary lg" data-act="newPart">+ Add a part</button>':'')+
      (tab==='stock'?'<button class="btn primary lg" data-act="adjustStock">Correct the stock</button>':'')+
      (tab==='supp'?'<button class="btn primary lg" data-act="newSupplier">+ Add a supplier</button>':'')+
+     (tab==='labour'&&canRates()?'<button class="btn primary lg" data-act="labNew">+ Add a labour job</button>':'')+
      '</div></div>';
   return h;
 }
+
+/* ---------------- labour rates ----------------
+   One rate per labour job. The list starts from the labour named in
+   "What each job usually needs", so only the rates need typing. Changing a
+   price on one job card is still possible, and is logged there. */
+function canRates(){ return can('price.set'); }
+function labourItems(){ return PARTS.filter(isLabour).sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); }); }
+function seedLabour(){
+  var have={}, added=0;
+  PARTS.filter(isLabour).forEach(function(p){ have[String(p.name).toLowerCase()]=1; });
+  var kits=parseKits(kitsText());
+  Object.keys(kits).forEach(function(job){
+    kits[job].forEach(function(it){
+      if(it.kind!=='labour') return;
+      var nm=titleCase(it.name), k=nm.toLowerCase(); if(have[k]) return; have[k]=1;
+      PARTS.push({id:uid('pt'), no:'LAB-'+pkey(nm).slice(0,18), name:nm, category:'Labour', hsn:'998714', gst:18,
+        unit:'job', buyUnit:'job', conv:1, sale:0, mrp:0, aliases:[], createdAt:Date.now(), updatedAt:Date.now()});
+      added++;
+    });
+  });
+  return added;
+}
+function deskLabour(){
+  var ls=labourItems(), edit=canRates(), unpriced=ls.filter(function(p){ return !p.sale; }).length;
+  var h='<p class="small muted" style="margin:6px 0 10px">'+ls.length+' labour jobs'+(unpriced?' \u00B7 <b style="color:var(--amber)">'+unpriced+' without a rate yet</b>':'')+
+    '. Rates include GST. A job ticked on a job card brings its labour in at this rate.</p>';
+  if(!ls.length) return h+'<div class="empty"><b>No labour jobs yet.</b></div>';
+  h+='<div class="card"><div class="card-b tight" style="overflow-x:auto"><table class="lines"><thead><tr><th>Labour job</th><th>SAC</th><th class="num">GST</th><th class="num">Rate (\u20B9)</th>'+(edit?'<th></th>':'')+'</tr></thead><tbody>';
+  ls.forEach(function(p){
+    h+='<tr><td>'+(edit?'<input type="text" data-lab="name" data-id="'+p.id+'" value="'+esc(p.name)+'" style="min-height:40px;font-size:14px">':'<b>'+esc(p.name)+'</b>')+'</td>'+
+      '<td class="mono small">'+esc(p.hsn||'')+'</td><td class="num small">'+(p.gst||0)+'%</td>'+
+      '<td class="num">'+(edit?'<input type="number" step="0.01" inputmode="decimal" data-lab="rate" data-id="'+p.id+'" value="'+(p.sale?paiseToInput(p.sale):'')+'" placeholder="set rate" style="min-height:40px;width:120px;text-align:right">'
+                          :(p.sale?'<b class="money">'+money(p.sale)+'</b>':'<span class="muted">\u2014</span>'))+'</td>'+
+      (edit?'<td class="num"><button class="btn sm danger" data-act="labDel" data-id="'+p.id+'">\u2715</button></td>':'')+'</tr>';
+  });
+  return h+'</tbody></table></div></div>';
+}
+async function labSet(id,f,v){
+  var p=partById(id); if(!p||!canRates()) return;
+  if(f==='rate'){ var was=p.sale||0; p.sale=toPaise(v)||0; if(was!==p.sale) logAudit('Labour rate',p.name,money(was)+' \u2192 '+money(p.sale),p.no); }
+  if(f==='name'){ var nm=titleCase(v); if(!nm) return; logAudit('Labour rate','Renamed',p.name+' \u2192 '+nm,p.no); p.name=nm; }
+  p.updatedAt=Date.now(); await saveStore('parts'); await saveAudit(); toast('Saved','good');
+}
+function labNew(){
+  openModal('<h2>Add a labour job</h2>'+
+    '<div class="field" style="margin-top:12px"><label class="req">Name</label><input type="text" name="labname"></div>'+
+    '<div class="two"><div class="field"><label>Rate incl. GST (\u20B9)</label><input type="number" step="0.01" name="labrate" inputmode="decimal"></div>'+
+    '<div class="field"><label>GST</label><select name="labgst">'+gstOpts(18)+'</select></div></div>'+
+    '<div class="btn-row"><button class="btn" data-act="closeModal">Cancel</button><button class="btn primary" data-act="labNewDo">Add it</button></div>');
+}
+async function labNewDo(){
+  var g=function(n){ var e=document.querySelector('.sheet [name="'+n+'"]'); return e?e.value.trim():''; };
+  var nm=titleCase(g('labname')); if(!nm){ toast('Give it a name','bad'); return; }
+  if(PARTS.some(function(p){ return isLabour(p)&&String(p.name).toLowerCase()===nm.toLowerCase(); })){ toast('That labour job is already on the list','bad'); return; }
+  PARTS.push({id:uid('pt'), no:'LAB-'+pkey(nm).slice(0,18), name:nm, category:'Labour', hsn:'998714', gst:parseInt(g('labgst')||18,10),
+    unit:'job', buyUnit:'job', conv:1, sale:toPaise(g('labrate'))||0, mrp:0, aliases:[], createdAt:Date.now(), updatedAt:Date.now()});
+  await saveStore('parts'); closeModal(); rerender(); toast(nm+' added','good');
+}
+async function labDel(id){
+  var p=partById(id); if(!p||!canRates()) return;
+  PARTS=PARTS.filter(function(x){ return x.id!==id; });
+  logAudit('Labour rate','Removed',p.name,p.no); await saveAudit();
+  await saveStore('parts'); rerender(); toast(p.name+' removed');
+}
+document.addEventListener('change',function(e){
+  var f=e.target.dataset&&e.target.dataset.lab; if(!f) return;
+  labSet(e.target.dataset.id,f,e.target.value);
+});
 
 /* ---------------- purchases ---------------- */
 function deskPurchases(){
@@ -10992,10 +11088,10 @@ function paintSupplierResults(){
 /* ---------------- parts master ---------------- */
 function deskParts(){
   var q=(S.pq||'').trim();
-  var list=q?findParts(q,''):PARTS.slice().sort(function(a,b){ return (b.updatedAt||0)-(a.updatedAt||0); });
+  var list=(q?findParts(q,''):PARTS.slice().sort(function(a,b){ return (b.updatedAt||0)-(a.updatedAt||0); })).filter(function(p){ return !isLabour(p); });
   var h='<div class="searchbar" style="position:static;margin:0;padding:0 0 10px;border:0">'+
     '<input type="text" id="pq" placeholder="Part number or name" value="'+esc(S.pq||'')+'" autocomplete="off"></div>';
-  if(!PARTS.length) return h+'<div class="empty"><b>No parts yet.</b>They appear here on their own as you enter purchase bills.</div>';
+  if(!shelfParts().length) return h+'<div class="empty"><b>No parts yet.</b>They appear here on their own as you enter purchase bills.</div>';
   var fc=fitCoverage();
   if(fc.mapped<fc.total){
     h+='<div class="banner '+(fc.pct>60?'info':'warn')+' small" style="margin-bottom:10px">'+
@@ -11089,10 +11185,10 @@ function moveLabel(k){
 
 /* ---------------- stock ---------------- */
 function deskStock(){
-  var rows=PARTS.map(function(p){ return {p:p, q:stockOf(p.id)}; });
+  var rows=shelfParts().map(function(p){ return {p:p, q:stockOf(p.id)}; });
   var low=rows.filter(function(r){ return r.q<=0||(r.p.minQty&&r.q<=r.p.minQty); });
   var h='';
-  if(!PARTS.length) return '<div class="empty"><b>Nothing in stock yet.</b>New Purchase Bill to start.</div>';
+  if(!rows.length) return '<div class="empty"><b>Nothing in stock yet.</b>New Purchase Bill to start.</div>';
   var neg=negativeStock();
   if(neg.length){
     h+='<div class="card" style="border-color:var(--red)"><div class="card-h" style="background:var(--red-bg);border-color:var(--red)">'+
@@ -11508,7 +11604,7 @@ function adjustModal(){
 function paintAdjResults(){
   var box=document.getElementById('adjres'), inp=document.getElementById('adjsearch');
   if(!box||!inp) return;
-  var res=findParts(inp.value,'');
+  var res=findParts(inp.value,'part');
   box.innerHTML=inp.value.trim()
     ? (res.length?'<div class="presults" style="max-height:180px">'+res.map(function(p){
         return '<button class="partrow" data-act="adjPick" data-id="'+p.id+'"><div style="flex:1">'+
@@ -11945,6 +12041,7 @@ function viewBill(){
     (j.direct?'<span class="tag t-blue">'+esc(channelName(j.channel))+'</span>':'<span class="plate">'+esc(regShow(j.reg))+'</span>')+
     '<div><div class="jid">'+esc(j.no)+'</div><div style="font-weight:800">'+esc(j.cust.name||'Walk-in customer')+'</div></div></div>';
 
+  h+=moneySummary(j);
   h+='<div class="card"><div class="card-h"><h2>'+(j.direct?'Items':'Approved')+'</h2></div><div class="card-b">'+
     (j.direct?'':'<div class="totrow"><span>Estimate approved by customer</span><span class="money">'+money(j.approvals.customer?j.approvals.customer.amount:0)+'</span></div>');
   j.additions.filter(function(a){return a.customer;}).forEach(function(a){
@@ -11968,27 +12065,128 @@ function viewBill(){
   h+='<div class="actionbar"><div class="actionbar-in"><button class="btn lg" data-act="backToJob">'+(j.direct?'Back to the sale':'Back to job card')+'</button></div></div>';
   return h;
 }
+/* ---- keeping the customer told: what is done, what is left, what was added ---- */
+var UPD_SKIP=['Customer updated','Viewed','Job card corrected'];
+function updChanges(j){
+  var since=j.lastUpdateAt||j.createdAt||0;
+  return (j.log||[]).filter(function(e){ return (e.ts||e.at||0)>since&&UPD_SKIP.indexOf(e.action)<0; }).length;
+}
+function updText(j){
+  var W=S.core.workshop, since=j.lastUpdateAt||0, ap=approvedLines(j);
+  var done=ap.filter(function(l){ return l.done; }), left=ap.filter(function(l){ return !l.done; });
+  var pend=(j.lines||[]).filter(function(l){ return !l.void&&!batchApproved(j,l.batch); });
+  var added=(j.lines||[]).filter(function(l){ return !l.void&&since&&l.addedAt>since; });
+  var fin=finTasks(j);
+  var t='Namaste '+j.cust.name+',\n\nUpdate on your '+j.make+' '+j.model+' ('+regShow(j.reg)+') at '+W.name+'.\n'+
+    'Now: '+stageName(j.stage)+'\n';
+  if(done.length||fin.some(function(x){ return x.done; })){
+    t+='\nDone:\n'+done.map(function(l){ return '\u2713 '+l.desc; }).join('\n');
+    fin.filter(function(x){ return x.done; }).forEach(function(x){ t+='\n\u2713 '+x.label; });
+    t+='\n';
+  }
+  if(left.length||fin.some(function(x){ return !x.done; })){
+    t+='\nStill to do:\n'+left.map(function(l){ return '\u2022 '+l.desc; }).join('\n');
+    fin.filter(function(x){ return !x.done; }).forEach(function(x){ t+='\n\u2022 '+x.label; });
+    t+='\n';
+  }
+  if(added.length) t+='\nAdded since our last message:\n'+added.map(function(l){ return '+ '+l.desc+' \u2014 '+money(lineAmount(l)); }).join('\n')+'\n';
+  if(pend.length) t+='\nWaiting for your OK:\n'+pend.map(function(l){ return '? '+l.desc+' \u2014 '+money(lineAmount(l)); }).join('\n')+'\n';
+  var due=jobDue(j);
+  t+='\nSo far: '+money(estimateTotal(j))+((j.advance&&j.advance.paise)?' \u00B7 advance '+money(j.advance.paise):'')+' \u00B7 balance '+money(Math.max(0,due));
+  if(j.expected&&j.stage!=='billed') t+='\nExpected ready: '+dOnly(new Date(j.expected).getTime());
+  return t+'\n\n\u2014 '+W.name;
+}
+function updModal(){
+  var j=S.job, n=(j.updates||[]).length;
+  openModal('<h2>Send an update</h2><p class="muted small">'+esc(j.no)+(n?' \u00B7 last sent '+dts(j.lastUpdateAt):' \u00B7 none sent yet')+'</p>'+
+    '<div class="field" style="margin-top:12px"><label>To</label><input type="tel" name="updphone" class="mono" value="'+esc(j.cust.phone)+'"></div>'+
+    '<div class="field"><label>Message</label><textarea name="updtext" data-nocaps style="min-height:260px;font-size:13px">'+esc(updText(j))+'</textarea></div>'+
+    '<div class="btn-row"><button class="btn" data-act="closeModal">Cancel</button>'+
+    '<button class="btn" data-act="updDo" data-how="sms">SMS</button><button class="btn go" data-act="updDo" data-how="wa">WhatsApp</button></div>');
+}
+async function updDo(how){
+  var j=S.job, g=function(n){ var e=document.querySelector('.sheet [name="'+n+'"]'); return e?e.value.trim():''; };
+  var ph=g('updphone')||j.cust.phone, tx=g('updtext');
+  try{ window.open(how==='sms'?smsLink(ph,tx):waLink(ph,tx),'_blank'); }catch(e){}
+  j.updates=j.updates||[]; j.updates.push({at:Date.now(), by:S.user.id, byName:S.user.name, how:how, to:ph});
+  j.lastUpdateAt=Date.now();
+  logIt(j,'Customer updated',(how==='sms'?'SMS':'WhatsApp')+' \u00B7 '+fmtPhone(ph));
+  closeModal(); await saveJob(j); rerender(); toast('Update sent and logged','good');
+}
+/* the whole of this job's money in four lines */
+function moneySummary(j){
+  var fin=(j.bills||[]).filter(function(b){ return b.status==='final'; });
+  var billed=fin.reduce(function(a,b){ return a+billCalc(j,b).grand; },0);
+  var paid=fin.reduce(function(a,b){ return a+(b.payments||[]).reduce(function(x,p){ return x+p.paise; },0); },0);
+  var adv=(j.advance&&j.advance.paise)||0, due=jobDue(j);
+  var tot=fin.length?billed+sumLines(unbilledApproved(j)):estimateTotal(j);
+  return '<div class="grid4" style="margin:6px 0 12px">'+
+    '<div class="stat"><div class="k">'+(fin.length?'Bill total':'Estimate')+'</div><div class="v money">'+money(tot)+'</div><div class="s">'+(fin.length?fin.length+' bill'+(fin.length>1?'s':''):'not billed yet')+'</div></div>'+
+    '<div class="stat"><div class="k">Advance</div><div class="v money">'+money(adv)+'</div><div class="s">'+ensureAdvances(j).length+' received</div></div>'+
+    '<div class="stat"><div class="k">Paid</div><div class="v money">'+money(paid)+'</div><div class="s">against the bills</div></div>'+
+    '<div class="stat"><div class="k">Balance</div><div class="v money" style="color:'+(due>0?'var(--red)':'var(--green)')+'">'+money(Math.max(0,due))+'</div>'+
+      '<div class="s">'+(due<0?money(-due)+' paid ahead':due>0?'still to collect':'nothing due')+'</div></div></div>';
+}
 /* ---- an advance can be taken at any point while the bike is in ---- */
-function advModal(){
-  var j=S.job;
-  openModal('<h2>Advance received</h2><p class="muted small">'+esc(j.no)+' \u00B7 '+esc(j.cust.name)+
+function ensureAdvances(j){
+  if(!j.advances) j.advances=(j.advance&&j.advance.paise)?[Object.assign({byName:coreUser(j.advance.by).name},j.advance)]:[];
+  return j.advances;
+}
+function advLocked(j){ return (j.bills||[]).some(function(b){ return b.status==='final'; }); }
+function syncAdvance(j){
+  var a=ensureAdvances(j), tot=a.reduce(function(s,x){ return s+x.paise; },0);
+  j.advance=tot?{paise:tot, mode:a[a.length-1].mode, at:a[0].at, by:a[0].by}:null;
+}
+function advList(j){
+  var a=ensureAdvances(j); if(!a.length) return '';
+  var ed=can('pay.take')&&!advLocked(j)&&j.stage!=='closed';
+  return '<div style="margin:2px 0 8px">'+a.map(function(x,i){
+    return '<div class="kv" style="padding:6px 0"><div class="k small">'+dts(x.at)+' \u00B7 '+esc(String(x.mode||'').toUpperCase())+
+      (x.ref?' \u00B7 <span class="mono">'+esc(x.ref)+'</span>':'')+'<br>'+esc(x.byName||coreUser(x.by).name)+'</div>'+
+      '<div class="v"><b class="money">'+money(x.paise)+'</b>'+(ed?' <button class="btn sm" data-act="advEdit" data-i="'+i+'">Edit</button>'+
+      ' <button class="btn sm danger" data-act="advDel" data-i="'+i+'">\u2715</button>':'')+'</div></div>';
+  }).join('')+'</div>';
+}
+async function advDel(i){
+  var j=S.job; closeModal(); if(advLocked(j)){ toast('The bills are made \u2014 correct it through a payment','bad'); return; }
+  var a=ensureAdvances(j), x=a[i]; if(!x) return;
+  a.splice(i,1); syncAdvance(j);
+  logIt(j,'Advance removed',money(x.paise)+' '+String(x.mode).toUpperCase()+' of '+dts(x.at));
+  logAudit('Job card','Advance removed',money(x.paise),j.no); await saveAudit();
+  await saveJob(j); rerender(); toast('Advance removed');
+  notify(ownerIds(),j,'advance','removed an advance of '+money(x.paise)+' ('+String(x.mode).toUpperCase()+')');
+}
+function advModal(idx){
+  var j=S.job, edit=(idx!==undefined&&idx!==null&&!isNaN(idx)), x=edit?ensureAdvances(j)[idx]:null;
+  S.advEdit=edit?idx:null;
+  openModal('<h2>'+(edit?'Correct this advance':'Advance received')+'</h2><p class="muted small">'+esc(j.no)+' \u00B7 '+esc(j.cust.name)+
     (j.advance&&j.advance.paise?' \u00B7 '+money(j.advance.paise)+' taken so far':'')+'</p>'+
-    '<div class="field" style="margin-top:12px"><label>Amount (\u20B9)</label><input type="number" name="advamt" step="0.01" inputmode="decimal"></div>'+
+    '<div class="field" style="margin-top:12px"><label>Amount (\u20B9)</label><input type="number" name="advamt" step="0.01" inputmode="decimal" value="'+(x?paiseToInput(x.paise):'')+'"></div>'+
     '<div class="field"><label>Paid by</label><div class="seg" id="advmodeseg">'+['cash','upi','card'].map(function(m,i){
-      return '<button data-act="mode" data-v="'+m+'" aria-pressed="'+(i===0)+'">'+m.toUpperCase()+'</button>'; }).join('')+'</div></div>'+
-    '<div class="field"><label>Reference (optional)</label><input type="text" name="advref" class="mono"></div>'+
-    '<div class="btn-row"><button class="btn" data-act="closeModal">Cancel</button><button class="btn go" data-act="advDo">Record it</button></div>');
+      return '<button data-act="mode" data-v="'+m+'" aria-pressed="'+(x?x.mode===m:i===0)+'">'+m.toUpperCase()+'</button>'; }).join('')+'</div></div>'+
+    '<div class="field"><label>Reference (optional)</label><input type="text" name="advref" class="mono" value="'+esc(x&&x.ref||'')+'"></div>'+
+    '<div class="btn-row"><button class="btn" data-act="closeModal">Cancel</button><button class="btn go" data-act="advDo">'+(edit?'Save the correction':'Record it')+'</button></div>');
 }
 async function advDo(){
   var j=S.job, amt=toPaise((document.querySelector('.sheet [name="advamt"]')||{}).value);
   if(!(amt>0)){ toast('Put in the amount','bad'); return; }
   var md=((document.querySelector('#advmodeseg [aria-pressed="true"]')||{}).dataset||{}).v||'cash';
   var ref=(document.querySelector('.sheet [name="advref"]')||{}).value||'';
-  if(!j.advances){ j.advances=(j.advance&&j.advance.paise)?[Object.assign({},j.advance)]:[]; }
-  j.advances.push({paise:amt, mode:md, ref:ref.trim(), at:Date.now(), by:S.user.id, byName:S.user.name});
-  var tot=j.advances.reduce(function(a,x){ return a+x.paise; },0);
-  j.advance={paise:tot, mode:md, at:j.advances[0].at, by:j.advances[0].by};
-  logIt(j,'Advance received',money(amt)+' by '+md.toUpperCase()+(ref.trim()?' \u00B7 '+ref.trim():'')+' \u00B7 '+money(tot)+' in all');
+  var a=ensureAdvances(j);
+  if(S.advEdit!==null&&S.advEdit!==undefined&&a[S.advEdit]){
+    if(advLocked(j)){ toast('The bills are made \u2014 correct it through a payment','bad'); return; }
+    var old=a[S.advEdit];
+    var note=(old.paise!==amt?money(old.paise)+' \u2192 '+money(amt):'')+(old.mode!==md?' \u00B7 '+String(old.mode).toUpperCase()+' \u2192 '+md.toUpperCase():'');
+    old.paise=amt; old.mode=md; old.ref=ref.trim(); old.editedAt=Date.now(); old.editedBy=S.user.name;
+    syncAdvance(j);
+    logIt(j,'Advance corrected',note||'reference changed');
+    logAudit('Job card','Advance corrected',note,j.no); await saveAudit();
+    S.advEdit=null; closeModal(); await saveJob(j); rerender(); toast('Advance corrected','good');
+    notify(ownerIds(),j,'advance','corrected an advance: '+(note||'reference changed')); return;
+  }
+  a.push({paise:amt, mode:md, ref:ref.trim(), at:Date.now(), by:S.user.id, byName:S.user.name});
+  syncAdvance(j);
+  logIt(j,'Advance received',money(amt)+' by '+md.toUpperCase()+(ref.trim()?' \u00B7 '+ref.trim():'')+' \u00B7 '+money(j.advance.paise)+' in all');
   closeModal(); await saveJob(j); rerender(); toast(money(amt)+' advance recorded','good');
 }
 /* what the bills will be, before they exist */
@@ -12346,7 +12544,7 @@ function billDocHtml(j,b){
         (SH.stateCode?'<br>'+esc(STATE_BY_CODE[SH.stateCode]||'')+' ('+esc(SH.stateCode)+')':'')+(SH.phone?'<br>'+esc(SH.phone):'')
         :(VE.reg||VE.make?'<b>For the bike</b><br>'+esc(regShow(VE.reg))+(VE.reg?' · ':'')+esc(VE.make||'')+' '+esc(VE.model||''):''))
     : '<b>Vehicle</b><br>'+esc(regShow(VE.reg))+' · '+esc(VE.make)+' '+esc(VE.model)+
-      (VE.cc?' '+esc(ccLabel(VE.cc)):'')+'<br>Odometer '+esc(VE.odo)+' km<br>In: '+dOnly(VE.inAt);
+      (VE.cc?' '+esc(ccLabel(VE.cc)):'')+'<br>'+(VE.odo?'Odometer '+esc(VE.odo)+' km':'Odometer not working')+'<br>In: '+dOnly(VE.inAt);
   h+='<table style="margin-top:12px"><tr>'+
     '<td style="width:50%;vertical-align:top">'+billedTo+'</td>'+
     '<td style="vertical-align:top">'+right+'</td></tr></table>';
@@ -14222,7 +14420,7 @@ async function dispatch(a,arg,d,t){
     case 'fuel': case 'mode': segPick(t); break;
     case 'incl': segPick(t); paintPCalc(); break;
     case 'supplyType': segPick(t); grabPurchaseHeader(); S.purch.supplyType=d.v; render(); break;
-    case 'item': case 'dmg': case 'jobreq': case 'tog': toggle(t); break;
+    case 'item': case 'dmg': case 'jobreq': case 'tog': toggle(t); if(d.v==='meterbad') paintOdo(); break;
     case 'jobtype': toggle(t); reorderReq(pickedTypes()); break;
     case 'toggleReq': return toggleReq(d.v);
     case 'useKnown': useKnown(); break;
@@ -14375,6 +14573,15 @@ async function dispatch(a,arg,d,t){
     case 'closeJob': return closeJob();
     case 'newBill': return newBill(d.type);
     case 'readyModal': readyModal(); break;
+    case 'labNew': labNew(); break;
+    case 'labNewDo': return labNewDo();
+    case 'labDel': confirmBox('Remove this labour job?','It stays on any job card it was already used on.','Remove it','labDelDo|'+d.id,'danger'); break;
+    case 'labDelDo': closeModal(); return labDel(arg);
+    case 'advEdit': advModal(parseInt(d.i,10)); break;
+    case 'advDel': confirmBox('Remove this advance?','Only if it was entered by mistake. The removal is logged.','Remove it','advDelDo|'+d.i,'danger'); break;
+    case 'advDelDo': return advDel(parseInt(arg,10));
+    case 'updModal': updModal(); break;
+    case 'updDo': return updDo(d.how);
     case 'readyDo': return readyDo();
     case 'advModal': advModal(); break;
     case 'advDo': return advDo();
@@ -14615,6 +14822,7 @@ async function bootLoad(){
     S.core.kitsText=S.core.kitsText.replace(/\s*$/,'')+'\n'+KIT_DEFAULT.split('\n').filter(function(l){ return !have4[upReq(l.slice(0,l.indexOf(':')))]; }).join('\n');
     await saveCore();
   }
+  if(!S.core.labourSeeded){ if(seedLabour()) await saveStore('parts'); S.core.labourSeeded=1; await saveCore(); }
   if(!S.core.jobs3){
     if(S.core.kitsText&&/ENGINE SERVICE:/.test(S.core.kitsText)&&!/ENGINE FLUSH \+ OIL:/.test(S.core.kitsText)) S.core.kitsText=null;
     S.core.jobs3=1; await saveCore();
