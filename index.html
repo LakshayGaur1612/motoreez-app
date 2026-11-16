@@ -3898,11 +3898,28 @@ async function fetchMediaFile(j,f){
     try{
       var blob=await Cloud.getFile(f.path);
       var rec={blob:blob,type:f.type||blob.type,size:f.size||blob.size,at:Date.now()};
-      try{ await MEDIA.put(key,rec); }catch(e){}
+      if(f.slot!=='video'){ try{ await MEDIA.put(key,rec); }catch(e){} }
       return rec;
     }finally{ delete MEDIA_FETCHING[key]; }
   })();
   return MEDIA_FETCHING[key];
+}
+/* Earlier versions kept every walk-round video on the phone. On the shared
+   server they are not needed there: clear them, and photos older than 45
+   days (any phone fetches them again from the server if they are opened). */
+async function mediaTidy(){
+  if(MODE!=='cloud'||mediaTidy.done) return; mediaTidy.done=true;
+  try{
+    var keys=await MEDIA.keys('job:'), old=Date.now()-45*86400000, freed=0, n=0;
+    for(var i=0;i<keys.length;i++){
+      var k=keys[i], vid=/:video$/.test(k), rec=null;
+      if(!vid){ rec=await MEDIA.get(k); if(!rec||(rec.at||0)>old) continue; }
+      else rec=await MEDIA.get(k);
+      freed+=(rec&&rec.size)||0; n++;
+      await MEDIA.del(k);
+    }
+    if(n) console.log('Motoreez: cleared '+n+' old media copies from this phone ('+fmtKb(freed)+')');
+  }catch(e){}
 }
 async function fetchJobMedia(j,withVideo){
   var have=await MEDIA.keys('job:'+j.id+':');
@@ -3947,7 +3964,9 @@ async function commitIntakeMedia(j){
     }
     for(var i=0;i<keys.length;i++){
       var slot=keys[i].slice(6), rec=await MEDIA.get(keys[i]); if(!rec) continue;
-      await MEDIA.put('job:'+j.id+':'+slot,rec);
+      /* on the shared server the video lives there only; keeping a copy on
+         the phone that took it filled phones up job after job */
+      if(!(MODE==='cloud'&&slot==='video')) await MEDIA.put('job:'+j.id+':'+slot,rec);
       list.bytes+=rec.size||0;
       if(slot==='video') list.video={size:rec.size,type:rec.type};
       else if(slot.indexOf('extra')===0) list.extras++;
@@ -6907,7 +6926,27 @@ function dviBar(t){
     (t.now?'<i style="width:'+w(t.now)+';background:var(--red)"></i>':'')+
     '</div>';
 }
-function shrinkImage(file,maxPx,quality){
+/* A phone photo can be 48 megapixels: decoded whole, that is a few hundred
+   MB of memory for a moment, which is how a phone ends up "low on memory"
+   halfway through the walk-round. Where the browser can, the picture is
+   decoded straight at the small size; the full-size one is never held. */
+async function shrinkImage(file,maxPx,quality){
+  if(window.createImageBitmap&&window.URL&&URL.createObjectURL&&location.protocol!=='file:'){
+    var url=URL.createObjectURL(file), bmp=null, cv=null;
+    try{
+      var dim=await new Promise(function(res,rej){ var im=new Image(); im.onload=function(){ res([im.naturalWidth,im.naturalHeight]); im.src=''; };
+        im.onerror=function(){ rej(new Error('bad image')); }; im.src=url; });
+      var s=Math.min(1,maxPx/Math.max(dim[0],dim[1])), w=Math.max(1,Math.round(dim[0]*s)), h=Math.max(1,Math.round(dim[1]*s));
+      bmp=await createImageBitmap(file,{resizeWidth:w,resizeHeight:h,resizeQuality:'high'});
+      cv=document.createElement('canvas'); cv.width=bmp.width; cv.height=bmp.height;
+      cv.getContext('2d').drawImage(bmp,0,0);
+      return cv.toDataURL('image/jpeg',quality);
+    }catch(e){ /* fall through to the plain way below */ }
+    finally{ URL.revokeObjectURL(url); if(bmp&&bmp.close) bmp.close(); if(cv){ cv.width=0; cv.height=0; } }
+  }
+  return shrinkImageOld(file,maxPx,quality);
+}
+function shrinkImageOld(file,maxPx,quality){
   return new Promise(function(res,rej){
     var fr=new FileReader();
     fr.onload=function(){
@@ -15455,6 +15494,7 @@ async function bootData(){
     render(); return;
   }
   if(!POLLING){ POLLING=true; setInterval(chatPoll,5000); }
+  setTimeout(mediaTidy,4000);
   render();
   if(MODE==='memory') toast(storeNote(),'bad');
 }
