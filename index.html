@@ -38,6 +38,14 @@
      - Technician's view is a work checklist (techTasks / viewTechChecklist): one
        item per Job Required piece of work with its spares under it, one tick each,
        washing-bay items left to the washer, and "Not used" to send a spare back.
+     - Floor rounds for the floor manager (Ram): every bike on the floor, tick for
+       the mechanic (credited to him, "marked by"), stale bikes flagged, Work finished
+       ('floor.run'; viewFloor / floorTick).
+     - Comebacks: a bike back within 48 hours of delivery is asked about on its new
+       job card; Ram or Kunal rule our workmanship or not ('comeback.judge'); the
+       mechanic of the earlier job is told (sectionComeback, cbMark, cbVerdict).
+     - A mechanic's Me page shows his pay plus his own work: bikes finished, time per
+       job, comebacks against him; no customer details (sectionMyWork).
 -->
 <html lang="en">
 <head>
@@ -1233,7 +1241,7 @@ async function guard(act,el,fn){
 /* Actions that write to storage. Anything listed here gets the lock. */
 var WRITES=['saveIntake','saveJobEdit','sendPricing','sendEstDo','ownerOkDo','custOkDo','custNoAdd',
   'startWork','raiseAddDo','ownerOkAddDo','workDoneDo','closeJob','newBill','finalBillDo','cancelBillDo',
-  'dropBill','payDo','addLineSave','pickPart','delLine','tick','notUsedDo','savePurchase','savePLine','savePart',
+  'dropBill','payDo','addLineSave','pickPart','delLine','tick','notUsedDo','floorTick','floorDoneDo','cbMark','cbNo','cbVerdict','savePurchase','savePLine','savePart',
   'saveSupplier','adjSave','savePartyRec','payPartyDo','saveExpense','delExpense','moveMoneyDo',
   'countCashDo','advanceDo','saveSalary','saveWorkshop','addUserDo','restoreDo','fitsSave','fitAdd',
   'verifyExp','verifyPay','reversePayDo','purchPayDo','autoFit','sendAddDo','dropAddDo','custOkTop',
@@ -1931,8 +1939,8 @@ var PERM={
   owner:['tech.assign','purch.edit','job.new','job.edit','work.add','work.tick','req.set','price.set','price.override',
          'estimate.send','approve.customer','addition.raise','bill.make','bill.final','pay.take',
          'see.money','see.phone','see.all','parts','ledgers','float','spend.own','spend.all',
-         'verify.all','reports','export','settings','users','wash.do','sale.new','cat.add','pay.vendor','pay.fix'],
-  advisor:['job.new','job.edit','req.set','see.phone','see.all','float','spend.own'],
+         'verify.all','reports','export','settings','users','wash.do','sale.new','cat.add','pay.vendor','pay.fix','floor.run','comeback.judge'],
+  advisor:['job.new','job.edit','req.set','see.phone','see.all','float','spend.own','floor.run','comeback.judge'],
   foreman:['tech.assign','purch.edit','job.new','job.edit','work.add','work.tick','req.set','addition.raise','price.override',
            'see.money','see.phone','see.all','parts','ledgers','float','spend.own','verify.junior'],
   mechanic:['work.tick','req.set'],
@@ -2330,7 +2338,10 @@ function indexEntry(job){
     direct:!!job.direct,
     imported:job.imported?1:0,
     updatedAt:job.imported?(job.closedAt||job.createdAt):Date.now(),
-    approved:job.imported?(job.histTotal||0):approvedTotal(job), balance:jobBalance(job) };
+    approved:job.imported?(job.histTotal||0):approvedTotal(job), balance:jobBalance(job),
+    approvedAt:(job.approvals&&job.approvals.customer&&job.approvals.customer.at)||0, workDoneAt:job.workDoneAt||0,
+    complaint:String(job.complaint||'').slice(0,140),
+    cb:(job.cb&&job.cb.of)?{of:job.cb.of, ofNo:job.cb.ofNo, mech:job.cb.mech, verdict:job.cb.verdict||''}:null };
 }
 async function saveJob(job){
   clearBalCache();
@@ -2488,6 +2499,7 @@ function render(){
   var body='';
   switch(S.view.name){
     case 'board':    body=viewBoard(); break;
+    case 'floor':    body=viewFloor(); break;
     case 'intake':   body=viewIntake(); break;
     case 'job':      body=viewJob(); break;
     case 'bill':     body=viewBill(); break;
@@ -2539,6 +2551,7 @@ var NAV_HUBS=['board','desk','dash','parties','spend','staff','books','unverifie
    rather than shrinking the bar until nothing is readable. */
 function allNavItems(){
   var out=[{k:'board', ico:'\u25A4', lbl:tr(washerOnly()?'Washing':'Jobs')}];
+  if(can('floor.run')) out.push({k:'floor', ico:'\u21C4', lbl:tr('Floor')});
   if(can('reports'))   out.push({k:'dash',   ico:'\u20B9', lbl:tr('Money')});
   if(can('reports'))   out.push({k:'sales',  ico:'\u2197', lbl:tr('Sales')});
   if(can('parts'))     out.push({k:'purch',  ico:'\u2199', lbl:tr('Purchases')});
@@ -2593,6 +2606,7 @@ function moreSheet(){
 /* which tab lights up for the screen you are on */
 function navCurrent(){
   var v=S.view.name;
+  if(v==='floor') return 'floor';
   if(v==='purch') return 'purch';
   if(v==='sales') return 'sales';
   if(v==='reports'||v==='rep'||v==='exports') return 'reports';
@@ -2703,6 +2717,7 @@ function goNav(k){
   closeModal();
   S.job=null;
   if(k==='board')   S.view={name:'board'};
+  if(k==='floor'){  S.view={name:'floor'}; floorLoad(false); }
   if(k==='sales')   S.view={name:'sales'};
   if(k==='purch')   S.view={name:'purch'};
   if(k==='desk')    S.view={name:'desk',tab:'parts'};
@@ -4693,6 +4708,7 @@ function viewJob(){
      '<div style="margin-top:6px;font-weight:700;color:var(--red)">'+esc(j.damage)+'</div></div>';
   h+='</div></div>';
 
+  h+=sectionComeback(j);
   h+=sectionChat(j);
   h+=sectionMedia(j);
   h+=sectionFinish(j);
@@ -5290,20 +5306,22 @@ function viewTechChecklist(j){
   return h;
 }
 /* one tick: the work item and everything under it */
-async function tickTask(key){
-  var j=S.job; if(!j) return;
+async function tickTask(key){ if(S.job) return tickTaskOn(S.job,key,false); }
+async function tickTaskOn(j,key,forMech){
   if(jobOnHold(j)){ toast('Work is stopped on this bike','bad'); return; }
   var T=techTasks(j), t=T.tasks.filter(function(x){ return x.key===key; })[0]; if(!t) return;
   var on=!t.done, now=Date.now();
-  t.lines.forEach(function(l){ l.done=on; l.doneBy=S.user.id; l.doneAt=now; });
+  var doer=(forMech&&j.mechanicId)?j.mechanicId:S.user.id, by=doer!==S.user.id?S.user.id:'';
+  t.lines.forEach(function(l){ l.done=on; l.doneBy=doer; l.doneAt=now; if(by) l.markedBy=by; else delete l.markedBy; });
   j.taskDone=j.taskDone||{};
-  if(on) j.taskDone[key]={by:S.user.id, byName:S.user.name, at:now}; else delete j.taskDone[key];
-  logIt(j,on?'Work done':'Marked not done',t.label+(t.parts.length?' — fitted '+t.parts.map(function(l){ return l.desc; }).join(', '):''));
+  if(on) j.taskDone[key]={by:doer, byName:coreUser(doer).name, markedBy:by, markedByName:by?S.user.name:'', at:now}; else delete j.taskDone[key];
+  logIt(j,on?'Work done':'Marked not done',t.label+(t.parts.length?' \u2014 fitted '+t.parts.map(function(l){ return l.desc; }).join(', '):'')+
+    (by?' \u00B7 '+coreUser(doer).name+', marked by '+S.user.name:''));
   if(on&&j.stage==='customer_ok') j.stage='in_progress';
   if(!await saveJob(j)){ rerender(); return; }
   rerender();
   var all=techTasks(j).tasks, left=all.filter(function(x){ return !x.done; }).length;
-  notify(watchers(j),j,'work',on
+  notify(watchers(j).concat(by&&doer?[doer]:[]),j,'work',on
     ? (left?'finished “'+t.label+'” · '+(all.length-left)+' of '+all.length+' done'
            :'finished “'+t.label+'” — all '+all.length+' items done')
     : 'un-ticked “'+t.label+'”');
@@ -5322,12 +5340,244 @@ async function notUsedDo(lineId){
   notify(watchers(j),j,'notused','did not use '+l.desc+' — back in the store, off the bill');
 }
 
+/* =====================================================================
+   FLOOR ROUNDS
+   Mechanics keep their hands on the tools. The floor manager walks the
+   floor at set times, asks, and ticks for them here. Credit stays with
+   the mechanic: the record says who did it and who marked it.
+   ===================================================================== */
+var FLOOR={jobs:{}, stamp:{}, loading:false};
+var FLOOR_STALE=2*3600000;   /* a bike nobody has updated for two hours is flagged */
+function floorEntries(){
+  return S.index.filter(function(e){ return !e.direct&&!e.imported&&(e.stage==='customer_ok'||e.stage==='in_progress'); });
+}
+async function floorLoad(force){
+  if(FLOOR.loading) return; FLOOR.loading=true;
+  try{
+    var es=floorEntries(), keep={};
+    for(var i=0;i<es.length;i++){
+      var e=es[i]; keep[e.id]=1;
+      if(force||!FLOOR.jobs[e.id]||FLOOR.stamp[e.id]!==e.updatedAt){
+        var j=await loadJob(e.id); if(j){ FLOOR.jobs[e.id]=j; FLOOR.stamp[e.id]=e.updatedAt; }
+      }
+    }
+    Object.keys(FLOOR.jobs).forEach(function(id){ if(!keep[id]){ delete FLOOR.jobs[id]; delete FLOOR.stamp[id]; } });
+  } finally { FLOOR.loading=false; }
+  if(S.view&&S.view.name==='floor') rerender();
+}
+function lastTouch(j){
+  var t=j.approvals&&j.approvals.customer?j.approvals.customer.at:j.createdAt;
+  (j.log||[]).forEach(function(x){ if(x.ts>t&&/Work done|Marked not done|Spare not used|Extra work|Comeback/.test(x.action||'')) t=x.ts; });
+  return t;
+}
+function viewFloor(){
+  var es=floorEntries();
+  var need=es.some(function(e){ return !FLOOR.jobs[e.id]||FLOOR.stamp[e.id]!==e.updatedAt; });
+  if(need) setTimeout(function(){ floorLoad(false); },0);
+  var jobs=es.map(function(e){ return FLOOR.jobs[e.id]; }).filter(Boolean);
+  var now=Date.now();
+  jobs.sort(function(a,b){ return lastTouch(a)-lastTouch(b); });   /* longest without news first */
+  var stale=jobs.filter(function(j){ return now-lastTouch(j)>FLOOR_STALE; }).length;
+  var h=pageHead('Floor rounds','Ask each mechanic, tick for him',
+    '<button class="btn sm" data-act="floorRefresh">Refresh</button>');
+  h+='<div class="small muted" style="margin:-4px 0 10px">'+jobs.length+' bike'+(jobs.length===1?'':'s')+' on the floor'+
+    (stale?' · <b style="color:var(--red)">'+stale+' not updated in 2 hours</b>':'')+'</div>';
+  if(!es.length) return h+'<div class="empty"><b>No bikes being worked on.</b>Bikes appear here once the customer has approved the work.</div>';
+  if(!jobs.length) return h+'<div class="empty"><b>Loading the bikes…</b></div>';
+  jobs.forEach(function(j){
+    var T=techTasks(j), n=T.tasks.filter(function(t){ return t.done; }).length, hold=jobOnHold(j);
+    var old=now-lastTouch(j)>FLOOR_STALE, mech=j.mechanicId?coreUser(j.mechanicId):null;
+    h+='<div class="card" style="'+(old?'border-color:var(--red)':'')+'"><div class="card-h" style="flex-wrap:wrap;gap:8px">'+
+      '<span class="plate">'+esc(regShow(j.reg))+'</span>'+
+      '<div style="min-width:0"><b>'+esc(j.make+' '+j.model)+'</b><div class="small muted">'+esc(mech?mech.name:'Not assigned')+
+        ' · last update '+ago(lastTouch(j))+'</div></div>'+
+      '<span class="tag '+(n===T.tasks.length&&n?'t-green':(old?'t-red':'t-grey'))+'" style="margin-left:auto">'+n+' of '+T.tasks.length+'</span></div>'+
+      (j.cb&&j.cb.of?'<div class="banner warn small" style="margin:10px 14px 0"><b>COMEBACK</b> of '+esc(j.cb.ofNo)+
+        (j.cb.mechName?' ('+esc(j.cb.mechName)+')':'')+'</div>':'')+
+      (hold?'<div class="banner warn small" style="margin:10px 14px 0"><b>Stopped</b> — extra work waiting for the customer</div>':'')+
+      '<div class="card-b tight">';
+    T.tasks.forEach(function(t){
+      h+='<div style="display:flex;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--rule2)">'+
+        '<button class="btn '+(t.done?'go':'')+'" style="flex:0 0 52px;min-height:52px;font-size:22px" '+(hold?'disabled':'')+
+        ' data-act="floorTick" data-id="'+j.id+'" data-task="'+esc(t.key)+'">'+(t.done?'✓':'')+'</button>'+
+        '<div style="flex:1;min-width:0"><div style="font-weight:700'+(t.done?';color:var(--steel)':'')+'">'+esc(t.label)+'</div>'+
+        (t.parts.length?'<div class="small muted">Fit: '+t.parts.map(function(l){ return esc(l.desc); }).join(', ')+'</div>':'')+
+        '</div></div>';
+    });
+    h+='<div class="btn-row" style="padding:10px 14px">'+
+      '<button class="btn sm" data-act="openJob" data-id="'+j.id+'">Open job card</button>'+
+      (!hold?'<button class="btn sm primary" data-act="floorDone" data-id="'+j.id+'">Work finished</button>':'')+
+      '</div></div></div>';
+  });
+  return h;
+}
+/* the same tick as the mechanic's own, done for him */
+async function floorTick(jobId,key){
+  var j=FLOOR.jobs[jobId]||await loadJob(jobId); if(!j) return;
+  await tickTaskOn(j,key,true);
+  FLOOR.jobs[jobId]=j; FLOOR.stamp[jobId]=(S.index.filter(function(e){ return e.id===jobId; })[0]||{}).updatedAt;
+  rerender();
+}
+async function floorDone(jobId){
+  var j=FLOOR.jobs[jobId]||await loadJob(jobId); if(!j) return;
+  var left=techTasks(j).tasks.filter(function(t){ return !t.done; });
+  if(left.length){ confirmBox('Finish anyway?',left.length+' not ticked: '+left.map(function(t){ return t.label; }).join(', ')+'.',
+    'Yes, work is finished','floorDoneDo|'+jobId); return; }
+  return floorDoneDo(jobId);
+}
+async function floorDoneDo(jobId){
+  var j=FLOOR.jobs[jobId]||await loadJob(jobId); if(!j) return;
+  j.stage='work_done'; j.workDoneAt=Date.now();
+  logIt(j,'Work finished',j.mechanicId&&j.mechanicId!==S.user.id?'marked by '+S.user.name+' for '+coreUser(j.mechanicId).name:'');
+  closeModal(); if(!await saveJob(j)) return;
+  delete FLOOR.jobs[jobId]; rerender(); toast(regShow(j.reg)+' ready to bill','good');
+  notify(watchers(j),j,'done','marked the work finished — ready to bill');
+}
+
+/* =====================================================================
+   COMEBACKS
+   A customer has 48 hours from delivery to come back about the work.
+   A bike taken in within that time asks, on its new job card, whether
+   it is back about the last job. Ram or Kunal then decide whether it was
+   our workmanship. Charges are normal; the record is against the
+   mechanic who did the last job, and he sees it.
+   ===================================================================== */
+var COMEBACK_HOURS=48;
+function lastDelivery(j){
+  var best=null;
+  S.index.forEach(function(e){
+    if(e.id===j.id||e.direct||e.imported||e.reg!==j.reg||!e.closedAt) return;
+    if(e.closedAt>j.createdAt||j.createdAt-e.closedAt>COMEBACK_HOURS*3600000) return;
+    if(!best||e.closedAt>best.closedAt) best=e;
+  });
+  return best;
+}
+function sectionComeback(j){
+  if(j.direct) return '';
+  var judge=can('comeback.judge');
+  if(j.cb&&j.cb.of){
+    var v=j.cb.verdict;
+    var h='<div class="card" style="border-color:var(--red)"><div class="card-h"><h2>Comeback</h2>'+
+      '<span class="tag '+(v==='ours'?'t-red':(v==='not'?'t-green':'t-amber'))+'" style="margin-left:auto">'+
+      (v==='ours'?'Our workmanship':(v==='not'?'Not our workmanship':'To be decided'))+'</span></div><div class="card-b">'+
+      '<div>Back within 48 hours of <button class="linkish" data-act="openJob" data-id="'+esc(j.cb.of)+'">'+esc(j.cb.ofNo)+'</button>'+
+      ' · delivered '+dts(j.cb.deliveredAt)+'</div>'+
+      '<div class="small muted" style="margin-top:4px">Last job done by <b>'+esc(j.cb.mechName||'—')+'</b></div>'+
+      (v?'<div class="small" style="margin-top:6px">Decided by '+esc(j.cb.verdictByName)+', '+dts(j.cb.verdictAt)+
+        (j.cb.note?' — '+esc(j.cb.note):'')+'</div>':'');
+    if(judge) h+='<div class="btn-row" style="margin-top:10px">'+
+      '<button class="btn sm '+(v==='ours'?'danger':'')+'" data-act="cbVerdict" data-v="ours">Our workmanship</button>'+
+      '<button class="btn sm '+(v==='not'?'go':'')+'" data-act="cbVerdict" data-v="not">Not our workmanship</button></div>';
+    return h+'</div></div>';
+  }
+  if(j.cb&&j.cb.no) return '';
+  var prev=lastDelivery(j); if(!prev) return '';
+  if(!can('job.edit')&&!judge) return '';
+  var pm=prev.mechanicId?coreUser(prev.mechanicId):null;
+  return '<div class="card" style="border-color:var(--amber)"><div class="card-h"><h2>Back within 48 hours</h2></div><div class="card-b">'+
+    '<div>This bike was delivered '+ago(prev.closedAt)+' (job '+esc(prev.no)+(pm?', '+esc(pm.name):'')+').</div>'+
+    '<div style="font-weight:700;margin-top:6px">Is the customer back about that work?</div>'+
+    '<div class="btn-row" style="margin-top:10px"><button class="btn danger" data-act="cbMark" data-id="'+esc(prev.id)+'">Yes, it’s a comeback</button>'+
+    '<button class="btn" data-act="cbNo">No, a new problem</button></div></div></div>';
+}
+async function cbMark(prevId){
+  var j=S.job, e=S.index.filter(function(x){ return x.id===prevId; })[0]; if(!j||!e) return;
+  var pm=e.mechanicId?coreUser(e.mechanicId):null;
+  j.cb={of:e.id, ofNo:e.no, deliveredAt:e.closedAt, mech:e.mechanicId||'', mechName:pm?pm.name:'',
+    by:S.user.id, byName:S.user.name, at:Date.now(), verdict:''};
+  logIt(j,'Comeback','Back within 48 hours of '+e.no+(pm?' ('+pm.name+')':''));
+  if(!await saveJob(j)) return; rerender();
+  var to=ownerIds().concat(e.mechanicId?[e.mechanicId]:[]).concat(userIdsWith('comeback.judge'));
+  notify(to,j,'comeback','COMEBACK — back within 48 hours of '+e.no+': '+(j.complaint||'').slice(0,90));
+}
+async function cbNo(){
+  var j=S.job; if(!j) return;
+  j.cb={no:true, by:S.user.id, byName:S.user.name, at:Date.now()};
+  logIt(j,'Not a comeback','New problem, not about the last job');
+  await saveJob(j); rerender();
+}
+async function cbVerdict(v){
+  var j=S.job; if(!j||!j.cb||!j.cb.of) return;
+  if(!can('comeback.judge')){ toast('Only Ram or Kunal decide this','bad'); return; }
+  var was=j.cb.verdict;
+  j.cb.verdict=v; j.cb.verdictBy=S.user.id; j.cb.verdictByName=S.user.name; j.cb.verdictAt=Date.now();
+  logIt(j,'Comeback decided',(v==='ours'?'Our workmanship':'Not our workmanship')+(was&&was!==v?' (changed)':''));
+  if(!await saveJob(j)) return; rerender();
+  notify(ownerIds().concat(j.cb.mech?[j.cb.mech]:[]),j,'comeback',
+    'comeback on '+j.cb.ofNo+': '+(v==='ours'?'OUR WORKMANSHIP':'not our workmanship'));
+}
+function userIdsWith(perm){
+  return S.core.users.filter(function(u){ return u.active!==false&&roleList(u).some(function(r){ return (PERM[r]||[]).indexOf(perm)>=0; }); })
+    .map(function(u){ return u.id; });
+}
+
+/* =====================================================================
+   A MECHANIC'S OWN RECORD
+   What he worked on, how long it took, and any comebacks against him.
+   Only his own: no money but his pay, no customer details.
+   ===================================================================== */
+var MYPER=[['week','This week'],['month','This month'],['prevmonth','Last month'],['q3','Last 3 months']];
+function myRange(k){
+  var now=new Date(), a, b=Date.now();
+  if(k==='week'){ var d=new Date(now); d.setDate(d.getDate()-((d.getDay()+6)%7)); d.setHours(0,0,0,0); a=d.getTime(); }
+  else if(k==='prevmonth'){ a=new Date(now.getFullYear(),now.getMonth()-1,1).getTime(); b=new Date(now.getFullYear(),now.getMonth(),1).getTime()-1; }
+  else if(k==='q3'){ a=new Date(now.getFullYear(),now.getMonth()-2,1).getTime(); }
+  else a=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+  return {from:a,to:b};
+}
+function hrs(ms){ var h=ms/3600000; return h<1?Math.round(h*60)+' min':(h<10?h.toFixed(1):Math.round(h))+' h'; }
+function sectionMyWork(uid){
+  var per=S.myPer||'month', R=myRange(per);
+  var mine=S.index.filter(function(e){ return !e.direct&&!e.imported&&e.mechanicId===uid; });
+  var done=mine.filter(function(e){ var t=e.workDoneAt||e.closedAt; return t&&t>=R.from&&t<=R.to; });
+  var open=mine.filter(function(e){ return e.stage==='customer_ok'||e.stage==='in_progress'; });
+  var times=done.filter(function(e){ return e.approvedAt&&e.workDoneAt; }).map(function(e){ return e.workDoneAt-e.approvedAt; });
+  var avg=times.length?times.reduce(function(a,b){ return a+b; },0)/times.length:0;
+  var cbs=S.index.filter(function(e){ return e.cb&&e.cb.mech===uid&&e.createdAt>=R.from&&e.createdAt<=R.to; });
+  var ours=cbs.filter(function(e){ return e.cb.verdict==='ours'; });
+  var cbOf={}; S.index.forEach(function(e){ if(e.cb&&e.cb.mech===uid&&e.cb.verdict==='ours') cbOf[e.cb.of]=1; });
+  var h='<div class="card"><div class="card-h"><h2>Your work</h2></div><div class="card-b">'+
+    '<div class="chips" style="margin-bottom:10px">'+MYPER.map(function(p){
+      return '<button class="chip filter" data-act="myPer" data-k="'+p[0]+'" aria-pressed="'+(per===p[0])+'">'+p[1]+'</button>'; }).join('')+'</div>'+
+    '<div class="grid4">'+
+      '<div class="stat"><div class="k">Bikes finished</div><div class="v">'+done.length+'</div></div>'+
+      '<div class="stat"><div class="k">On your bay now</div><div class="v">'+open.length+'</div></div>'+
+      '<div class="stat"><div class="k">Average time</div><div class="v">'+(avg?hrs(avg):'—')+'</div><div class="s">approval to finished</div></div>'+
+      '<div class="stat"><div class="k">Comebacks</div><div class="v" style="color:'+(ours.length?'var(--red)':'inherit')+'">'+ours.length+'</div>'+
+        '<div class="s">'+(cbs.length>ours.length?(cbs.length-ours.length)+' not ours or open':'our workmanship')+'</div></div>'+
+    '</div></div></div>';
+  if(cbs.length){
+    h+='<div class="card" style="border-color:var(--red)"><div class="card-h"><h2>Comebacks on your jobs</h2></div><div class="card-b tight">'+
+      cbs.sort(function(a,b){ return b.createdAt-a.createdAt; }).map(function(e){
+        return '<div style="padding:10px 14px;border-bottom:1px solid var(--rule2)"><div style="display:flex;gap:8px;align-items:center">'+
+          '<span class="plate sm">'+esc(regShow(e.reg))+'</span><b>'+esc(e.make+' '+e.model)+'</b>'+
+          '<span class="tag '+(e.cb.verdict==='ours'?'t-red':(e.cb.verdict==='not'?'t-green':'t-amber'))+'" style="margin-left:auto">'+
+          (e.cb.verdict==='ours'?'Our workmanship':(e.cb.verdict==='not'?'Not ours':'Being checked'))+'</span></div>'+
+          '<div class="small muted" style="margin-top:4px">Back '+dOnly(e.createdAt)+' about job '+esc(e.cb.ofNo)+(e.complaint?' — '+esc(e.complaint):'')+'</div></div>';
+      }).join('')+'</div></div>';
+  }
+  var list=done.concat(open.filter(function(e){ return done.indexOf(e)<0; })).sort(function(a,b){
+    return (b.workDoneAt||b.closedAt||b.createdAt)-(a.workDoneAt||a.closedAt||a.createdAt); });
+  h+='<div class="card"><div class="card-h"><h2>Your bikes</h2><span class="tag t-grey" style="margin-left:auto">'+list.length+'</span></div><div class="card-b tight">';
+  if(!list.length) h+='<div class="empty" style="padding:20px 8px"><b>Nothing in this period.</b></div>';
+  list.slice(0,80).forEach(function(e){
+    var t=(e.approvedAt&&e.workDoneAt)?hrs(e.workDoneAt-e.approvedAt):'';
+    h+='<button class="noterow" data-act="openJob" data-id="'+e.id+'"><span class="plate sm">'+esc(regShow(e.reg))+'</span>'+
+      '<span class="nt"><b>'+esc(e.make+' '+e.model)+'</b> '+esc(titleCase(e.jobType||''))+
+      '<span class="small muted" style="display:block">'+(e.workDoneAt||e.closedAt?'Finished '+dOnly(e.workDoneAt||e.closedAt):'On your bay')+
+      (t?' · '+t:'')+(cbOf[e.id]?' · <b style="color:var(--red)">comeback</b>':'')+'</span></span></button>';
+  });
+  return h+'</div></div>';
+}
+
 function viewJobMechanic(j){
   var ls=j.lines.filter(function(l){ return !l.void && batchApproved(j,l.batch); });
   var hold=jobOnHold(j);
   var h='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0 10px">'+
     '<span class="plate lg">'+esc(regShow(j.reg))+'</span>'+
     '<div><div class="jid">'+esc(j.no)+'</div><div style="font-weight:800;font-size:19px">'+esc(j.make)+' '+esc(j.model)+'</div></div></div>';
+  if(j.cb&&j.cb.of) h+='<div class="banner warn" style="margin:0 0 12px"><b>COMEBACK</b> \u2014 back within 48 hours of job '+esc(j.cb.ofNo)+
+    (j.cb.mechName?' (done by '+esc(j.cb.mechName)+')':'')+'. Check the earlier work carefully.</div>';
   if(hold) h+='<div class="stopbox"><div class="hazard"></div><div class="in"><h2>STOP — do not touch this bike</h2>'+
     '<p style="margin:8px 0 0">Extra work is waiting for approval. Wait for the store manager.</p></div><div class="hazard"></div></div>';
   h+='<div class="card"><div class="card-h"><h2>Customer complaint</h2></div><div class="card-b">'+
@@ -7349,6 +7599,7 @@ function viewMyPay(mk){
   }
   h+='</div></div></div>';
   h+='<div class="actionbar"><div class="actionbar-in"><button class="btn lg" data-act="goBoard">Back to jobs</button></div></div>';
+  h+=sectionMyWork(u.id);
   return h;
 }
 
@@ -12852,7 +13103,7 @@ async function workDone(){
   workDoneDo();
 }
 async function workDoneDo(){
-  var j=S.job; j.stage='work_done'; logIt(j,'Work finished','');
+  var j=S.job; j.stage='work_done'; j.workDoneAt=Date.now(); logIt(j,'Work finished','');
   closeModal(); await saveJob(j); rerender(); toast('Ready to bill','good');
   notify(watchers(j),j,'done','marked the work finished \u2014 ready to bill');
 }
@@ -15421,6 +15672,14 @@ async function dispatch(a,arg,d,t){
     case 'notUsed': confirmBox('Not used on the bike?','It goes back into the store and comes off the bill. Kunal is told.',
       'Yes, not used','notUsedDo|'+d.line,'danger'); break;
     case 'notUsedDo': return notUsedDo(arg);
+    case 'floorTick': return floorTick(d.id,d.task);
+    case 'floorDone': return floorDone(d.id);
+    case 'floorDoneDo': return floorDoneDo(arg);
+    case 'floorRefresh': await syncFromServer(); return floorLoad(true);
+    case 'cbMark': return cbMark(d.id);
+    case 'cbNo': return cbNo();
+    case 'cbVerdict': return cbVerdict(d.v);
+    case 'myPer': S.myPer=d.k; rerender(); break;
     case 'sendPricing': return sendPricing();
     case 'sendEstimate': sendEstimateModal(); break;
     case 'sendEstDo': return sendEstimateDo(d.how);
