@@ -1196,7 +1196,7 @@ var WRITES=['saveIntake','saveJobEdit','sendPricing','sendEstDo','ownerOkDo','cu
   'dropBill','payDo','addLineSave','pickPart','delLine','tick','savePurchase','savePLine','savePart',
   'saveSupplier','adjSave','savePartyRec','payPartyDo','saveExpense','delExpense','moveMoneyDo',
   'countCashDo','advanceDo','saveSalary','saveWorkshop','addUserDo','restoreDo','fitsSave','fitAdd',
-  'verifyExp','verifyPay','reversePayDo','autoFit','sendAddDo','dropAddDo','custOkTop',
+  'verifyExp','verifyPay','reversePayDo','purchPayDo','autoFit','sendAddDo','dropAddDo','custOkTop',
   'bookNew','bookArrive','bookDrop','remindMark','voidReturnDo','salesReturnDo','purchReturnDo',
   'dviDone','dviSet','readyDo','advDo','advDelDo','labNewDo','labDelDo','updDo','plateRenewDo','newSale','saleShip','saleDiscardDo','saleParty','saleNoParty','saleBike','finAddDo','finDone','sendInvDo','invPdf','fitAdd','kitAdd','kitAll','kitsSave','loadReal','loadDemo','loadParts','backupAll',
   'toggleReq','toggleLine','billOpt','attTap','toggleUser','clearParts','clearStore','importRun','pinSave',
@@ -1891,7 +1891,7 @@ var PERM={
   owner:['tech.assign','purch.edit','job.new','job.edit','work.add','work.tick','req.set','price.set','price.override',
          'estimate.send','approve.customer','addition.raise','bill.make','bill.final','pay.take',
          'see.money','see.phone','see.all','parts','ledgers','float','spend.own','spend.all',
-         'verify.all','reports','export','settings','users','wash.do','sale.new','cat.add'],
+         'verify.all','reports','export','settings','users','wash.do','sale.new','cat.add','pay.vendor','pay.fix'],
   advisor:['job.new','job.edit','req.set','see.phone','see.all','float','spend.own'],
   foreman:['tech.assign','purch.edit','job.new','job.edit','work.add','work.tick','req.set','addition.raise','price.override',
            'see.money','see.phone','see.all','parts','ledgers','float','spend.own','verify.junior'],
@@ -2258,7 +2258,9 @@ function jobDue(job){
   var billed=fin.reduce(function(a,b){ return a+billCalc(job,b).grand; },0);
   var paid=fin.reduce(function(a,b){ return a+(b.payments||[]).reduce(function(x,p){ return x+p.paise; },0); },0);
   var due=(billed||estimateTotal(job))+(fin.length?sumLines(unbilledApproved(job)):0);
-  return due-paidAdv-paid;
+  /* money received through the customer's account and set against a bill */
+  var viaAcct=(typeof allocatedTo==='function')?fin.reduce(function(a,b){ return a+allocatedTo(b.id); },0):0;
+  return due-paidAdv-paid-viaAcct;
 }
 function liveBills(job){ return (job.bills||[]).filter(function(b){return b.status!=='cancelled';}); }
 function advanceUsed(job,exceptId){
@@ -8814,8 +8816,8 @@ function repSales(R){
     rows.push({date:dOnly(s.at), no:s.number, kind:(s.type==='gst'?'Tax invoice':'Plain bill'),
       cust:s.custName, reg:regShow(s.reg), job:s.jobNo,
       taxable:money(s.taxable), tax:money(s.tax), total:money(s.grand),
-      due:s.balance>0?money(s.balance):'\u2014',
-      status:(s.status==='cancelled'?'CANCELLED':(s.balance>0?'Unpaid':'Paid'))});
+      due:saleDue(s)>0?money(saleDue(s)):'\u2014',
+      status:(s.status==='cancelled'?'CANCELLED':(saleDue(s)>0?'Unpaid':'Paid'))});
   });
   return repTable([{k:'date',label:'Date'},{k:'no',label:'Number',mono:1},{k:'kind',label:'Kind'},
     {k:'cust',label:'Customer'},{k:'reg',label:'Vehicle',mono:1},{k:'taxable',label:'Taxable',num:1},
@@ -9094,8 +9096,8 @@ function repRows(id,R){
       .sort(function(a,b){ return a.at-b.at; }).forEach(function(s){
       out.rows.push([dOnly(s.at),s.number,s.type==='gst'?'Tax invoice':'Plain bill',channelName(s.channel||'workshop'),s.custName,
         regShow(s.reg),(s.channel&&s.channel!=='workshop')?'':s.jobNo,rup(s.taxable),rup(s.tax),rup(s.grand),
-        rup((s.advance||0)+(s.paid||0)),rup(s.balance),
-        s.status==='cancelled'?'CANCELLED':(s.balance>0?'Unpaid':'Paid')]);
+        rup((s.advance||0)+(s.paid||0)+allocatedTo(s.id)),rup(saleDue(s)),
+        s.status==='cancelled'?'CANCELLED':(saleDue(s)>0?'Unpaid':'Paid')]);
     });
   }
   else if(id==='purchsum'){
@@ -9515,7 +9517,7 @@ function salesStats(R){
   var live=SALES.filter(function(s){ return s.at>=R.from&&s.at<=R.to&&s.status!=='cancelled'; });
   var gross=0, taxable=0, tax=0, due=0, gst=0, plain=0;
   live.forEach(function(s){
-    gross+=s.grand; taxable+=s.taxable; tax+=s.tax; due+=Math.max(0,s.balance);
+    gross+=s.grand; taxable+=s.taxable; tax+=s.tax; due+=saleDue(s);
     if(s.type==='gst') gst+=s.grand; else plain+=s.grand;
   });
   var ret=returnsIn('sales',R.from,R.to);
@@ -9586,7 +9588,7 @@ function salesOverview(R){
         return '<tr><td><button class="linkish mono" data-act="openInvoice" data-job="'+esc(s.jobId)+'" data-bill="'+esc(s.id)+'">'+esc(s.number)+'</button>'+
           '<div class="small muted">'+dOnly(s.at)+' \u00B7 '+esc(s.custName)+' \u00B7 '+esc(regShow(s.reg))+'</div></td>'+
           '<td class="num"><b class="money">'+money(s.grand)+'</b>'+
-          (s.balance>0?'<div class="small" style="color:var(--bad)">'+money(s.balance)+' due</div>':'')+'</td></tr>';
+          (saleDue(s)>0?'<div class="small" style="color:var(--bad)">'+money(saleDue(s))+' due</div>':'')+'</td></tr>';
       }).join('')+'</tbody></table></div></div>';
   }
   return h;
@@ -9738,7 +9740,7 @@ function listEmpty(msg){
    ===================================================================== */
 function saleStatus(s){
   if(s.status==='cancelled') return 'cancelled';
-  if(s.balance<=0) return 'paid';
+  if(saleDue(s)<=0) return 'paid';
   if((s.advance||0)+(s.paid||0)>0) return 'part';
   return 'unpaid';
 }
@@ -9760,7 +9762,7 @@ function viewSalesSection(){
 function salesInvoices(all){
   var f=S.salesFilter||'all';
   var live=all.filter(function(s){ return s.status!=='cancelled'; });
-  var sum=function(l,k){ return l.reduce(function(a,s){ return a+(k==='due'?Math.max(0,s.balance):s.grand); },0); };
+  var sum=function(l,k){ return l.reduce(function(a,s){ return a+(k==='due'?saleDue(s):s.grand); },0); };
   var paid=live.filter(function(s){ return saleStatus(s)==='paid'; });
   var unpaid=live.filter(function(s){ return saleStatus(s)!=='paid'; });
   var canc=all.filter(function(s){ return s.status==='cancelled'; });
@@ -9793,8 +9795,10 @@ function salesInvoices(all){
       '<div class="small muted mono">'+(s.channel&&s.channel!=='workshop'?esc(channelName(s.channel)):esc(regShow(s.reg)))+'</div>'+
       (st!=='paid'&&st!=='cancelled'&&pty?'<div class="small">'+dueIn(s.at,pty.creditDays)+'</div>':'')+
       '</td>'+
-      '<td class="num">'+amountPair(s.grand,Math.max(0,s.balance))+
-      '<div style="margin-top:6px">'+statusTag(st)+'</div></td></tr>';
+      '<td class="num">'+amountPair(s.grand,saleDue(s))+
+      '<div style="margin-top:6px">'+statusTag(st)+'</div>'+
+      (st!=='paid'&&st!=='cancelled'&&s.jobId&&can('pay.take')?'<div style="margin-top:6px"><button class="btn sm go" data-act="salePay" data-job="'+esc(s.jobId)+'" data-bill="'+esc(s.id)+'">Receive</button></div>':'')+
+      '</td></tr>';
   });
   h+='</tbody></table></div>';
   if(list.length>120) h+='<div class="hint" style="padding:10px 14px">Showing 120 of '+list.length+'.</div>';
@@ -9877,10 +9881,12 @@ function purchBills(all){
         ? '<span class="tag t-amber" style="font-size:9px;padding:1px 5px">no GST</span>'
         : '<span class="tag t-blue" style="font-size:9px;padding:1px 5px">'+(p.taxMode==='intra'?'CGST+SGST':'IGST')+'</span>')+
       '</div>'+
-      (st!=='paid'?'<div class="small">'+dueIn(new Date(p.invDate).getTime(),sup.creditDays)+'</div>':'')+
+      (st!=='paid'?'<div class="small">'+dueLabel(purchDueAt(p))+'</div>':'')+
       '</td>'+
       '<td class="num">'+amountPair(x.total,x.due)+
-      '<div style="margin-top:6px">'+statusTag(st)+'</div></td></tr>';
+      '<div style="margin-top:6px">'+statusTag(st)+'</div>'+
+      (x.due>0&&can('pay.vendor')?'<div style="margin-top:6px"><button class="btn sm primary" data-act="purchPay" data-id="'+p.id+'">Pay</button></div>':'')+
+      '</td></tr>';
   });
   h+='</tbody></table></div>';
   if(list.length>120) h+='<div class="hint" style="padding:10px 14px">Showing 120 of '+list.length+'.</div>';
@@ -10390,6 +10396,223 @@ async function reversePayment(id){
   if(!await savePartyData()){ PAYMENTS.pop(); delete v.reversedBy; return; }
   closeModal(); rerender(); toast('Reversed '+money(v.amount),'good');
 }
+/* =====================================================================
+   PAYING A BILL WHERE THE BILL IS
+   Purchase bills are paid bill by bill, so the payment lives on the bill:
+   when it is entered (often already paid), on the bill itself, and in the
+   list. It is the same payment record the party ledger uses, so the
+   supplier's balance, ageing and the cash book all move together.
+   Paying more than is due keeps the extra as credit with that supplier,
+   and that credit is used first on their next bill.
+   ===================================================================== */
+var VENDOR_DAYS=30;   /* when a supplier has no credit days of their own */
+function supplierOf(p){ return partyById(p.supplierId)||supplierById(p.supplierId)||{name:'—',creditDays:0}; }
+function purchDueAt(p){
+  var sup=supplierOf(p), d=sup.creditDays>0?sup.creditDays:VENDOR_DAYS;
+  return new Date((p.invDate||isoDate())+'T10:00:00').getTime()+d*86400000;
+}
+function dueLabel(dueAt){
+  var days=Math.ceil((dueAt-Date.now())/86400000);
+  if(days>0) return '<span class="due">Due in '+days+' day'+(days===1?'':'s')+'</span>';
+  if(days===0) return '<span class="due">Due today</span>';
+  return '<span class="due over">Overdue by '+(-days)+' day'+(days===-1?'':'s')+'</span>';
+}
+function payAllocated(v){ return (v.allocations||[]).reduce(function(a,x){ return a+x.amount; },0); }
+/* money already paid to a supplier that no bill has used yet */
+function vendorCredit(partyId){
+  var t=0;
+  PAYMENTS.forEach(function(v){
+    if(v.partyId!==partyId||v.direction!=='out'||v.reversalOf||v.reversedBy) return;
+    t+=Math.max(0,v.amount-payAllocated(v));
+  });
+  return t;
+}
+/* use that credit, oldest first, against one bill */
+function useVendorCredit(partyId,docId,docNo,upTo){
+  var used=0;
+  PAYMENTS.filter(function(v){ return v.partyId===partyId&&v.direction==='out'&&!v.reversalOf&&!v.reversedBy; })
+    .sort(function(a,b){ return a.at-b.at; })
+    .forEach(function(v){
+      var free=v.amount-payAllocated(v), take=Math.min(free,upTo-used);
+      if(take<=0) return;
+      v.allocations=(v.allocations||[]).concat([{docId:docId,docNo:docNo,amount:take,credit:true,at:Date.now()}]);
+      used+=take;
+    });
+  return used;
+}
+/* everything paid against one bill, for its history */
+function billPayments(docId){
+  var out=[];
+  PAYMENTS.forEach(function(v){
+    if(v.reversalOf) return;
+    (v.allocations||[]).forEach(function(a){
+      if(a.docId!==docId) return;
+      out.push({pay:v, amount:a.amount, credit:!!a.credit, at:a.credit?(a.at||v.at):v.at});
+    });
+  });
+  return out.sort(function(a,b){ return a.at-b.at; });
+}
+function payStats(total,paid,due){
+  return '<div class="grid4" style="margin:6px 0 4px">'+
+    '<div class="stat"><div class="k">Bill total</div><div class="v money">'+money(total)+'</div></div>'+
+    '<div class="stat"><div class="k">Paid</div><div class="v money">'+money(paid)+'</div></div>'+
+    '<div class="stat"><div class="k">Balance</div><div class="v money" style="color:'+(due>0?'var(--red)':'var(--green)')+'">'+money(Math.max(0,due))+'</div></div></div>';
+}
+function activeAccounts(){ return ACCOUNTS.filter(function(a){ return a.active!==false; }); }
+function accountOptions(sel){
+  return activeAccounts().map(function(a){ return '<option value="'+a.id+'"'+(a.id===sel?' selected':'')+'>'+esc(a.name)+'</option>'; }).join('');
+}
+/* record one payment to a supplier against one bill */
+async function payPurchase(p,o){
+  var due=purchPaid(p).due, used=0, payId='';
+  if(o.useCredit&&due>0){
+    used=useVendorCredit(p.supplierId,p.id,p.invNo,due);
+    if(used) logAudit('Money','Supplier credit used',money(used)+' against '+p.invNo,p.invNo);
+  }
+  var rest=Math.max(0,due-used);
+  if(o.amount>0){
+    var alloc=Math.min(o.amount,rest);
+    payId=uid('pv');
+    PAYMENTS.push({ id:payId, partyId:p.supplierId, direction:'out', amount:o.amount,
+      accountId:o.accountId||(activeAccounts()[0]||{}).id, ref:o.ref||'', at:o.at||Date.now(),
+      allocations:alloc>0?[{docId:p.id, docNo:p.invNo, amount:alloc}]:[],
+      by:S.user.id, byName:S.user.name, note:'Paid on bill '+p.invNo });
+    logAudit('Money','Paid supplier',money(o.amount)+' on '+p.invNo+' · '+((accountById(o.accountId)||{}).name||'')+
+      (o.amount>alloc?' · '+money(o.amount-alloc)+' kept as credit':''),p.invNo);
+  }
+  if(!o.amount&&!used) return true;
+  if(!await savePartyData()){
+    /* nothing half-saved: take this payment and the credit use back off */
+    if(payId) PAYMENTS=PAYMENTS.filter(function(v){ return v.id!==payId; });
+    PAYMENTS.forEach(function(v){ v.allocations=(v.allocations||[]).filter(function(a){ return !(a.credit&&a.docId===p.id&&used); }); });
+    return false;
+  }
+  return true;
+}
+
+/* ---------- the Pay screen ---------- */
+function purchPayModal(id){
+  var p=PURCHASES.filter(function(x){ return x.id===id; })[0]; if(!p) return;
+  var x=purchPaid(p), sup=supplierOf(p), cr=vendorCredit(p.supplierId);
+  var useCr=Math.min(cr,x.due), rest=Math.max(0,x.due-useCr);
+  openModal('<h2>Pay '+esc(sup.name)+'</h2>'+
+    '<div class="small muted">Bill '+esc(p.invNo)+' · '+dOnly(new Date(p.invDate).getTime())+'</div>'+
+    payStats(x.total,x.paid,x.due)+
+    (cr>0&&x.due>0?'<label class="checkrow" style="display:flex;gap:10px;align-items:center;margin:0 0 12px">'+
+      '<input type="checkbox" name="usecr" checked> <span>Use <b>'+money(useCr)+'</b> of the '+money(cr)+' credit with '+esc(sup.name)+' first</span></label>':'')+
+    '<div class="field"><label>Amount paid now (₹)</label>'+
+      '<input type="number" step="0.01" inputmode="decimal" name="ppamt" value="'+paiseToInput(rest)+'" data-rest="'+rest+'" style="font-size:22px;min-height:60px">'+
+      '<div class="hint">Change it to pay part. Paying more than the balance keeps the extra as credit with this supplier.</div>'+
+      '<div class="btn-row" style="margin-top:6px"><button class="btn sm" data-act="ppFull">Paid in full</button></div></div>'+
+    '<div class="two"><div class="field"><label>Paid from</label><select name="ppacc">'+accountOptions()+'</select></div>'+
+      '<div class="field"><label>Date paid</label><input type="date" name="ppdate" value="'+isoDate()+'"></div></div>'+
+    '<div class="field"><label>Reference (UPI ref, cheque no.) — optional</label><input type="text" class="mono" name="ppref"></div>'+
+    '<div class="btn-row"><button class="btn" data-act="closeModal">Cancel</button>'+
+    '<button class="btn primary" data-act="purchPayDo" data-id="'+p.id+'">Record payment</button></div>');
+}
+function ppFull(){
+  var cr=document.querySelector('.sheet [name="usecr"]'), a=document.querySelector('.sheet [name="ppamt"]');
+  if(!a) return;
+  var p=PURCHASES.filter(function(x){ return x.id===(document.querySelector('.sheet [data-act="purchPayDo"]')||{dataset:{}}).dataset.id; })[0];
+  if(!p) return;
+  var due=purchPaid(p).due, credit=(cr&&cr.checked)?Math.min(vendorCredit(p.supplierId),due):0;
+  a.value=paiseToInput(Math.max(0,due-credit));
+}
+async function purchPayDo(id){
+  if(!can('pay.vendor')){ toast('Only Kunal or Jatin can pay suppliers','bad'); return; }
+  var p=PURCHASES.filter(function(x){ return x.id===id; })[0]; if(!p) return;
+  var g=function(n){ var e=document.querySelector('.sheet [name="'+n+'"]'); return e?(e.type==='checkbox'?e.checked:e.value.trim()):''; };
+  var amt=toPaise(g('ppamt')), useCr=!!g('usecr');
+  if(amt<0){ toast('The amount cannot be below zero','bad'); return; }
+  if(!amt&&!useCr){ toast('Enter the amount paid','bad'); return; }
+  var at=g('ppdate')?new Date(g('ppdate')+'T12:00:00').getTime():Date.now();
+  if(!await payPurchase(p,{amount:amt, accountId:g('ppacc'), ref:g('ppref'), at:at, useCredit:useCr})) return;
+  closeModal(); rerender();
+  var x=purchPaid(p);
+  toast(x.due>0?money(x.due)+' still to pay on '+p.invNo:p.invNo+' fully paid','good');
+}
+
+/* ---------- on the bill: status, history, Pay ---------- */
+function purchPaySection(p){
+  if(!seeMoney()) return '';
+  var x=purchPaid(p), st=purchStatus(p), hist=billPayments(p.id), cr=vendorCredit(p.supplierId);
+  var h='<div class="card"><div class="card-h"><h2>Payment</h2><span style="margin-left:auto">'+statusTag(st)+'</span></div><div class="card-b">'+
+    payStats(x.total,x.paid,x.due)+
+    (x.due>0?'<div class="small" style="margin-top:8px">'+dueLabel(purchDueAt(p))+'</div>':'')+
+    (cr>0?'<div class="small" style="margin-top:6px;color:var(--green)">'+money(cr)+' credit with '+esc(supplierOf(p).name)+'</div>':'');
+  if(hist.length){
+    h+='<table class="lines" style="margin-top:10px"><tbody>'+hist.map(function(e){
+      var v=e.pay, rev=!!v.reversedBy;
+      return '<tr><td>'+dOnly(e.at)+'<div class="small muted">'+(e.credit?'From credit':esc((accountById(v.accountId)||{name:''}).name))+
+        (v.ref?' · <span class="mono">'+esc(v.ref)+'</span>':'')+' · '+esc(v.byName||'')+'</div>'+
+        (rev?'<div class="small" style="color:var(--red)">Reversed</div>':'')+'</td>'+
+        '<td class="num"><span class="money"'+(rev?' style="text-decoration:line-through"':'')+'>'+money(e.amount)+'</span>'+
+        (v.amount>e.amount&&!e.credit?'<div class="small muted">of '+money(v.amount)+'</div>':'')+
+        (!rev&&!e.credit&&can('pay.fix')?'<div><button class="btn sm" data-act="reversePay" data-id="'+v.id+'">Reverse</button></div>':'')+'</td></tr>';
+    }).join('')+'</tbody></table>';
+  } else h+='<div class="small muted" style="margin-top:8px">Nothing paid yet.</div>';
+  if(x.due>0&&can('pay.vendor')) h+='<div class="btn-row" style="margin-top:12px">'+
+    '<button class="btn primary" data-act="purchPay" data-id="'+p.id+'">Pay</button></div>';
+  return h+'</div></div>';
+}
+
+/* ---------- while the bill is being entered ---------- */
+function purchPayEntry(p){
+  if(!seeMoney()||!can('pay.vendor')) return '';
+  var pn=p.payNow||{mode:'none'}, T=billTotals(p);
+  var cr=p.supplierId?vendorCredit(p.supplierId):0;
+  var h='<div class="card"><div class="card-h"><h2>Payment</h2></div><div class="card-b">'+
+    '<div class="seg" id="ppseg">'+[['none','Not paid'],['full','Paid in full'],['part','Part paid']].map(function(m){
+      return '<button data-act="purchPayMode" data-v="'+m[0]+'" aria-pressed="'+(pn.mode===m[0])+'">'+m[1]+'</button>'; }).join('')+'</div>';
+  if(cr>0) h+='<label class="checkrow" style="display:flex;gap:10px;align-items:center;margin-top:10px">'+
+    '<input type="checkbox" name="pnusecr"'+(pn.useCredit===false?'':' checked')+'> <span>Use the '+money(cr)+' credit with this supplier first</span></label>';
+  if(pn.mode==='none'){
+    h+='<div class="hint" style="margin-top:8px">Pay it later from this bill or the bills list. '+
+      (p.supplierId?'Due '+dOnly(purchDueAt(p))+'.':'Due 30 days from the bill date unless the supplier has their own credit days.')+'</div>';
+    return h+'</div></div>';
+  }
+  if(pn.mode==='part') h+='<div class="field" style="margin-top:10px"><label>Amount paid (₹)</label>'+
+    '<input type="number" step="0.01" inputmode="decimal" name="pnamt" value="'+(pn.amount?paiseToInput(pn.amount):'')+'">'+
+    '<div class="hint">The rest shows as the balance on the bill. More than the bill total is kept as credit with the supplier.</div></div>';
+  else h+='<div class="small" style="margin-top:10px">The bill total, '+money(T.grand)+', is recorded as paid'+(cr>0?' (after any credit used)':'')+'.</div>';
+  h+='<div class="two" style="margin-top:6px"><div class="field"><label>Paid from</label><select name="pnacc">'+accountOptions(pn.accountId)+'</select></div>'+
+    '<div class="field"><label>Date paid</label><input type="date" name="pndate" value="'+esc(pn.date||p.invDate||isoDate())+'"></div></div>'+
+    '<div class="field"><label>Reference — optional</label><input type="text" class="mono" name="pnref" value="'+esc(pn.ref||'')+'"></div>';
+  return h+'</div></div>';
+}
+function grabPayNow(){
+  var p=S.purch; if(!p||p.saved) return;
+  p.payNow=p.payNow||{mode:'none'};
+  var f=function(n){ var e=document.querySelector('[name="'+n+'"]'); return e?(e.type==='checkbox'?e.checked:e.value.trim()):null; };
+  if(f('pnamt')!==null) p.payNow.amount=toPaise(f('pnamt'));
+  if(f('pnacc')!==null) p.payNow.accountId=f('pnacc');
+  if(f('pndate')!==null) p.payNow.date=f('pndate');
+  if(f('pnref')!==null) p.payNow.ref=f('pnref');
+  if(f('pnusecr')!==null) p.payNow.useCredit=f('pnusecr');
+}
+/* after the bill is safely in: the payment that came with it */
+async function payNowAfterSave(p){
+  var pn=p.payNow; if(!pn) return;
+  var useCr=pn.useCredit!==false&&vendorCredit(p.supplierId)>0;
+  if(pn.mode==='none'){ if(useCr) await payPurchase(p,{amount:0,useCredit:true}); return; }
+  var due=purchPaid(p).due, credit=useCr?Math.min(vendorCredit(p.supplierId),due):0;
+  var amt=pn.mode==='full'?Math.max(0,due-credit):(pn.amount||0);
+  if(pn.mode==='part'&&!amt&&!useCr) return;
+  var at=pn.date?new Date(pn.date+'T12:00:00').getTime():Date.now();
+  var ok=await payPurchase(p,{amount:amt, accountId:pn.accountId, ref:pn.ref, at:at, useCredit:useCr});
+  if(!ok) toast('The bill is saved, but the payment was not. Open the bill and press Pay.','bad');
+}
+
+/* ---------- sales: what is still owed on an invoice ----------
+   Money taken on the job card sits on the bill; money received through
+   the customer's account is set against the invoice there. Both count. */
+function billDue(j,b){ var c=billCalc(j,b); return c.balance-allocatedTo(b.id); }
+function saleDue(s){ return Math.max(0,(s.balance||0)-allocatedTo(s.id)); }
+async function salePayOpen(jobId,billId){
+  await openInvoice(jobId,billId);
+  if(S.job&&S.job.id===jobId) payModal(billId);
+}
+
 /* partyEntries walks every purchase, sale and receipt. Doing that once per
    party per render is fine at fifty parties and hopeless at five thousand,
    so balances are worked out once and kept until something changes. */
@@ -11358,6 +11581,7 @@ function viewPurchase(){
        ? 'No GST on this bill, so no input credit.'
        : 'Rates are entered exactly as printed. Tax is separated when the cost of each part is worked out.')+'</p>'+
      '</div></div>';
+  h+=done?purchPaySection(p):(p.editing?'':purchPayEntry(p));
 
   h+='<div class="actionbar"><div class="actionbar-in">'+
      '<button class="btn lg" style="flex:0 0 110px" data-act="deskBack">Back</button>'+
@@ -11717,6 +11941,7 @@ function grabPurchaseHeader(){
   var r=document.querySelector('[name="roundoff"]');
   if(r&&p.roundMode!=='auto') p.roundOff=toPaise(r.value);
   ['irn','ackNo'].forEach(function(n){ var e=document.querySelector('[name="'+n+'"]'); if(e) p[n]=e.value.trim(); });
+  grabPayNow();
 }
 function addPLineModal(idx){
   grabPurchaseHeader();
@@ -11917,7 +12142,10 @@ async function savePurchase(){
   p.at=Date.now(); p.by=S.user.id; p.saved=true;
   var ok=await receivePurchase(p);
   if(!ok){ p.saved=false; return; }
-  toast(p.lines.length+' item'+(p.lines.length>1?'s':'')+' received into stock','good');
+  await payNowAfterSave(p);
+  delete p.payNow;
+  toast(p.lines.length+' item'+(p.lines.length>1?'s':'')+' received into stock'+
+    (purchStatus(p)==='paid'?' \u00B7 paid':(purchStatus(p)==='part'?' \u00B7 '+money(purchPaid(p).due)+' still to pay':'')),'good');
   S.view={name:'desk',tab:'purch'}; S.purch=null; window.scrollTo(0,0); render();
 }
 
@@ -12651,7 +12879,10 @@ function billCard(j,b){
     h+='<div class="totrow"><span>Paid · '+esc(p.mode.toUpperCase())+(p.ref?' <span class="small muted mono">'+esc(p.ref)+'</span>':'')+
       ' <span class="small muted">'+dts(p.at)+'</span></span><span class="money">-'+money(p.paise)+'</span></div>';
   });
-  if(c.advance||c.paid) h+='<div class="totrow grand" style="border-color:'+(c.balance>0?'var(--red)':'var(--green)')+';color:'+(c.balance>0?'var(--red)':'var(--green)')+'">'+
+  var viaAcct=allocatedTo(b.id);
+  if(viaAcct){ c.balance-=viaAcct;
+    h+='<div class="totrow"><span>Received through the customer\u2019s account</span><span class="money">-'+money(viaAcct)+'</span></div>'; }
+  if(c.advance||c.paid||viaAcct) h+='<div class="totrow grand" style="border-color:'+(c.balance>0?'var(--red)':'var(--green)')+';color:'+(c.balance>0?'var(--red)':'var(--green)')+'">'+
     '<span>'+(c.balance>0?'Balance to collect':'Nothing due')+'</span><span class="money">'+money(c.balance)+'</span></div>';
   h+='</div>';
 
@@ -12661,7 +12892,7 @@ function billCard(j,b){
     btn.push('<button class="btn primary" data-act="viewInvoice" data-bill="'+b.id+'">View invoice</button>');
     btn.push('<button class="btn" data-act="sendInvoice" data-bill="'+b.id+'">Send to customer</button>');
     if(can('bill.make')) btn.push('<button class="btn" data-act="salesReturn" data-job="'+j.id+'" data-bill="'+b.id+'">Goods returned</button>');
-    if(c.balance>0&&can('pay.take')) btn.push('<button class="btn go" data-act="payModal" data-bill="'+b.id+'">Take payment</button>');
+    if(billDue(j,b)>0&&can('pay.take')) btn.push('<button class="btn go" data-act="payModal" data-bill="'+b.id+'">Take payment</button>');
     if(can('bill.final')) btn.push('<button class="btn danger sm" data-act="cancelBill" data-bill="'+b.id+'">Cancel this bill</button>');
   }
   if(btn.length) h+='<div class="btn-row" style="margin-top:16px">'+btn.join('')+'</div>';
@@ -12810,6 +13041,7 @@ async function cancelBillDo(billId){
 }
 function payModal(billId){
   var j=S.job, b=j.bills.filter(function(x){return x.id===billId;})[0], c=billCalc(j,b);
+  c.balance=billDue(j,b);
   openModal('<h2>Take payment</h2>'+
     '<div class="banner" style="margin:12px 0"><div class="eyebrow" style="color:var(--ink)">Balance</div>'+
     '<div class="money" style="font-size:30px">'+money(c.balance)+'</div></div>'+
@@ -13000,6 +13232,13 @@ function viewInvoice(){
   var h=pageHead((b.type==='gst'?'Tax invoice':'Bill of supply')+' \u00B7 '+(j.direct?esc(channelName(j.channel)):esc(regShow(j.reg))),
     b.number||'Draft', esc(j.cust.name)+' \u00B7 '+dOnly(b.finalAt||Date.now())+' \u00B7 '+money(c.grand)+
     (b.status==='cancelled'?' \u00B7 <b style="color:var(--red)">CANCELLED</b>':''));
+  if(b.status==='final'&&seeMoney()){
+    var bd=billDue(j,b), bpaid=c.grand-bd;
+    h+='<div class="card"><div class="card-h"><h2>Payment</h2><span style="margin-left:auto">'+
+      statusTag(bd<=0?'paid':(bpaid>0?'part':'unpaid'))+'</span></div><div class="card-b">'+payStats(c.grand,bpaid,bd)+
+      (bd>0&&can('pay.take')?'<div class="btn-row" style="margin-top:10px"><button class="btn go" data-act="payModal" data-bill="'+b.id+'">Receive payment</button></div>':'')+
+      '</div></div>';
+  }
   h+='<div class="docpaper"><div class="doc" id="invdoc">'+billDocHtml(j,b)+'</div></div>';
   h+='<div class="card"><div class="card-h"><h2>Sent to the customer</h2>'+
     '<span class="tag '+(sends.length?'t-green':'t-grey')+'" style="margin-left:auto">'+
@@ -14861,10 +15100,17 @@ async function dispatch(a,arg,d,t){
     case 'showBill': showBill(d.id); break;
     case 'verifyExp': return verifyItem('exp',d.id);
     case 'verifyPay': return verifyItem('pay',d.id);
-    case 'reversePay': confirmBox('Reverse this payment?',
+    case 'reversePay': if(!can('pay.fix')){ toast('Only Kunal or Jatin can reverse a payment','bad'); break; }
+      confirmBox('Reverse this payment?',
       'An opposite entry is added. Both stay on the ledger, so the record shows what happened.',
       'Reverse it','reversePayDo|'+d.id,'danger'); break;
-    case 'reversePayDo': return reversePayment(arg);
+    case 'reversePayDo': if(!can('pay.fix')) return; return reversePayment(arg);
+    case 'purchPay': purchPayModal(d.id); break;
+    case 'purchPayDo': return purchPayDo(d.id);
+    case 'ppFull': ppFull(); break;
+    case 'purchPayMode': grabPurchaseHeader(); S.purch.payNow=S.purch.payNow||{}; S.purch.payNow.mode=d.v;
+      if(d.v==='full'&&S.purch.payNow.useCredit===undefined) S.purch.payNow.useCredit=true; rerender(); break;
+    case 'salePay': return salePayOpen(d.job,d.bill);
     case 'editJob': editJobModal(); break;
     case 'saveJobEdit': return saveJobEdit();
     case 'staff': S.view={name:'staff'}; window.scrollTo(0,0); render(); break;
