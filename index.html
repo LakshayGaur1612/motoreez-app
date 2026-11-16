@@ -1891,7 +1891,7 @@ var PERM={
   owner:['tech.assign','purch.edit','job.new','job.edit','work.add','work.tick','req.set','price.set','price.override',
          'estimate.send','approve.customer','addition.raise','bill.make','bill.final','pay.take',
          'see.money','see.phone','see.all','parts','ledgers','float','spend.own','spend.all',
-         'verify.all','reports','export','settings','users','wash.do','sale.new'],
+         'verify.all','reports','export','settings','users','wash.do','sale.new','cat.add'],
   advisor:['job.new','job.edit','req.set','see.phone','see.all','float','spend.own'],
   foreman:['tech.assign','purch.edit','job.new','job.edit','work.add','work.tick','req.set','addition.raise','price.override',
            'see.money','see.phone','see.all','parts','ledgers','float','spend.own','verify.junior'],
@@ -5205,9 +5205,303 @@ function gstinCheck(g){
 }
 
 var UNITS=['piece','set','pair','litre','ml','kg','gram','metre','box','can','bottle','job'];
-var CATEGORIES=['Engine','Brakes','Suspension','Transmission','Electrical','Body & Panels','Tyres & Wheels',
-  'Oils & Fluids','Filters','Cables','Bearings & Bushes','Paint & Consumables','Accessories','Exhaust',
-  'Performance & Tuning','Hardware','Merchandise','Labour','Uncategorised'];
+/* ---------- what a product is: group > category, and who made it ----------
+   You pick the specific category; the group comes with it. Reports can
+   then say "Brakes" or "Brake Pads vs Brake Shoes" from the same data. */
+var CAT_TREE=[
+ ['Engine',['Piston & Rings','Cylinder & Head','Gaskets & Oil Seals','Valves & Valve Parts','Cam Chain & Tensioner',
+   'Crankshaft & Connecting Rod','Oil Pump','Engine Covers','Kick Starter Parts','Engine Mounting']],
+ ['Fuel & Air',['Carburettor & Parts','Throttle Body & Injector','Fuel Pump','Fuel Hose','Fuel Cock & Tank Cap','Air Filter Box','Intake Manifold']],
+ ['Cooling',['Radiator','Coolant Hoses & Clamps','Radiator Fan','Thermostat','Oil Cooler']],
+ ['Filters',['Oil Filter','Air Filter','Fuel Filter']],
+ ['Oils & Fluids',['Engine Oil','Gear Oil','Fork Oil','Coolant','Chain Lube & Cleaner','Grease','Additives']],
+ ['Brakes',['Brake Pads','Brake Shoes','Brake Disc','Master Cylinder','Brake Caliper','Caliper / Master Cylinder Kit',
+   'Brake Hose','Brake Fluid','ABS Parts']],
+ ['Transmission',['Chain Sprocket Kit','Chain','Front Sprocket','Rear Sprocket','Clutch Plates','Clutch Assembly',
+   'Gearbox Parts','Cush Drive Rubber','Chain Guard','Chain Adjuster']],
+ ['Suspension & Steering',['Fork Tube','Fork Oil Seal & Dust Seal','Fork Bushes','Rear Shock Absorber','Steering Bearing',
+   'Triple Clamp','Swingarm Bushes','Handlebar','Handlebar Risers']],
+ ['Controls',['Brake & Clutch Levers','Throttle Assembly','Grips','Bar Ends','Mirrors','Footrests & Rubbers','Gear Shift Lever','Brake Pedal']],
+ ['Tyres & Wheels',['Tyre','Tube','Rim','Spokes','Wheel Bearing','Hub & Axle','Valve & Puncture Kit','Wheel Weights']],
+ ['Electrical',['Battery','Spark Plug','Ignition Coil','CDI / ECU','Stator / Magneto Coil','Starter Motor','Relays',
+   'Regulator Rectifier','Wiring & Connectors','Switches','Key Set & Ignition Lock','Fuses','Horn','Speedometer & Meter','Sensors']],
+ ['Lights',['Headlight Assembly','Headlight Bulb','Tail Light','Indicators','DRL & LED Strips','Number Plate Light']],
+ ['Cables',['Clutch Cable','Accelerator Cable','Choke Cable','Speedometer Cable','Brake Cable','Seat Lock Cable']],
+ ['Body & Panels',['Seat','Seat Cover','Side Panels','Tail Panel','Fairing','Mudguards','Visor & Windshield','Fuel Tank',
+   'Tank Pad & Grip','Grab Rail','Side Stand & Main Stand','Number Plate','Stickers & Decals','Badges & Emblems']],
+ ['Exhaust',['Full Exhaust System','Slip-On Silencer','Header / Bend Pipe','Exhaust Gasket & Clamps','DB Killer']],
+ ['Accessories',['Crash Guard','Saddle Stay','Top Rack','Top Box','Side Boxes / Panniers','Aux Light','Engine / Sump Guard',
+   'Radiator Guard','Headlight Grill','Handguards','Frame & Fork Sliders','Backrest','Tail Tidy','Saddle Bags','Tank Bag',
+   'Tail Bag','Mobile Holder','USB Charger','GPS Mount','Bike Cover','Locks & Anti-Theft','Other Accessories']],
+ ['Riding Gear',['Helmets','Helmet Visor & Parts','Jackets','Riding Pants','Gloves','Boots','Knee & Elbow Guards','Rain Gear','Balaclava','Intercom']],
+ ['Merchandise',['T-Shirts','Caps','Keychains','Other Merchandise']],
+ ['Performance & Tuning',['PowerTronic','Fuel X','Performance Air Filter','Fuel Controller / Remap','Other Performance Parts']],
+ ['Care & Detailing',['Wash & Shampoo','Polish & Wax','Ceramic & Coating','Rust Remover','Microfibre & Cloths']],
+ ['Paint & Consumables',['Paint','Primer & Putty','Thinner','Sandpaper & Masking','Sealants & Thread Locker','Workshop Consumables']],
+ ['Hardware',['Nuts, Bolts & Washers','Clips & Fasteners','Springs','Rubber Grommets']],
+ ['Tools & Equipment',['Tyre Inflator','Tool Kits','Other Tools']],
+ ['Labour',['Labour']]
+];
+function catTree(){
+  var t=CAT_TREE.map(function(g){ return [g[0],g[1].slice()]; });
+  ((S.core&&S.core.customCats)||[]).forEach(function(x){
+    var g=t.filter(function(y){ return y[0]===x.g; })[0];
+    if(!g){ g=[x.g,[]]; t.splice(t.length-1,0,g); }
+    if(g[1].indexOf(x.c)<0) g[1].push(x.c);
+  });
+  return t;
+}
+function allCats(){ var o=[]; catTree().forEach(function(g){ o=o.concat(g[1]); }); return o; }
+function catIsSet(c){ return !!c&&allCats().indexOf(c)>=0; }
+function catFind(c){ var k=String(c||'').toLowerCase().trim(); if(!k) return ''; return allCats().filter(function(x){ return x.toLowerCase()===k; })[0]||''; }
+/* the group a category sits in; an old broad heading is its own group */
+function catGroup(c){
+  if(!c) return '';
+  var t=catTree();
+  for(var i=0;i<t.length;i++) if(t[i][1].indexOf(c)>=0) return t[i][0];
+  for(var j=0;j<t.length;j++) if(t[j][0]===c) return c;
+  if(c==='Bearings & Bushes') return 'Suspension & Steering';
+  if(c==='Suspension') return 'Suspension & Steering';
+  if(c==='Electrical') return 'Electrical';
+  return '';
+}
+function catLabel(p){
+  if(!p) return '';
+  if(catIsSet(p.category)) return catGroup(p.category)+' › '+p.category;
+  var g=catGroup(p.category);
+  return (g?g+' · ':'')+'<span style="color:var(--amber);font-weight:700">Category not set</span>';
+}
+/* read a category off a product's name. The order matters: the narrow
+   names come before the broad ones. Anything not sure stays unset. */
+var CAT_RULES=[
+ [/power\s*-?tronic/i,'PowerTronic'],[/fuel\s*-?x\b/i,'Fuel X'],
+ [/remap|fuel\s*controller|piggy\s*back|fuel\s*module/i,'Fuel Controller / Remap'],
+ [/\b(k\s*&\s*n|bmc|dna)\b.*filter/i,'Performance Air Filter'],
+ [/aux|fog\s*l(igh|am)p?/i,'Aux Light'],
+ [/brake\s*fluid|\bdot\s*[345]\b/i,'Brake Fluid'],
+ [/fork\s*(oil\s*)?seal|dust\s*seal/i,'Fork Oil Seal & Dust Seal'],
+ [/fork\s*oil/i,'Fork Oil'],[/gear\s*oil|transmission\s*oil/i,'Gear Oil'],
+ [/(coolant|radiator)\s*(hose|pipe)/i,'Coolant Hoses & Clamps'],[/coolant|anti\s*freeze/i,'Coolant'],
+ [/chain\s*(lube|spray|clean|wax)/i,'Chain Lube & Cleaner'],[/grease/i,'Grease'],
+ [/additive|octane\s*boost|injector\s*clean/i,'Additives'],
+ [/oil\s*filter/i,'Oil Filter'],[/air\s*(filter\s*)?box/i,'Air Filter Box'],[/air\s*(filter|cleaner)/i,'Air Filter'],[/fuel\s*filter/i,'Fuel Filter'],
+ [/engine\s*oil|motor\s*oil|\b\d{1,2}\s*w\s*-?\s*\d{2}\b/i,'Engine Oil'],
+ [/shampoo|bike\s*wash|foam\s*wash/i,'Wash & Shampoo'],[/polish|\bwax\b/i,'Polish & Wax'],
+ [/ceramic|coating/i,'Ceramic & Coating'],[/rust|wd\s*-?\s*40|degreaser/i,'Rust Remover'],[/microfib|cloth|towel/i,'Microfibre & Cloths'],
+ [/clutch\s*cable/i,'Clutch Cable'],[/(accelerator|throttle|acc\.?)\s*cable/i,'Accelerator Cable'],
+ [/choke\s*cable/i,'Choke Cable'],[/(speedo\w*|meter)\s*cable/i,'Speedometer Cable'],
+ [/brake\s*cable/i,'Brake Cable'],[/seat\s*lock\s*cable/i,'Seat Lock Cable'],
+ [/brake\s*light|stop\s*light|tail\s*(light|lamp)/i,'Tail Light'],
+ [/disc\s*lock|alarm|tracker|anti\s*-?\s*theft/i,'Locks & Anti-Theft'],
+ [/exhaust\s*(gasket|clamp|spring)/i,'Exhaust Gasket & Clamps'],
+ [/brake\s*pad|disc\s*pad|\bpads?\b/i,'Brake Pads'],[/brake\s*shoe/i,'Brake Shoes'],
+ [/brake\s*(disc|rotor)|\brotor\b|disc\s*plate/i,'Brake Disc'],
+ [/(caliper|master\s*cyl\w*)\s*(seal\s*|repair\s*)?kit/i,'Caliper / Master Cylinder Kit'],
+ [/master\s*cyl/i,'Master Cylinder'],[/caliper/i,'Brake Caliper'],
+ [/brake\s*(hose|line|pipe)|braided/i,'Brake Hose'],[/\babs\b/i,'ABS Parts'],
+ [/brake\s*pedal/i,'Brake Pedal'],[/(clutch|brake)\s*lever|\blevers?\b/i,'Brake & Clutch Levers'],
+ [/key\s*(chain|ring)|keychain/i,'Keychains'],
+ [/packing\s*kit|gasket|o[\s-]?ring|oil\s*seal|seal\s*kit/i,'Gaskets & Oil Seals'],
+ [/chain\s*(and\s*|&\s*)?sprocket|sprocket\s*kit|chain\s*kit|\bcs\s*kit/i,'Chain Sprocket Kit'],
+ [/front\s*sprocket|engine\s*sprocket|\bpinion\b/i,'Front Sprocket'],[/sprocket/i,'Rear Sprocket'],
+ [/chain\s*(guard|cover)/i,'Chain Guard'],[/chain\s*adjust/i,'Chain Adjuster'],
+ [/cam\s*chain|timing\s*chain|tensioner/i,'Cam Chain & Tensioner'],[/\bchain\b/i,'Chain'],
+ [/(engine|clutch|magneto|side)\s*cover/i,'Engine Covers'],
+ [/clutch\s*(plate|disc)|friction\s*plate/i,'Clutch Plates'],[/clutch/i,'Clutch Assembly'],
+ [/cush\s*(drive|rubber)|hub\s*rubber|damper\s*rubber/i,'Cush Drive Rubber'],
+ [/gear\s*(shift|shifter|lever)|shift\s*lever/i,'Gear Shift Lever'],
+ [/gear\s*box|gearbox|gear\s*shaft/i,'Gearbox Parts'],
+ [/piston/i,'Piston & Rings'],
+ [/cylinder\s*(head|block|kit)|\bbarrel\b/i,'Cylinder & Head'],
+ [/rocker|cam\s*shaft|camshaft|tappet|valve\s*(guide|spring|seal|shim)|engine\s*valve/i,'Valves & Valve Parts'],
+ [/crank|connecting\s*rod|con\s*rod/i,'Crankshaft & Connecting Rod'],
+ [/oil\s*pump/i,'Oil Pump'],[/kick/i,'Kick Starter Parts'],[/engine\s*(mount|bracket)/i,'Engine Mounting'],
+ [/carb/i,'Carburettor & Parts'],[/throttle\s*body|injector/i,'Throttle Body & Injector'],
+ [/fuel\s*pump/i,'Fuel Pump'],[/fuel\s*(hose|pipe|line)/i,'Fuel Hose'],
+ [/fuel\s*cock|petrol\s*cock|petcock|tank\s*cap|fuel\s*cap/i,'Fuel Cock & Tank Cap'],
+ [/intake|inlet\s*manifold/i,'Intake Manifold'],
+ [/oil\s*cooler/i,'Oil Cooler'],[/radiator\s*(guard|grill)/i,'Radiator Guard'],
+ [/radiator\s*fan|cooling\s*fan/i,'Radiator Fan'],[/radiator/i,'Radiator'],[/thermostat/i,'Thermostat'],
+ [/tubeless\s*valve|tyre\s*valve|puncture/i,'Valve & Puncture Kit'],
+ [/fork\s*(tube|pipe|leg)|inner\s*tube/i,'Fork Tube'],[/fork\s*bush/i,'Fork Bushes'],
+ [/\btubes?\b/i,'Tube'],
+ [/\btyres?\b|\btires?\b|\b\d{2,3}\s*\/\s*\d{2,3}\s*-?\s*(zr|r)?\s*\d{2}\b|\b\d{2,3}-\d{2,3}-\d{2}\b/i,'Tyre'],
+ [/\brims?\b|alloy\s*wheel/i,'Rim'],[/spoke/i,'Spokes'],[/wheel\s*bearing/i,'Wheel Bearing'],
+ [/steering\s*(bearing|cone)|cone\s*set|ball\s*race/i,'Steering Bearing'],
+ [/swing\s*arm/i,'Swingarm Bushes'],[/\baxle\b|\bhub\b/i,'Hub & Axle'],[/wheel\s*weight|balancing\s*weight/i,'Wheel Weights'],
+ [/shock/i,'Rear Shock Absorber'],[/triple\s*clamp|\byoke\b/i,'Triple Clamp'],
+ [/riser/i,'Handlebar Risers'],[/handle\s*bar/i,'Handlebar'],
+ [/battery/i,'Battery'],[/spark\s*plug|iridium/i,'Spark Plug'],
+ [/stator|magneto|pick\s*-?up\s*coil/i,'Stator / Magneto Coil'],[/ignition\s*coil|\bh\.?t\.?\s*coil/i,'Ignition Coil'],
+ [/\bcdi\b|\becu\b/i,'CDI / ECU'],[/\brelay\b/i,'Relays'],
+ [/self\s*motor|starter\s*motor|self\s*gear|starter/i,'Starter Motor'],
+ [/rectifier|regulator/i,'Regulator Rectifier'],
+ [/wiring|harness|connector/i,'Wiring & Connectors'],
+ [/ignition\s*(lock|switch)|key\s*set|lock\s*set/i,'Key Set & Ignition Lock'],
+ [/switch/i,'Switches'],[/\bfuses?\b/i,'Fuses'],[/\bhorns?\b/i,'Horn'],
+ [/speedo|instrument\s*cluster|odometer|tacho|meter\s*(assy|assembly|console)/i,'Speedometer & Meter'],
+ [/sensor/i,'Sensors'],
+ [/headlight\s*(grill|guard|protector)/i,'Headlight Grill'],
+ [/head\s*-?\s*(light|lamp)\s*bulb|\bh4\b|\bbulb/i,'Headlight Bulb'],[/head\s*-?\s*(light|lamp)/i,'Headlight Assembly'],
+ [/indicator|blinker|winker|turn\s*signal/i,'Indicators'],[/\bdrl\b|led\s*strip/i,'DRL & LED Strips'],
+ [/(number|licen[cs]e)\s*plate\s*(light|lamp)/i,'Number Plate Light'],
+ [/seat\s*cover/i,'Seat Cover'],[/\bseats?\b/i,'Seat'],[/side\s*panel/i,'Side Panels'],
+ [/tail\s*(panel|cowl)|rear\s*cowl/i,'Tail Panel'],[/fairing/i,'Fairing'],
+ [/mud\s*guard|fender|hugger/i,'Mudguards'],
+ [/helmet\s*(visor|shield|pin)|pinlock/i,'Helmet Visor & Parts'],
+ [/visor|wind\s*(shield|screen)|fly\s*screen/i,'Visor & Windshield'],
+ [/tank\s*(pad|grip)|knee\s*grip|traction\s*pad/i,'Tank Pad & Grip'],
+ [/tank\s*bag/i,'Tank Bag'],[/fuel\s*tank|petrol\s*tank/i,'Fuel Tank'],
+ [/grab\s*rail|pillion\s*handle/i,'Grab Rail'],[/(side|main|centre|center)\s*stand/i,'Side Stand & Main Stand'],
+ [/(number|licen[cs]e)\s*plate/i,'Number Plate'],[/sticker|decal/i,'Stickers & Decals'],[/badge|emblem|monogram/i,'Badges & Emblems'],
+ [/mirror/i,'Mirrors'],[/bar\s*end/i,'Bar Ends'],[/\bgrips?\b/i,'Grips'],
+ [/foot\s*(rest|peg)|footrest|\bpegs?\b/i,'Footrests & Rubbers'],[/throttle/i,'Throttle Assembly'],
+ [/slip\s*-?\s*on|silencer|muffler/i,'Slip-On Silencer'],
+ [/header|bend\s*pipe|exhaust\s*pipe|link\s*pipe|mid\s*pipe/i,'Header / Bend Pipe'],
+ [/db\s*killer|baffle/i,'DB Killer'],[/exhaust/i,'Full Exhaust System'],
+ [/crash\s*guard|leg\s*guard/i,'Crash Guard'],
+ [/saddle\s*stay|pannier\s*(rail|stay|mount)|side\s*box\s*(mount|rail|bracket)/i,'Saddle Stay'],
+ [/top\s*box|top\s*case/i,'Top Box'],[/top\s*rack|luggage\s*rack|rear\s*rack|carrier/i,'Top Rack'],
+ [/side\s*(box|case)|pannier/i,'Side Boxes / Panniers'],
+ [/sump\s*guard|bash\s*plate|engine\s*guard|skid\s*plate/i,'Engine / Sump Guard'],
+ [/hand\s*guard/i,'Handguards'],[/slider/i,'Frame & Fork Sliders'],[/back\s*rest|sissy\s*bar/i,'Backrest'],
+ [/tail\s*tidy|fender\s*eliminator/i,'Tail Tidy'],[/saddle\s*bag/i,'Saddle Bags'],
+ [/tail\s*bag|seat\s*bag|duffel|dry\s*bag/i,'Tail Bag'],
+ [/(mobile|phone)\s*(holder|mount)/i,'Mobile Holder'],[/\busb\b|charger/i,'USB Charger'],
+ [/gps\s*mount|navigation\s*(tower|mount)/i,'GPS Mount'],[/(bike|body)\s*cover/i,'Bike Cover'],
+ [/helmet/i,'Helmets'],[/jacket/i,'Jackets'],[/riding\s*(pant|trouser|jeans)|\btrousers?\b/i,'Riding Pants'],
+ [/glove/i,'Gloves'],[/\bboots?\b/i,'Boots'],[/knee|elbow/i,'Knee & Elbow Guards'],
+ [/rain\s*(suit|coat|gear|liner)|raincoat/i,'Rain Gear'],[/balaclava|neck\s*gaiter/i,'Balaclava'],
+ [/intercom|communicator/i,'Intercom'],
+ [/t\s*-?\s*shirt|\btee\b/i,'T-Shirts'],
+ [/primer|putty/i,'Primer & Putty'],[/thinner/i,'Thinner'],[/sand\s*paper|masking|emery/i,'Sandpaper & Masking'],
+ [/sealant|thread\s*lock|loctite|silicone|\brtv\b|anabond/i,'Sealants & Thread Locker'],
+ [/\bpaint|lacquer|clear\s*coat|enamel/i,'Paint'],[/cotton\s*waste|nitrile/i,'Workshop Consumables'],
+ [/\bnuts?\b|\bbolts?\b|\bwashers?\b|\bscrews?\b/i,'Nuts, Bolts & Washers'],
+ [/\bclips?\b|fastener|rivet|circlip/i,'Clips & Fasteners'],[/\bsprings?\b/i,'Springs'],[/grommet/i,'Rubber Grommets'],
+ [/inflator|compressor/i,'Tyre Inflator'],[/tool\s*kit|spanner|wrench|screwdriver/i,'Tool Kits']
+];
+function catGuess(name){
+  var n=String(name||'');
+  for(var i=0;i<CAT_RULES.length;i++) if(CAT_RULES[i][0].test(n)) return CAT_RULES[i][1];
+  return '';
+}
+
+/* who made it. Bike makers are left out of the guess on purpose: in a
+   name like "Clutch Plate Activa" Honda is what it fits, not who made it. */
+var BRAND_LOCAL='Local / Unbranded';
+var BRAND_SEED=['3M','Amaron','Apollo','BMC','Bosch','Brembo','Bridgestone','Castrol','Ceat','Continental','Denso','DID',
+ 'DNA','DP','Dunlop','EBC','Endurance','Exide','Fuel X','Gabriel','Givi','Gulf','Ipone','K&N','Liqui Moly','Lumax','Maddog',
+ "Meguiar's",'Metzeler','Michelin','Minda','Mobil','Motorex','Motoreez','Motul','MRF','MT','Newlite','NGK','Ohlins','Pirelli',
+ 'PowerTronic','Race Dynamics','RK','Rolon','RRP','Rynox','Shad','Shell','TVS Eurogrip','Varroc','Viaterra','WD-40','Wurth',
+ 'YSS','Zana','Bajaj','Hero','Honda','Kawasaki','KTM','Royal Enfield','Suzuki','Triumph','TVS','Yamaha'];
+var BRAND_NOGUESS=['Bajaj','Hero','Honda','Kawasaki','KTM','Royal Enfield','Suzuki','Triumph','TVS','Yamaha'];
+var BRAND_PAT={'DP':/\bdp\b/i,'K&N':/\bk\s*&\s*n\b/i,'Fuel X':/\bfuel\s*-?x\b/i,'PowerTronic':/power\s*-?tronic/i,
+ 'Liqui Moly':/liqui\s*-?moly/i,'TVS Eurogrip':/eurogrip/i,'WD-40':/wd\s*-?\s*40/i,"Meguiar's":/meguiar/i,
+ 'Race Dynamics':/race\s*dynamics/i,'Minda':/\b(uno\s*)?minda\b/i};
+function allBrands(){
+  var seen={}, out=[];
+  var add=function(b){ b=String(b||'').trim(); if(!b||b===BRAND_LOCAL) return; var k=b.toLowerCase(); if(!seen[k]){ seen[k]=1; out.push(b); } };
+  BRAND_SEED.forEach(add); ((S.core&&S.core.customBrands)||[]).forEach(add); PARTS.forEach(function(p){ add(p.brand); });
+  return out.sort(function(a,b){ return a.toLowerCase().localeCompare(b.toLowerCase()); });
+}
+function brandFind(b){ var k=String(b||'').toLowerCase().trim(); if(!k) return ''; if(k===BRAND_LOCAL.toLowerCase()) return BRAND_LOCAL;
+  return allBrands().filter(function(x){ return x.toLowerCase()===k; })[0]||''; }
+function brandGuess(name){
+  var n=String(name||''), best='', at=1e9;
+  allBrands().forEach(function(b){
+    if(BRAND_NOGUESS.indexOf(b)>=0) return;
+    var re=BRAND_PAT[b]||new RegExp('(^|[^a-z0-9])'+b.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'($|[^a-z0-9])','i');
+    var m=n.match(re); if(m&&m.index<at){ at=m.index; best=b; }
+  });
+  return best;
+}
+function brandLabel(p){
+  if(!p||isLabour(p)) return '';
+  return p.brand?esc(p.brand):'<span style="color:var(--amber);font-weight:700">Brand not set</span>';
+}
+
+/* the pickers on the product forms */
+function catPicker(sel,name){
+  name=name||'pcat';
+  if(sel&&!catIsSet(sel)) sel='';
+  var h='<select name="'+name+'" data-picknew="newcat"><option value="">— Pick One —</option>';
+  catTree().forEach(function(g){
+    h+='<optgroup label="'+esc(g[0])+'">'+g[1].map(function(c){
+      return '<option value="'+esc(c)+'"'+(c===sel?' selected':'')+'>'+esc(c)+'</option>'; }).join('')+'</optgroup>';
+  });
+  if(can('cat.add')) h+='<option value="__new">+ New category…</option>';
+  h+='</select><div id="newcat" class="newbox" hidden style="margin-top:8px">'+
+    '<div class="two"><div class="field"><label>Group</label><select name="newcatg">'+
+    catTree().map(function(g){ return '<option>'+esc(g[0])+'</option>'; }).join('')+'</select></div>'+
+    '<div class="field"><label>New category name</label><input type="text" name="newcatn" placeholder="E.g. Fog Light Switch"></div></div></div>';
+  return h;
+}
+function brandPicker(sel){
+  var bs=allBrands();
+  if(sel&&sel!==BRAND_LOCAL&&bs.indexOf(sel)<0) bs.push(sel);
+  var h='<select name="pbrand" data-picknew="newbrand"><option value="">— Pick One —</option>'+
+    '<option'+(sel===BRAND_LOCAL?' selected':'')+'>'+BRAND_LOCAL+'</option>'+
+    bs.map(function(b){ return '<option value="'+esc(b)+'"'+(b===sel?' selected':'')+'>'+esc(b)+'</option>'; }).join('');
+  if(can('cat.add')) h+='<option value="__new">+ New brand…</option>';
+  h+='</select><div id="newbrand" class="newbox" hidden style="margin-top:8px"><div class="field">'+
+    '<label>New brand name</label><input type="text" name="newbrandn" placeholder="As written on the box"></div></div>';
+  return h;
+}
+document.addEventListener('change',function(e){
+  var el=e.target; if(!el||!el.dataset||!el.dataset.picknew) return;
+  var box=document.getElementById(el.dataset.picknew);
+  if(box){ box.hidden=(el.value!=='__new'); if(!box.hidden){ var i=box.querySelector('input'); if(i) i.focus(); } }
+});
+/* read the pickers back; a new one is saved for everyone */
+async function readCatBrand(nameForGuess){
+  var out={ok:false, cat:'', brand:''};
+  var c=dg('pcat');
+  if(c==='__new'){
+    if(!can('cat.add')){ toast('Only Kunal or Jatin can add a category','bad'); return out; }
+    var g=dg('newcatg'), n=titleCase(dg('newcatn'));
+    if(!n){ toast('Type the new category name','bad'); return out; }
+    var ex=catFind(n);
+    if(ex) c=ex;
+    else{
+      S.core.customCats=(S.core.customCats||[]).concat([{g:g, c:n, by:S.user.id, at:Date.now()}]);
+      await saveCore(); c=n; toast('Category '+n+' added under '+g,'good');
+    }
+  }
+  if(!c){ toast('Pick a category','bad'); return out; }
+  var b=dg('pbrand');
+  if(b==='__new'){
+    if(!can('cat.add')){ toast('Only Kunal or Jatin can add a brand','bad'); return out; }
+    var bn=titleCase(dg('newbrandn'));
+    if(!bn){ toast('Type the new brand name','bad'); return out; }
+    var bx=brandFind(bn);
+    if(bx) b=bx;
+    else{ S.core.customBrands=(S.core.customBrands||[]).concat([bn]); await saveCore(); b=bn; }
+  }
+  if(!b&&c!=='Labour'){ toast('Pick a brand — or Local / Unbranded','bad'); return out; }
+  out.ok=true; out.cat=c; out.brand=(c==='Labour')?'':b; return out;
+}
+/* existing products: read the category and brand off the name where it is clear */
+function catsMigrate(){
+  var n=0;
+  PARTS.forEach(function(p){
+    if(isLabour(p)){ if(p.category!=='Labour'&&!catIsSet(p.category)){ p.category='Labour'; n++; } return; }
+    if(!catIsSet(p.category)){
+      var g=catGuess(p.name);
+      if(g){ p.oldCategory=p.category; p.category=g; n++; }
+    }
+    if(!p.brand){ var b=brandGuess(p.name); if(b){ p.brand=b; n++; } }
+  });
+  return n;
+}
+
+/* a typed name fills an empty category and brand on its own */
+document.addEventListener('change',function(e){
+  var el=e.target; if(!el||el.name!=='pname'||!el.closest||!el.closest('.sheet')) return;
+  var c=document.querySelector('.sheet [name="pcat"]'), b=document.querySelector('.sheet [name="pbrand"]');
+  if(c&&!c.value){ var g=catGuess(el.value); if(g) c.value=g; }
+  if(b&&!b.value){ var bg=brandGuess(el.value); if(bg) b.value=bg; }
+});
 
 /* ---------- lookups ---------- */
 function pkey(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
@@ -5342,6 +5636,8 @@ function billTotals(p){
   var charges=p.charges||0;
   var chargeTax=(p.chargesTaxed&&charges)?Math.round(charges*0.18):0;
   var gross=taxable+tax+charges+chargeTax;
+  /* new bills round to the nearest rupee by themselves; older bills keep what was typed */
+  if(p.roundMode==='auto') p.roundOff=Math.round(gross/100)*100-gross;
   return {taxable:taxable, tax:tax, charges:charges, chargeTax:chargeTax,
           gross:gross, roundOff:p.roundOff||0, grand:gross+(p.roundOff||0)};
 }
@@ -5378,14 +5674,17 @@ function batchLabels(partId){
 function upsertPart(p,l){
   var part=partById(l.partId)||partByNo(l.no);
   if(!part){
-    part={id:uid('pt'), no:l.no, aliases:[], name:l.name, category:l.category, hsn:l.hsn, gst:l.gst,
+    part={id:uid('pt'), no:l.no, aliases:[], name:l.name,
+      category:catIsSet(l.category)?l.category:(catGuess(l.name)||l.category||''),
+      brand:l.brand||brandGuess(l.name)||'', hsn:l.hsn, gst:l.gst,
       unit:l.unit, buyUnit:l.buyUnit, conv:l.conv, mrp:l.mrp, sale:l.sale, minQty:0,
       createdAt:Date.now(), updatedAt:Date.now()};
     PARTS.push(part);
   } else {
     /* the latest bill wins on price, but the part keeps its identity */
     part.name=l.name||part.name; part.hsn=l.hsn||part.hsn; part.gst=l.gst;
-    part.category=l.category||part.category;
+    if(catIsSet(l.category)||!catIsSet(part.category)) part.category=catIsSet(l.category)?l.category:(part.category||l.category);
+    if(l.brand) part.brand=l.brand;
     part.unit=l.unit; part.buyUnit=l.buyUnit; part.conv=l.conv;
     if(l.mrp) part.mrp=l.mrp;
     if(l.sale) part.sale=l.sale;
@@ -7861,11 +8160,19 @@ function jobProfits(from,to){
     return g;
   }).sort(function(a,b){ return b.profit-a.profit; });
 }
-function categorySplit(from,to){
+/* level: 'kind' (the old one), 'group', 'cat' or 'brand'. The part as it is
+   filed today wins over the snapshot, so a re-filed part moves its history. */
+function categorySplit(from,to,level){
   var m={};
   salesIn(from,to).forEach(function(s){
     (s.lines||[]).forEach(function(l){
-      var key=(l.kind==='labour')?'Labour':(l.cat||'Uncategorised');
+      var pt=l.partId?partById(l.partId):null;
+      var cat=pt?pt.category:(l.cat||''), brand=pt?(pt.brand||''):(l.brand||'');
+      var key;
+      if(l.kind==='labour'||cat==='Labour') key='Labour';
+      else if(level==='brand') key=brand||'Brand not set';
+      else if(level==='cat') key=catIsSet(cat)?cat:'Category not set';
+      else key=catGroup(cat)||(cat||'Category not set');
       m[key]=m[key]||{name:key, rev:0, cost:0, qty:0};
       m[key].rev+=exTax(l.amount,l.gst||0); m[key].cost+=l.cost||0; m[key].qty+=l.qty||0;
     });
@@ -7991,15 +8298,17 @@ function booksJobs(){
   return h+'</tbody></table></div></div>';
 }
 
+var CAT_LEVELS=[['group','By Group'],['cat','By Category'],['brand','By Brand']];
 function booksCats(){
-  var per=S.bookPeriod||'month', R=periodRange(per);
-  var cs=categorySplit(R.from,R.to);
+  var per=S.bookPeriod||'month', R=periodRange(per), lv=S.catLevel||'group';
+  var cs=categorySplit(R.from,R.to,lv);
   var tot=cs.reduce(function(a,x){ return a+x.rev; },0);
-  var h=periodBar('bookPeriod',per);
+  var h=periodBar('bookPeriod',per)+'<div class="chips" style="margin:8px 0">'+CAT_LEVELS.map(function(x){
+    return '<button class="chip filter" data-act="catLevel" data-k="'+x[0]+'" aria-pressed="'+(lv===x[0])+'">'+x[1]+'</button>'; }).join('')+'</div>';
   if(!cs.length) return h+'<div class="empty"><b>No bills were raised in this period.</b>'+
     'This splits what you sold by category, so it fills up once bills are finalised.</div>';
-  h+='<div class="card"><div class="card-h"><h2>Revenue By Category</h2></div><div class="card-b tight">'+
-    '<table class="lines"><thead><tr><th>Kind of work</th><th class="num">Billed</th>'+
+  h+='<div class="card"><div class="card-h"><h2>Revenue '+(CAT_LEVELS.filter(function(x){ return x[0]===lv; })[0]||['',''])[1]+'</h2></div><div class="card-b tight">'+
+    '<table class="lines"><thead><tr><th>'+(lv==='brand'?'Brand':(lv==='cat'?'Category':'Group'))+'</th><th class="num">Billed</th>'+
     '<th class="num">Earned</th></tr></thead><tbody>';
   cs.forEach(function(x){
     var share=tot?Math.round(x.rev*100/tot):0;
@@ -8039,11 +8348,13 @@ function exportBooks(){
     downloadCsv('job-profit-'+per+'.csv',r2);
     return;
   }
-  var r3=[['By category', periodLabel(per)],[],['Kind of work','Quantity','Billed ex-tax','Cost','Earned','Margin %']];
-  categorySplit(R2.from,R2.to).forEach(function(x){
+  var lv=S.catLevel||'group';
+  var r3=[['By '+(lv==='brand'?'brand':(lv==='cat'?'category':'group')), periodLabel(per)],[],
+    [(lv==='brand'?'Brand':(lv==='cat'?'Category':'Group')),'Quantity','Billed ex-tax','Cost','Earned','Margin %']];
+  categorySplit(R2.from,R2.to,lv).forEach(function(x){
     r3.push([x.name,x.qty,rup(x.rev),rup(x.cost),rup(x.profit),x.pct]);
   });
-  downloadCsv('category-split-'+per+'.csv',r3);
+  downloadCsv('sales-by-'+lv+'-'+per+'.csv',r3);
 }
 
 /* =====================================================================
@@ -8565,10 +8876,10 @@ function repStaffSales(R){
 function repStock(){
   var rows=shelfParts().map(function(p){
     var q=stockOf(p.id), c=costOf(p.id);
-    return {name:p.name, no:p.no, cat:p.category||'', qty:q, unit:p.unit,
+    return {name:p.name, no:p.no, grp:catGroup(p.category)||'', cat:catIsSet(p.category)?p.category:'', brand:p.brand||'', qty:q, unit:p.unit,
       cost:money(c), value:money(q>0?Math.round(q*c):0)};
   }).sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
-  return repTable([{k:'no',label:'Part number',mono:1},{k:'name',label:'Name'},{k:'cat',label:'Category'},
+  return repTable([{k:'no',label:'Part number',mono:1},{k:'name',label:'Name'},{k:'grp',label:'Group'},{k:'cat',label:'Category'},{k:'brand',label:'Brand'},
     {k:'qty',label:'On the shelf',num:1},{k:'unit',label:'Unit'},{k:'cost',label:'Cost',num:1},
     {k:'value',label:'Value',num:1}],rows,{no:'',name:shelfParts().length+' items',value:money(stockValue())});
 }
@@ -8584,7 +8895,7 @@ function repLowStock(){
 }
 function repItemSummary(R){
   var m={};
-  PARTS.forEach(function(p){ m[p.id]={name:p.name,no:p.no,cat:p.category||'',sold:0,rev:0,cost:0,bought:0,spend:0}; });
+  PARTS.forEach(function(p){ m[p.id]={name:p.name,no:p.no,grp:catGroup(p.category)||'',cat:catIsSet(p.category)?p.category:'',brand:p.brand||'',sold:0,rev:0,cost:0,bought:0,spend:0}; });
   SALES.filter(function(s){ return s.at>=R.from&&s.at<=R.to&&s.status!=='cancelled'; }).forEach(function(s){
     (s.lines||[]).forEach(function(l){
       var pid=l.partId; if(!pid||!m[pid]) return;
@@ -8602,10 +8913,10 @@ function repItemSummary(R){
   var rows=Object.keys(m).map(function(k){ return m[k]; })
     .filter(function(x){ return x.sold||x.bought; })
     .sort(function(a,b){ return (b.rev-b.cost)-(a.rev-a.cost); })
-    .map(function(x){ return {no:x.no,name:x.name,cat:x.cat,bought:x.bought,spend:money(x.spend),
+    .map(function(x){ return {no:x.no,name:x.name,grp:x.grp,cat:x.cat,brand:x.brand,bought:x.bought,spend:money(x.spend),
       sold:x.sold,rev:money(x.rev),earned:money(x.rev-x.cost),
       pc:(x.rev?Math.round((x.rev-x.cost)*1000/x.rev)/10:0)+'%'}; });
-  return repTable([{k:'no',label:'Part number',mono:1},{k:'name',label:'Name'},{k:'cat',label:'Category'},
+  return repTable([{k:'no',label:'Part number',mono:1},{k:'name',label:'Name'},{k:'grp',label:'Group'},{k:'cat',label:'Category'},{k:'brand',label:'Brand'},
     {k:'bought',label:'Bought',num:1},{k:'spend',label:'Spent',num:1},{k:'sold',label:'Sold',num:1},
     {k:'rev',label:'Billed',num:1},{k:'earned',label:'Earned',num:1},{k:'pc',label:'Margin',num:1}],rows);
 }
@@ -8613,11 +8924,11 @@ function repRateList(){
   var rows=PARTS.slice().sort(function(a,b){
     return String(a.category||'').localeCompare(String(b.category||''))||String(a.name).localeCompare(String(b.name));
   }).map(function(p){
-    return {no:p.no,name:p.name,cat:p.category||'',hsn:p.hsn||'',gst:(p.gst||0)+'%',
+    return {no:p.no,name:p.name,cat:p.category||'',brand:p.brand||'',hsn:p.hsn||'',gst:(p.gst||0)+'%',
       sale:money(p.sale||0),mrp:p.mrp?money(p.mrp):'\u2014',unit:p.unit,
       fits:((p.fits||[]).length?p.fits.length+' bikes':'\u2014')};
   });
-  return repTable([{k:'no',label:'Part number',mono:1},{k:'name',label:'Name'},{k:'cat',label:'Category'},
+  return repTable([{k:'no',label:'Part number',mono:1},{k:'name',label:'Name'},{k:'cat',label:'Category'},{k:'brand',label:'Brand'},
     {k:'hsn',label:'HSN',mono:1},{k:'gst',label:'GST',num:1},{k:'sale',label:'Selling price',num:1},
     {k:'mrp',label:'MRP',num:1},{k:'fits',label:'Fits'}],rows);
 }
@@ -10001,7 +10312,8 @@ function syncSales(job){
       byRate:c.byRate||{}, hsn:(b.snapshot&&b.snapshot.hsnSummary)||[],
       make:job.make||'', model:job.model||'', jobType:job.jobType||'',
       lines:(b.lineIds||[]).map(function(id){ var l=findLine(job,id); return l?{
-        desc:l.desc, kind:l.kind, cat:(partById(l.partId)||{}).category||'', qty:qtyNum(l.qty),
+        desc:l.desc, kind:l.kind, partId:l.partId||'', cat:(partById(l.partId)||{}).category||'',
+        brand:(partById(l.partId)||{}).brand||'', qty:qtyNum(l.qty),
         hsn:l.hsn||'', amount:lineAmount(l), cost:Math.round(qtyNum(l.qty)*(l.cost||0)), gst:l.gst||0 }:null; }).filter(Boolean) });
   });
 }
@@ -10907,6 +11219,9 @@ async function labDel(id){
   await saveStore('parts'); rerender(); toast(p.name+' removed');
 }
 document.addEventListener('change',function(e){
+  var n=e.target&&e.target.name;
+  if((n==='charges'||n==='roundoff')&&S.view&&S.view.name==='purchase'&&S.purch&&!S.purch.saved){
+    grabPurchaseHeader(); rerender(); return; }
   var f=e.target.dataset&&e.target.dataset.lab; if(!f) return;
   labSet(e.target.dataset.id,f,e.target.value);
 });
@@ -10936,8 +11251,6 @@ function viewPurchase(){
   if(!S.purch){ S.view={name:'desk',tab:'purch'}; return viewDesk(); }
   var p=S.purch;
   var sup=p.supplierId?supplierById(p.supplierId):null;
-  var lineValue=p.lines.reduce(function(a,l){ return a+Math.round(l.qty*l.rate); },0);
-  var total=lineValue+(p.charges||0);
   var done=!!p.saved;
   var h='<div class="eyebrow" style="margin:14px 0 4px">'+(done?'Purchase bill':'New purchase bill')+'</div>'+
     '<h1 style="font-size:26px;margin-bottom:12px">'+(done?esc(p.invNo):(p.editing?'Correcting '+esc(p.invNo):'New Purchase Bill'))+'</h1>'+
@@ -11000,7 +11313,7 @@ function viewPurchase(){
         (l.batchLabel?' \u00B7 '+esc(l.batchLabel):'')+((l.lot||l.batchNo)?' \u00B7 lot '+esc(l.lot||l.batchNo):'')+'</div>'+
         (l.batchId&&!done?(function(){ var b=BATCHES.filter(function(x){ return x.id===l.batchId; })[0], u=batchUsed(b);
           return u?'<div class="small" style="color:var(--amber);font-weight:700">'+u+' already used on job cards</div>':''; })():'')+
-        '<div class="small muted">'+esc(l.category||'')+
+        '<div class="small muted">'+esc(l.category||'')+(l.brand?' \u00B7 '+esc(l.brand):'')+
         ((l.conv||1)!==1?' \u00B7 1 '+esc(l.buyUnit)+' = '+l.conv+' '+esc(l.unit):'')+'</div></td>'+
         '<td class="num">'+l.qty+'<br><span class="small muted">'+esc(l.buyUnit)+'</span></td>'+
         '<td class="num">'+money(l.rate)+'<br><span class="small muted">GST '+l.gst+'%</span></td>'+
@@ -11026,16 +11339,21 @@ function viewPurchase(){
   if(!done){
     h+='<div class="field" style="margin:10px 0"><label>Freight and other charges on the bill (\u20B9)</label>'+
        '<input type="number" step="0.01" inputmode="decimal" name="charges" value="'+paiseToInput(p.charges||0)+'">'+
-       '<div class="hint">Spread across the items by value.</div>'+
-       '<div class="field"><label>Round off as printed (\u20B9)</label>'+
-       '<input type="number" step="0.01" inputmode="decimal" name="roundoff" value="'+(p.roundOff?(p.roundOff/100).toFixed(2):'')+'">'+
-       '<div class="hint">So your total matches the paper exactly.</div></div>';
+       '<div class="hint">Spread across the items by value.</div></div>'+
+       (p.roundMode==='auto'
+         ? '<div class="totrow"><span>Round off <span class="small muted">(automatic)</span> '+
+           '<button class="btn sm" data-act="roundManual" style="margin-left:6px">Change</button></span>'+
+           '<span class="money">'+money(T.roundOff)+'</span></div>'
+         : '<div class="field"><label>Round off as printed (\u20B9)</label>'+
+           '<input type="number" step="0.01" inputmode="decimal" name="roundoff" value="'+(p.roundOff?(p.roundOff/100).toFixed(2):'')+'">'+
+           '<div class="hint">Only if the supplier rounded differently. '+
+           '<button class="btn sm" data-act="roundAuto">Round automatically</button></div></div>');
   } else if(p.charges){
     h+='<div class="totrow"><span>Freight and other charges</span><span class="money">'+money(p.charges)+
        (p.chargesTaxed?'':' <span class="small muted">no tax</span>')+'</span></div>';
   }
-  if(T.roundOff) h+='<div class="totrow"><span>Round off</span><span class="money">'+money(T.roundOff)+'</span></div>';
-  h+='<div class="totrow grand"><span>Bill total</span><span class="money">'+money(done?T.grand:total)+'</span></div>'+
+  if(T.roundOff&&(done||p.roundMode!=='auto')) h+='<div class="totrow"><span>Round off</span><span class="money">'+money(T.roundOff)+'</span></div>';
+  h+='<div class="totrow grand"><span>Bill total</span><span class="money">'+money(T.grand)+'</span></div>'+
      '<p class="hint">'+(p.supplyType==='composition'
        ? 'No GST on this bill, so no input credit.'
        : 'Rates are entered exactly as printed. Tax is separated when the cost of each part is worked out.')+'</p>'+
@@ -11086,12 +11404,61 @@ function paintSupplierResults(){
 }
 
 /* ---------------- parts master ---------------- */
+/* ---- filter the shelf by group, category and brand, with counts ---- */
+function partCatMatch(p,f){
+  if(!f) return true;
+  if(f==='x:') return !catIsSet(p.category);
+  if(f.slice(0,2)==='g:') return catIsSet(p.category)&&catGroup(p.category)===f.slice(2);
+  if(f.slice(0,2)==='c:') return p.category===f.slice(2);
+  return true;
+}
+function partBrandMatch(p,f){
+  if(!f) return true;
+  if(f==='x:') return !p.brand;
+  return p.brand===f.slice(2);
+}
+function partFilters(){
+  var parts=shelfParts(), cc={}, gc={}, bc={}, noCat=0, noBrand=0;
+  parts.forEach(function(p){
+    if(catIsSet(p.category)){ cc[p.category]=(cc[p.category]||0)+1; var g=catGroup(p.category); gc[g]=(gc[g]||0)+1; } else noCat++;
+    if(p.brand) bc[p.brand]=(bc[p.brand]||0)+1; else noBrand++;
+  });
+  var ch='<option value="">All categories ('+parts.length+')</option>';
+  if(noCat) ch+='<option value="x:"'+(S.pcf==='x:'?' selected':'')+'>\u26A0 Category not set ('+noCat+')</option>';
+  catTree().forEach(function(g){
+    if(!gc[g[0]]) return;
+    ch+='<optgroup label="'+esc(g[0])+'"><option value="g:'+esc(g[0])+'"'+(S.pcf==='g:'+g[0]?' selected':'')+'>All '+esc(g[0])+' ('+gc[g[0]]+')</option>'+
+      g[1].filter(function(c){ return cc[c]; }).map(function(c){
+        return '<option value="c:'+esc(c)+'"'+(S.pcf==='c:'+c?' selected':'')+'>'+esc(c)+' ('+cc[c]+')</option>'; }).join('')+'</optgroup>';
+  });
+  var bh='<option value="">All brands ('+parts.length+')</option>';
+  if(noBrand) bh+='<option value="x:"'+(S.pbf==='x:'?' selected':'')+'>\u26A0 Brand not set ('+noBrand+')</option>';
+  Object.keys(bc).sort(function(a,b){ return a.toLowerCase().localeCompare(b.toLowerCase()); }).forEach(function(b){
+    bh+='<option value="b:'+esc(b)+'"'+(S.pbf==='b:'+b?' selected':'')+'>'+esc(b)+' ('+bc[b]+')</option>';
+  });
+  var h='<div class="two" style="margin:0 0 10px">'+
+    '<div class="field" style="margin:0"><label>Category</label><select id="pcatf">'+ch+'</select></div>'+
+    '<div class="field" style="margin:0"><label>Brand</label><select id="pbrandf">'+bh+'</select></div></div>';
+  if(S.pcf||S.pbf) h+='<div style="margin:-4px 0 10px"><button class="btn sm" data-act="partFiltClear">Clear filters</button></div>';
+  if((noCat||noBrand)&&!S.pcf&&!S.pbf)
+    h+='<div class="banner warn small" style="margin-bottom:10px"><b>'+
+      (noCat?noCat+' part'+(noCat>1?'s':'')+' need a category':'')+(noCat&&noBrand?' \u00B7 ':'')+
+      (noBrand?noBrand+' need a brand':'')+'.</b> Pick \u201CCategory not set\u201D or \u201CBrand not set\u201D above, open each part and press Edit.</div>';
+  return h;
+}
+document.addEventListener('change',function(e){
+  var id=e.target&&e.target.id;
+  if(id==='pcatf'){ S.pcf=e.target.value; rerender(); }
+  if(id==='pbrandf'){ S.pbf=e.target.value; rerender(); }
+});
 function deskParts(){
   var q=(S.pq||'').trim();
   var list=(q?findParts(q,''):PARTS.slice().sort(function(a,b){ return (b.updatedAt||0)-(a.updatedAt||0); })).filter(function(p){ return !isLabour(p); });
+  list=list.filter(function(p){ return partCatMatch(p,S.pcf)&&partBrandMatch(p,S.pbf); });
   var h='<div class="searchbar" style="position:static;margin:0;padding:0 0 10px;border:0">'+
     '<input type="text" id="pq" placeholder="Part number or name" value="'+esc(S.pq||'')+'" autocomplete="off"></div>';
   if(!shelfParts().length) return h+'<div class="empty"><b>No parts yet.</b>They appear here on their own as you enter purchase bills.</div>';
+  h+=partFilters();
   var fc=fitCoverage();
   if(fc.mapped<fc.total){
     h+='<div class="banner '+(fc.pct>60?'info':'warn')+' small" style="margin-bottom:10px">'+
@@ -11099,7 +11466,8 @@ function deskParts(){
       'Mapped parts get offered when a matching bike comes in.'+
       '<button class="btn sm" style="margin-left:10px;background:var(--surface)" data-act="autoFit">Read the rest from the names</button></div>';
   }
-  if(!list.length) return h+'<div class="empty"><b>Nothing matches that.</b>Try the part number without dashes.</div>';
+  if(!list.length) return h+'<div class="empty"><b>Nothing matches that.</b>'+((S.pcf||S.pbf)?'Clear the filters to see every part.':'Try the part number without dashes.')+'</div>';
+  if(S.pcf||S.pbf||q) h+='<div class="small muted" style="margin:0 0 6px">'+list.length+' part'+(list.length===1?'':'s')+' shown'+(list.length>150?' (first 150)':'')+'</div>';
   h+='<div class="card"><div class="card-b tight" style="overflow-x:auto"><table class="lines"><thead><tr>'+
      '<th>Part</th><th class="num">In stock</th><th class="num">Cost</th><th class="num">Sale</th>'+
      '<th class="num">MRP</th>'+(can('reports')?'<th class="num">Margin</th>':'')+'</tr></thead><tbody>';
@@ -11107,7 +11475,7 @@ function deskParts(){
     var q2=stockOf(p.id), low=(p.minQty&&q2<=p.minQty);
     h+='<tr><td><button class="linkish" data-act="openPart" data-id="'+p.id+'">'+esc(p.name)+'</button>'+
       '<div class="small muted mono">'+esc(p.no)+(p.hsn?' \u00B7 HSN '+esc(p.hsn):'')+'</div>'+
-      '<div class="small muted">'+esc(p.category||'')+'</div></td>'+
+      '<div class="small muted">'+catLabel(p)+' \u00B7 '+brandLabel(p)+'</div></td>'+
       '<td class="num"><b style="font-size:17px'+(q2<=0?';color:var(--red)':(low?';color:var(--amber)':''))+'">'+q2+'</b>'+
       '<br><span class="small muted">'+esc(p.unit)+'</span>'+(low&&q2>0?'<br><span class="tag t-amber">low</span>':'')+'</td>'+
       '<td class="num">'+(seeMoney()?money(costOf(p.id)):'—')+'</td>'+
@@ -11125,7 +11493,7 @@ function viewPart(){
   var bs=batchesOf(p.id), mv=MOVES.filter(function(m){ return m.partId===p.id; }).sort(function(a,b){ return b.at-a.at; });
   var h='<div style="margin:16px 0 10px"><div class="jid mono">'+esc(p.no)+'</div>'+
     '<h1 style="font-size:26px">'+esc(p.name)+'</h1>'+
-    '<div class="muted small">'+esc(p.category||'')+(p.hsn?' \u00B7 HSN '+esc(p.hsn):'')+' \u00B7 GST '+(p.gst||0)+'%</div></div>';
+    '<div class="muted small">'+catLabel(p)+(isLabour(p)?'':' \u00B7 '+brandLabel(p))+(p.hsn?' \u00B7 HSN '+esc(p.hsn):'')+' \u00B7 GST '+(p.gst||0)+'%</div></div>';
 
   h+='<div class="grid2"><div><div class="card"><div class="card-h"><h2>Prices</h2>'+
     '<button class="btn sm" style="margin-left:auto" data-act="editPart" data-id="'+p.id+'">Edit</button></div><div class="card-b">'+
@@ -11258,8 +11626,6 @@ function deskSuppliers(){
    THE DESK — the things that change data
    ===================================================================== */
 function unitOpts(sel){ return UNITS.map(function(u){ return '<option'+(u===sel?' selected':'')+'>'+u+'</option>'; }).join(''); }
-function catOpts(sel){ return '<option value="">— pick one —</option>'+
-  CATEGORIES.map(function(c){ return '<option'+(c===sel?' selected':'')+'>'+esc(c)+'</option>'; }).join(''); }
 /* ---------- GST 2.0 ----------
    The Council abolished the 12% and 28% slabs with effect from 22 September
    2025 and added 40% for demerit goods. Auto parts moved to a flat 18%, and
@@ -11338,7 +11704,7 @@ function mountPurchase(){
 /* ---------------- a purchase bill ---------------- */
 function newPurchase(){
   S.purch={id:uid('pu'), supplierId:'', invNo:'', invDate:isoDate(), lines:[], charges:0,
-    at:Date.now(), by:S.user.id, saved:false};
+    roundMode:'auto', at:Date.now(), by:S.user.id, saved:false};
   S.view={name:'purchase'}; window.scrollTo(0,0); render();
 }
 function grabPurchaseHeader(){
@@ -11349,7 +11715,7 @@ function grabPurchaseHeader(){
   var c=document.querySelector('[name="charges"]');
   if(c) p.charges=toPaise(c.value);
   var r=document.querySelector('[name="roundoff"]');
-  if(r) p.roundOff=toPaise(r.value);
+  if(r&&p.roundMode!=='auto') p.roundOff=toPaise(r.value);
   ['irn','ackNo'].forEach(function(n){ var e=document.querySelector('[name="'+n+'"]'); if(e) p[n]=e.value.trim(); });
 }
 function addPLineModal(idx){
@@ -11361,8 +11727,9 @@ function addPLineModal(idx){
     '<input type="text" name="pno" id="plno" class="mono" autocomplete="off" placeholder="06430-KTY-D01">'+
     '<div id="pnores"></div><div class="hint">If we have bought it before, everything below fills itself.</div></div>'+
     '<div class="field"><label class="req">Part name</label><input type="text" name="pname" placeholder="Brake pad set front"></div>'+
-    '<div class="two"><div class="field"><label class="req">Category</label><select name="pcat">'+catOpts('')+'</select></div>'+
-    '<div class="field"><label>HSN / SAC</label><input type="text" name="phsn" class="mono"></div></div>'+
+    '<div class="two"><div class="field"><label class="req">Category</label>'+catPicker('')+'</div>'+
+    '<div class="field"><label class="req">Brand</label>'+brandPicker('')+'</div></div>'+
+    '<div class="field"><label>HSN / SAC</label><input type="text" name="phsn" class="mono"></div>'+
     '<div class="two"><div class="field"><label>Lot no. on the box (optional)</label><input type="text" name="pbatch" class="mono" placeholder="leave blank if none"></div>'+
     '<div class="field"><label>GST rate</label><select name="pgst">'+gstOpts(18)+'</select></div></div>'+
     '<div class="sub" style="margin:6px -16px;padding:14px 16px;background:#F6F8F9">'+
@@ -11434,7 +11801,8 @@ function paintBatchPick(costPer){
 function fillPartInto(id){
   var p=partById(id); if(!p) return;
   var set=function(n,v){ var e=document.querySelector('.sheet [name="'+n+'"]'); if(e&&v!==undefined&&v!==null&&v!=='') e.value=v; };
-  set('pno',p.no); set('pname',p.name); set('pcat',p.category); set('phsn',p.hsn);
+  set('pno',p.no); set('pname',p.name); set('pcat',catIsSet(p.category)?p.category:catGuess(p.name)); set('phsn',p.hsn);
+  set('pbrand',p.brand||brandGuess(p.name));
   set('pgst',p.gst); set('pbuyunit',p.buyUnit||'piece'); set('punit',p.unit||'piece'); set('pconv',p.conv||1);
   set('pmrp',paiseToInput(p.mrp||0)); set('psale',paiseToInput(p.sale||0));
   var last=batchesOf(p.id).slice(-1)[0];
@@ -11485,14 +11853,14 @@ function paintPCalc(){
 async function savePLine(){
   var p=S.purch;
   if(!dg('pname')){ toast('The item needs a name','bad'); return; }
-  if(!dg('pcat')){ toast('Pick a category','bad'); return; }
   var qty=parseFloat(dg('pqty')||0)||0, rate=toPaise(dg('prate'));
   if(qty<=0){ toast('Put in the quantity','bad'); return; }
   if(rate<=0){ toast('Put in the purchase rate','bad'); return; }
   var conv=parseFloat(dg('pconv')||1)||1;
   if(conv<=0){ toast('The conversion cannot be zero','bad'); return; }
+  var cb=await readCatBrand(); if(!cb.ok) return;
   var ex=partByNo(dg('pno'));
-  var nl={ no:dg('pno')||autoPartNo(dg('pname')), name:titleCase(dg('pname')), category:dg('pcat'),
+  var nl={ no:dg('pno')||autoPartNo(dg('pname')), name:titleCase(dg('pname')), category:cb.cat, brand:cb.brand,
     hsn:dg('phsn'), gst:(p.supplyType==='composition')?0:parseInt(dg('pgst')||0,10), lot:dg('pbatch'),
     incl:inclOn(), disc:parseFloat(dg('pdisc')||0)||0,
     qty:qty, buyUnit:dg('pbuyunit')||'piece', unit:dg('punit')||'piece', conv:conv,
@@ -11524,7 +11892,9 @@ function delPLine(i){
 function fillLineInto(l){
   if(!l) return;
   var set=function(n,v){ var e=document.querySelector('.sheet [name="'+n+'"]'); if(e&&v!==undefined&&v!==null) e.value=v; };
-  set('pno',l.no); set('pname',l.name); set('pcat',l.category); set('phsn',l.hsn); set('pbatch',l.lot||l.batchNo||'');
+  var lp=partById(l.partId)||{};
+  set('pno',l.no); set('pname',l.name); set('pcat',catIsSet(l.category)?l.category:(catIsSet(lp.category)?lp.category:catGuess(l.name)));
+  set('pbrand',l.brand||lp.brand||brandGuess(l.name)); set('phsn',l.hsn); set('pbatch',l.lot||l.batchNo||'');
   set('pgst',l.gst); set('pqty',l.qty); set('pbuyunit',l.buyUnit); set('punit',l.unit); set('pconv',l.conv||1);
   set('prate',paiseToInput(l.rate)); set('pdisc',l.disc||0); set('pmrp',paiseToInput(l.mrp||0)); set('psale',paiseToInput(l.sale||0));
   var seg=document.querySelectorAll('#inclseg button');
@@ -11559,8 +11929,10 @@ function partModal(id){
     '<input type="text" name="pno" class="mono" value="'+esc(p?p.no:'')+'"></div>'+
     '<div class="field"><label>HSN / SAC</label><input type="text" name="phsn" class="mono" value="'+esc(p?p.hsn:'')+'"></div></div>'+
     '<div class="field"><label class="req">Name</label><input type="text" name="pname" value="'+esc(p?p.name:'')+'"></div>'+
-    '<div class="two"><div class="field"><label class="req">Category</label><select name="pcat">'+catOpts(p?p.category:'')+'</select></div>'+
-    '<div class="field"><label>GST rate</label><select name="pgst">'+gstOpts(p?p.gst:18)+'</select></div></div>'+
+    '<div class="two"><div class="field"><label class="req">Category</label>'+
+      catPicker(p?(catIsSet(p.category)?p.category:catGuess(p.name)):'')+'</div>'+
+    '<div class="field"><label class="req">Brand</label>'+brandPicker(p?(p.brand||brandGuess(p.name)):'')+'</div></div>'+
+    '<div class="field"><label>GST rate</label><select name="pgst">'+gstOpts(p?p.gst:18)+'</select></div>'+
     '<div class="three"><div class="field"><label>Bought in</label><select name="pbuyunit">'+unitOpts(p?p.buyUnit:'piece')+'</select></div>'+
     '<div class="field"><label>Issued in</label><select name="punit">'+unitOpts(p?p.unit:'piece')+'</select></div>'+
     '<div class="field"><label>1 bought =</label><input type="number" step="0.001" name="pconv" value="'+(p?(p.conv||1):1)+'"></div></div>'+
@@ -11577,13 +11949,13 @@ function partModal(id){
 }
 async function savePart(id){
   if(!dg('pno')||!dg('pname')){ toast('A part number and a name are needed','bad'); return; }
-  if(!dg('pcat')){ toast('Pick a category','bad'); return; }
   var other=partByNo(dg('pno'));
   if(other&&other.id!==id){ toast('That part number is already used by '+other.name,'bad'); return; }
   var al=dg('palias').split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+  var cb=await readCatBrand(); if(!cb.ok) return;
   var p=id?partById(id):null;
   if(!p){ p={id:uid('pt'), createdAt:Date.now(), aliases:[]}; PARTS.push(p); }
-  p.no=dg('pno'); p.name=titleCase(dg('pname')); p.category=dg('pcat'); p.hsn=dg('phsn');
+  p.no=dg('pno'); p.name=titleCase(dg('pname')); p.category=cb.cat; p.brand=cb.brand; p.hsn=dg('phsn');
   p.gst=parseInt(dg('pgst')||0,10); p.buyUnit=dg('pbuyunit'); p.unit=dg('punit');
   p.conv=parseFloat(dg('pconv')||1)||1; p.sale=toPaise(dg('psale')); p.mrp=toPaise(dg('pmrp'));
   p.minQty=parseFloat(dg('pmin')||0)||0; p.aliases=al; p.updatedAt=Date.now();
@@ -12928,10 +13300,9 @@ async function loadPartsCsv(){
     if(!line.trim()) return;
     var c=line.split(',').map(function(x){ return x.trim(); });
     if(c.length<2||!c[0]||!c[1]){ bad++; return; }
-    var cat=c[2]||'';
-    if(cat&&CATEGORIES.indexOf(cat)<0) cat='';
+    var cat=catFind(c[2]||'')||catGuess(c[1]);
     var ex=partByNo(c[0]);
-    var rec={ no:c[0], name:c[1], category:cat||(/^99/.test(c[3]||'')?'Labour':'Hardware'),
+    var rec={ no:c[0], name:c[1], category:cat||(/^99/.test(c[3]||'')?'Labour':''), brand:brandGuess(c[1]),
       hsn:c[3]||'', gst:c[4]!==''&&c[4]!==undefined?(parseInt(c[4],10)||0):18,
       sale:toPaise(c[5]||'0'), mrp:toPaise(c[6]||'0'),
       unit:UNITS.indexOf(c[7])>=0?c[7]:'piece', buyUnit:UNITS.indexOf(c[8])>=0?c[8]:(UNITS.indexOf(c[7])>=0?c[7]:'piece'),
@@ -13664,7 +14035,8 @@ var IMPORT_TYPES={
   inventory:{label:'Inventory', blurb:'Part number or name at least. Quantity becomes opening stock at the cost you give.',
     fields:[['no','Part number',0,['part no','part number','part','part #','pn','sku','code','item code','product code']],
       ['name','Name',0,['name','description','item','item name','part name','product','product name','particulars']],
-      ['category','Category',0,['category','group','type','item group','sub category']],
+      ['category','Category',0,['category','sub category','item category','type']],
+      ['brand','Brand',0,['brand','manufacturer','company','brand name']],
       ['hsn','HSN',0,['hsn','hsn code','sac','hsn/sac']],
       ['gst','GST %',0,['gst','gst %','gst rate','tax','tax %','tax rate','igst']],
       ['qty','Quantity in stock',0,['qty','quantity','stock','in stock','closing stock','closing','balance qty','on hand','available']],
@@ -13833,13 +14205,16 @@ function checkRowRaw(type,r){
     if(gst>0&&gst<1) gst=Math.round(gst*100);       /* 0.18 written as a fraction */
     if([0,5,12,18,28,40].indexOf(gst)<0){ why.push('GST '+gst+'% is not a GST rate — set to 18%'); gst=18; }
     if(gst===12||gst===28) why.push('GST '+gst+'% was abolished in Sept 2025 — check this part');
-    var cat=matchCategory(cellStr(r.category));
+    var cat=matchCategory(cellStr(r.category),nm);
+    var brand=cat==='Labour'?'':matchBrand(cellStr(r.brand),nm);
+    if(!cat) why.push('category not recognised — shows under "Category not set"');
+    if(!brand&&cat!=='Labour') why.push('no brand — shows under "Brand not set"');
     var qty=numCell(r.qty);
     if(qty<0){ why.push('negative quantity — opening stock left at 0'); qty=0; }
     var cost=toPaise(cellStr(r.cost));
     if(qty>0&&!cost) why.push('stock with no cost — margins for it will read wrong');
     var unit=cellStr(r.unit).toLowerCase(); if(UNITS.indexOf(unit)<0) unit='piece';
-    return {ok:true, why:why.join('; '), rec:{no:no, name:nm||no, category:cat, hsn:cellStr(r.hsn), gst:gst, qty:qty,
+    return {ok:true, why:why.join('; '), rec:{no:no, name:nm||no, category:cat, brand:brand, hsn:cellStr(r.hsn), gst:gst, qty:qty,
       cost:cost, sale:toPaise(cellStr(r.sale)), mrp:toPaise(cellStr(r.mrp)), unit:unit, minQty:numCell(r.minQty)}};
   }
   if(type==='history'){
@@ -13871,15 +14246,19 @@ function matchModel(make,s){
   for(var i=0;i<ms.length;i++) if(pkey(ms[i].n)===k) return ms[i].n;
   return s;
 }
-function matchCategory(s){
-  if(!s) return 'Uncategorised';
-  var k=s.toLowerCase();
-  for(var i=0;i<CATEGORIES.length;i++) if(CATEGORIES[i].toLowerCase()===k) return CATEGORIES[i];
-  for(var j=0;j<CATEGORIES.length;j++){
-    var first=CATEGORIES[j].toLowerCase().split(/[ &]+/)[0];
-    if(first.length>=4&&k.indexOf(first)>=0) return CATEGORIES[j];
-  }
-  return 'Uncategorised';
+/* the specific category as written; else read off the product name; else
+   left unset so it shows under "Category not set" for someone to file */
+function matchCategory(s,name){
+  var c=catFind(s);
+  if(c) return c;
+  if(/^labou?r$/i.test(String(s||'').trim())) return 'Labour';
+  return catGuess(name||'')||catGuess(s||'')||'';
+}
+function matchBrand(s,name){
+  var b=String(s||'').trim();
+  if(b){ if(/^(local|unbranded|local\s*\/\s*unbranded|no brand)$/i.test(b)) return BRAND_LOCAL;
+    return brandFind(b)||titleCase(b); }
+  return brandGuess(name||'');
 }
 
 /* ---------- the screen ---------- */
@@ -14080,13 +14459,14 @@ async function importInventory(recs,costIncl){
     var p=r.no?partByNo(r.no):null;
     if(!p&&!r.no){ var nk=r.name.toLowerCase(); p=PARTS.filter(function(x){ return String(x.name).toLowerCase()===nk; })[0]||null; }
     if(!p){
-      p={id:uid('pt'), no:r.no||autoPartNo(r.name), aliases:[], name:r.name, category:r.category, hsn:r.hsn, gst:r.gst,
+      p={id:uid('pt'), no:r.no||autoPartNo(r.name), aliases:[], name:r.name, category:r.category, brand:r.brand||'', hsn:r.hsn, gst:r.gst,
         unit:r.unit, buyUnit:r.unit, conv:1, mrp:r.mrp, sale:r.sale||r.mrp, minQty:r.minQty, createdAt:Date.now(), updatedAt:Date.now()};
       PARTS.push(p); made++;
     } else {
       upd++;
       if(r.name) p.name=r.name; if(r.hsn) p.hsn=r.hsn; p.gst=r.gst;
-      if(r.category!=='Uncategorised') p.category=r.category;
+      if(r.category) p.category=r.category;
+      if(r.brand) p.brand=r.brand;
       if(r.sale) p.sale=r.sale; if(r.mrp) p.mrp=r.mrp; if(r.minQty) p.minQty=r.minQty;
       p.updatedAt=Date.now();
     }
@@ -14518,6 +14898,10 @@ async function dispatch(a,arg,d,t){
     case 'editPLine': addPLineModal(d.i); break;
     case 'editPurchase': editPurchase(d.id); break;
     case 'delPLine': delPLine(d.i); break;
+    case 'catLevel': S.catLevel=d.k; rerender(); break;
+    case 'partFiltClear': S.pcf=''; S.pbf=''; rerender(); break;
+    case 'roundManual': grabPurchaseHeader(); S.purch.roundMode='manual'; rerender(); break;
+    case 'roundAuto': grabPurchaseHeader(); S.purch.roundMode='auto'; rerender(); break;
     case 'savePurchase': return savePurchase();
     case 'fillPart': fillPartInto(d.id); break;
     case 'newSupplier': grabPurchaseHeader(); newSupplierModal(''); break;
@@ -14828,6 +15212,7 @@ async function bootLoad(){
     S.core.jobs3=1; await saveCore();
   }
   if(!S.core.caseDone){ await caseMigrate(); S.core.caseDone=1; S.core.capsDone=1; await saveCore(); }
+  if(!S.core.cats2){ if(catsMigrate()) await saveStore('parts'); S.core.cats2=1; await saveCore(); }
   if(!S.core.batchNames){ if(migrateBatchNames()) await DB.set('mz:batches',BATCHES); S.core.batchNames=1; await saveCore(); }
   CHATMETA=await ChatStore.meta();
   NOTES=await DB.get('mz:notes')||[];
