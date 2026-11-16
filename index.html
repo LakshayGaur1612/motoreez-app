@@ -35,6 +35,9 @@
      - A spare typed in by hand on a job card (not in the store) asks for its
        category and brand like the store does, and Kunal/Jatin/store can add it to
        the store from there (addLineModal / addLineSave).
+     - Technician's view is a work checklist (techTasks / viewTechChecklist): one
+       item per Job Required piece of work with its spares under it, one tick each,
+       washing-bay items left to the washer, and "Not used" to send a spare back.
 -->
 <html lang="en">
 <head>
@@ -1230,7 +1233,7 @@ async function guard(act,el,fn){
 /* Actions that write to storage. Anything listed here gets the lock. */
 var WRITES=['saveIntake','saveJobEdit','sendPricing','sendEstDo','ownerOkDo','custOkDo','custNoAdd',
   'startWork','raiseAddDo','ownerOkAddDo','workDoneDo','closeJob','newBill','finalBillDo','cancelBillDo',
-  'dropBill','payDo','addLineSave','pickPart','delLine','tick','savePurchase','savePLine','savePart',
+  'dropBill','payDo','addLineSave','pickPart','delLine','tick','notUsedDo','savePurchase','savePLine','savePart',
   'saveSupplier','adjSave','savePartyRec','payPartyDo','saveExpense','delExpense','moveMoneyDo',
   'countCashDo','advanceDo','saveSalary','saveWorkshop','addUserDo','restoreDo','fitsSave','fitAdd',
   'verifyExp','verifyPay','reversePayDo','purchPayDo','autoFit','sendAddDo','dropAddDo','custOkTop',
@@ -4479,6 +4482,8 @@ async function finDoneDo(jobId,k){
   j.finDone[k]={at:Date.now(), by:S.user.id, byName:S.user.name};
   var kitKeys=(parseKits(kitsText())[finKindReq(k)]||[]).map(function(x){ return x.kind+'|'+x.name.toLowerCase(); });
   (j.lines||[]).forEach(function(l){ if(!l.void&&(l.fin===k||(l.kitItem&&kitKeys.indexOf(l.kitItem)>=0))) l.done=true; });
+  var wl=FIN_LABEL[k];
+  techTasks(j).wash.forEach(function(w){ if(w.label.indexOf(wl)>=0||w.label===wl) w.lines.forEach(function(l){ l.done=true; }); });
   logIt(j,FIN_LABEL[k]+' done','');
   await saveJob(j); rerender(); toast(FIN_LABEL[k]+' done','good');
   notify(watchers(j),j,'washed',FIN_LABEL[k].toLowerCase()+' done'+(finOpen(j).length?'':' \u2014 ready to hand over'));
@@ -5186,6 +5191,137 @@ function jobActionBar(j){
 }
 
 /* ---- what a mechanic sees: no money, no phone ---- */
+/* =====================================================================
+   THE TECHNICIAN'S CHECKLIST
+   A technician does not need the bill. He needs the work, named the way
+   he says it, with the spares to fit under each piece of work, and one
+   tick when it is done. The bill is untouched: ticking a piece of work
+   marks its labour lines done and its spares fitted.
+     - work items come from Job Required, plus approved extra work;
+     - the washing bay's items (foam wash, chain treatment) go to the
+       washing bay, not to him;
+     - spares and labour find their work item through the service kit
+       they came from, else by name or category;
+     - anything left over: labour is its own item, spares go under
+       "Other spares to fit".
+   ===================================================================== */
+var TASK_SKIP=['and','the','for','with','labour','labor','job','work','service','change','replacement','replace','check'];
+function taskWords(s){
+  return String(s||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').split(/\s+/).filter(function(w){
+    return w.length>=3&&TASK_SKIP.indexOf(w)<0; }).map(function(w){ return w.replace(/(ing|es|s)$/,''); });
+}
+function lineFitsReq(l,r,kits,j){
+  var items=kits[upReq(r)]||[];
+  for(var i=0;i<items.length;i++){
+    var it=items[i], key=it.kind+'|'+it.name.toLowerCase();
+    if(l.kitItem===key) return 2;
+    if(String(l.desc).toLowerCase()===it.name.toLowerCase()) return 2;
+    if(l.partId&&kitCandidates(it,j).some(function(c){ return c.id===l.partId; })) return 2;
+  }
+  var want=taskWords(r); if(!want.length) return 0;
+  var have=taskWords(l.desc+' '+(l.cat||'')+' '+((l.partId&&partById(l.partId))?partById(l.partId).category:''));
+  return want.every(function(w){ return have.indexOf(w)>=0; })?1:0;
+}
+function techTasks(j){
+  var kits=parseKits(kitsText()), ls=approvedLines(j), claimed={};
+  var req=(j.approvals&&j.approvals.customer)?(j.required||[]):[];
+  var out={tasks:[], wash:[]};
+  /* the washing bay's items first, so their lines are theirs */
+  var washReq=req.filter(function(r){ return FIN_REQ[upReq(r)]; });
+  var workReq=req.filter(function(r){ return !FIN_REQ[upReq(r)]; });
+  function claim(r,pass){
+    return ls.filter(function(l){ return l.batch==='main'&&!claimed[l.id]&&lineFitsReq(l,r,kits,j)>=pass; })
+      .map(function(l){ claimed[l.id]=1; return l; });
+  }
+  var groups=[];
+  washReq.forEach(function(r){ groups.push({r:r, wash:true, lines:[]}); });
+  workReq.forEach(function(r){ groups.push({r:r, wash:false, lines:[]}); });
+  [2,1].forEach(function(pass){ groups.forEach(function(g){ g.lines=g.lines.concat(claim(g.r,pass)); }); });
+  groups.forEach(function(g){
+    if(g.wash){ out.wash.push({label:FIN_LABEL[FIN_REQ[upReq(g.r)]]||titleCase(g.r), lines:g.lines,
+      done:!!((j.finDone||{})[FIN_REQ[upReq(g.r)]])}); return; }
+    out.tasks.push({key:'req:'+upReq(g.r), label:titleCase(g.r), lines:g.lines});
+  });
+  /* approved extra work, one item each; the washing bay's extras go there */
+  (j.additions||[]).forEach(function(a){
+    if(!a.customer||a.rejected) return;
+    var al=ls.filter(function(l){ return l.batch===a.id&&!claimed[l.id]; });
+    al.forEach(function(l){ claimed[l.id]=1; });
+    if(a.fin){ out.wash.push({label:(a.kinds||[]).map(function(k){ return FIN_LABEL[k]; }).join(' + ')||'Washing bay', lines:al,
+      done:(a.kinds||[]).every(function(k){ return (j.finDone||{})[k]; })}); return; }
+    if(al.length) out.tasks.push({key:'add:'+a.id, label:'Extra: '+(a.reason||'extra work'), lines:al, extra:true});
+  });
+  /* what is left: labour is its own item; spares go under one heading */
+  var left=ls.filter(function(l){ return !claimed[l.id]; });
+  left.filter(function(l){ return l.kind!=='part'; }).forEach(function(l){
+    out.tasks.push({key:'ln:'+l.id, label:l.desc, lines:[l]}); });
+  var lp=left.filter(function(l){ return l.kind==='part'; });
+  if(lp.length) out.tasks.push({key:'other', label:'Other spares to fit', lines:lp});
+  out.tasks.forEach(function(t){
+    t.parts=t.lines.filter(function(l){ return l.kind==='part'; });
+    var mark=(j.taskDone||{})[t.key];
+    t.done=t.lines.length?t.lines.every(function(l){ return l.done; }):!!mark;
+    t.doneBy=mark||null;
+  });
+  return out;
+}
+function viewTechChecklist(j){
+  var T=techTasks(j), hold=jobOnHold(j), n=T.tasks.filter(function(t){ return t.done; }).length;
+  var h='<div class="card"><div class="card-h"><h2>Your work</h2><span class="tag '+(n===T.tasks.length&&n?'t-green':'t-grey')+'" style="margin-left:auto">'+
+    n+' of '+T.tasks.length+' done</span></div><div class="card-b tight">';
+  if(!T.tasks.length) h+='<div class="empty" style="padding:26px 10px"><b>Nothing for you on this bike yet.</b></div>';
+  T.tasks.forEach(function(t){
+    h+='<div style="display:flex;gap:14px;align-items:flex-start;padding:14px;border-bottom:1px solid var(--rule2)">'+
+      '<button class="btn '+(t.done?'go':'')+'" style="flex:0 0 64px;min-height:64px;font-size:26px" '+(hold?'disabled':'')+
+      ' data-act="tick" data-task="'+esc(t.key)+'" aria-label="'+esc(t.label)+(t.done?' done':' not done')+'">'+(t.done?'✓':'')+'</button>'+
+      '<div style="flex:1;min-width:0"><div style="font-weight:800;font-size:18px;line-height:1.3'+(t.done?';color:var(--steel)':'')+'">'+esc(t.label)+'</div>';
+    if(t.parts.length){
+      h+='<div class="small muted" style="margin-top:6px">Fit:</div>'+t.parts.map(function(l){
+        return '<div style="display:flex;gap:8px;align-items:center;margin-top:4px">'+
+          '<div style="flex:1;font-weight:600">'+esc(l.desc)+(qtyNum(l.qty)!==1?' <b>× '+qtyNum(l.qty)+'</b>':'')+'</div>'+
+          (!t.done&&!hold?'<button class="btn sm" data-act="notUsed" data-line="'+l.id+'">Not used</button>':'')+'</div>';
+      }).join('');
+    }
+    h+='</div></div>';
+  });
+  h+='</div></div>';
+  if(T.wash.length) h+='<div class="card"><div class="card-b small">'+
+    '<b>Washing bay</b> (not yours): '+T.wash.map(function(w){ return esc(w.label)+(w.done?' ✓':''); }).join(' · ')+'</div></div>';
+  return h;
+}
+/* one tick: the work item and everything under it */
+async function tickTask(key){
+  var j=S.job; if(!j) return;
+  if(jobOnHold(j)){ toast('Work is stopped on this bike','bad'); return; }
+  var T=techTasks(j), t=T.tasks.filter(function(x){ return x.key===key; })[0]; if(!t) return;
+  var on=!t.done, now=Date.now();
+  t.lines.forEach(function(l){ l.done=on; l.doneBy=S.user.id; l.doneAt=now; });
+  j.taskDone=j.taskDone||{};
+  if(on) j.taskDone[key]={by:S.user.id, byName:S.user.name, at:now}; else delete j.taskDone[key];
+  logIt(j,on?'Work done':'Marked not done',t.label+(t.parts.length?' — fitted '+t.parts.map(function(l){ return l.desc; }).join(', '):''));
+  if(on&&j.stage==='customer_ok') j.stage='in_progress';
+  if(!await saveJob(j)){ rerender(); return; }
+  rerender();
+  var all=techTasks(j).tasks, left=all.filter(function(x){ return !x.done; }).length;
+  notify(watchers(j),j,'work',on
+    ? (left?'finished “'+t.label+'” · '+(all.length-left)+' of '+all.length+' done'
+           :'finished “'+t.label+'” — all '+all.length+' items done')
+    : 'un-ticked “'+t.label+'”');
+}
+/* a spare that was issued but not fitted goes back on the shelf and off the bill */
+async function notUsedDo(lineId){
+  var j=S.job, l=j&&findLine(j,lineId); if(!l||l.void) return;
+  if(billedLineIds(j)[l.id]){ toast('This is already on a bill — ask Kunal or Jatin','bad'); return; }
+  l.void=true; l.notUsed={by:S.user.id, byName:S.user.name, at:Date.now()};
+  if(l.partId&&l.kind==='part'){
+    moveIn({partId:l.partId, batchId:l.batchId||'', qty:qtyNum(l.qty), kind:'return', ref:j.no, note:'not used on the bike'});
+    await saveStore('moves');
+  }
+  logIt(j,'Spare not used',l.desc+(l.partId?' — back on the shelf, off the bill':' — off the bill'));
+  closeModal(); await saveJob(j); rerender(); toast(l.desc+' — back to the store','good');
+  notify(watchers(j),j,'notused','did not use '+l.desc+' — back in the store, off the bill');
+}
+
 function viewJobMechanic(j){
   var ls=j.lines.filter(function(l){ return !l.void && batchApproved(j,l.batch); });
   var hold=jobOnHold(j);
@@ -5202,6 +5338,7 @@ function viewJobMechanic(j){
   h+=sectionChat(j);
   h+=sectionMedia(j);
   h+=sectionInspect(j);
+  if(j.approvals&&j.approvals.customer) return h+viewTechChecklist(j);
   h+=sectionRequired(j);
   h+='<div class="card"><div class="card-h"><h2>Spares &amp; Labour issued</h2><span class="tag t-grey" style="margin-left:auto">'+
     ls.filter(function(l){return l.done;}).length+' / '+ls.length+' done</span></div><div class="card-b tight">';
@@ -12709,8 +12846,9 @@ async function custNoAdd(id){
   await saveJob(j); rerender(); toast('Recorded. Work can continue on the rest.');
 }
 async function workDone(){
-  var j=S.job, ls=approvedLines(j), undone=ls.filter(function(l){ return !l.done; });
-  if(undone.length){ confirmBox('Finish anyway?',undone.length+' item(s) are not ticked off yet.','Yes, work is finished','workDoneDo'); return; }
+  var j=S.job, undone=techTasks(j).tasks.filter(function(t){ return !t.done; });
+  if(undone.length){ confirmBox('Finish anyway?',undone.length+' item(s) not ticked yet: '+
+    undone.map(function(t){ return t.label; }).join(', ')+'.','Yes, work is finished','workDoneDo'); return; }
   workDoneDo();
 }
 async function workDoneDo(){
@@ -15279,7 +15417,10 @@ async function dispatch(a,arg,d,t){
     case 'loadParts': return loadPartsCsv();
     case 'clearParts': return clearParts();
     case 'delLine': return delLine(d.line);
-    case 'tick': return tickLine(d.line);
+    case 'tick': return d.task?tickTask(d.task):tickLine(d.line);
+    case 'notUsed': confirmBox('Not used on the bike?','It goes back into the store and comes off the bill. Kunal is told.',
+      'Yes, not used','notUsedDo|'+d.line,'danger'); break;
+    case 'notUsedDo': return notUsedDo(arg);
     case 'sendPricing': return sendPricing();
     case 'sendEstimate': sendEstimateModal(); break;
     case 'sendEstDo': return sendEstimateDo(d.how);
