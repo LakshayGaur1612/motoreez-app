@@ -1,4 +1,38 @@
 <!DOCTYPE html>
+<!--
+  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 16 NOV 2026
+  This file IS the live app at motoreez.netlify.app. It is now the source of truth:
+  make new changes on THIS file, not on an older copy.
+
+  NOTE FOR WHOEVER EDITS THIS FILE (person or AI):
+  1. Shared data. With config.js present (the hosted app), every phone reads and
+     writes one Supabase database through the "Cloud" object. Opened on its own,
+     this file keeps data in that browser only, which is fine for trying changes.
+     Keep these parts as they are: Cloud, DB, SYNC_KEYS, syncFromServer, bootData,
+     bootLoad, ixKey/ixMerge (one row per job and per sale), saveBikesChanged.
+     Save through saveJob, saveCore, saveStore, savePartyData, DB.append and
+     allocNumber. Never number an invoice locally: allocNumber gets it from the server.
+  2. Added on the live app, on top of the workshop team's files (please keep):
+     - Workshop sign-in before the PIN screen; e-mail sent in lowercase while every
+       box still shows capitals.
+     - Chat on each job card: text, voice notes, camera photos and files.
+     - Notifications: bell, alerts list, phone alerts, tap to open the job.
+       Sent on assign, tick, work done, extra work, customer OK, wash due, wash done,
+       bills made, and advance corrected or removed.
+     - Walk-round photos and video uploaded to the server, so every phone sees them.
+     - Excel/CSV import for customers, bikes, vendors, inventory (with category and
+       brand), labour rates and past job cards (Settings > Bring in your existing data).
+     - Warning while default PINs are still in use.
+     - Pay purchase bills on the bill itself: Not paid, Paid in full or Part paid
+       while entering it; a Pay button on the bill and in the bills list; due 30 days
+       unless the supplier has credit days, then "Overdue by N days"; overpaying keeps
+       the extra as credit with the supplier, used first on their next bill; only
+       Kunal and Jatin can pay suppliers or reverse a payment ('pay.vendor', 'pay.fix').
+     - Receive payment on sales invoices: Receive in the Sales list and on the invoice
+       screen, with part payment.
+     - Money received through Parties counts on the invoice, the Sales list and the
+       job card (billDue, saleDue).
+-->
 <html lang="en">
 <head>
 <meta charset="utf-8">
