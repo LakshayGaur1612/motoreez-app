@@ -32,6 +32,9 @@
        screen, with part payment.
      - Money received through Parties counts on the invoice, the Sales list and the
        job card (billDue, saleDue).
+     - A spare typed in by hand on a job card (not in the store) asks for its
+       category and brand like the store does, and Kunal/Jatin/store can add it to
+       the store from there (addLineModal / addLineSave).
 -->
 <html lang="en">
 <head>
@@ -5533,7 +5536,7 @@ function catsMigrate(){
 
 /* a typed name fills an empty category and brand on its own */
 document.addEventListener('change',function(e){
-  var el=e.target; if(!el||el.name!=='pname'||!el.closest||!el.closest('.sheet')) return;
+  var el=e.target; if(!el||(el.name!=='pname'&&el.name!=='desc')||!el.closest||!el.closest('.sheet')) return;
   var c=document.querySelector('.sheet [name="pcat"]'), b=document.querySelector('.sheet [name="pbrand"]');
   if(c&&!c.value){ var g=catGuess(el.value); if(g) c.value=g; }
   if(b&&!b.value){ var bg=brandGuess(el.value); if(bg) b.value=bg; }
@@ -12335,9 +12338,18 @@ function addLineModal(kind,batch){
         esc(S.job.model)+'</button></div>' : '')+
     '<div id="presults" data-kind="'+esc(kind)+'" data-batch="'+esc(batch)+'" class="presults"></div>'+
     '<details style="margin-top:14px"><summary class="eyebrow" style="cursor:pointer;padding:10px 0">Not in the price list \u2014 type it in</summary>'+
-    '<div class="field" style="margin-top:10px"><label>What is it</label>'+
-    '<input type="text" name="desc" list="common" placeholder="'+(kind==='part'?'Oil filter':'Fabrication labour')+'" autocomplete="off">'+
-    '<datalist id="common">'+COMMON.map(function(c){return '<option>'+esc(c)+'</option>';}).join('')+'</datalist></div>'+
+    (kind==='part'
+      ? '<div class="field" style="margin-top:10px"><label class="req">Name of the spare</label>'+
+        '<input type="text" name="desc" placeholder="As on the box, e.g. DP Brake Pads Himalayan 450" autocomplete="off">'+
+        '<div class="hint">Category and brand fill in from the name where it is clear.</div></div>'+
+        '<div class="two"><div class="field"><label class="req">Category</label>'+catPicker('','pcat')+'</div>'+
+        '<div class="field"><label class="req">Brand</label>'+brandPicker('')+'</div></div>'+
+        '<div class="field"><label>Part number \u2014 optional</label><input type="text" name="pno" class="mono" autocomplete="off"></div>'+
+        (can('parts')?'<label class="checkrow" style="display:flex;gap:10px;align-items:center;margin:2px 0 10px">'+
+          '<input type="checkbox" name="tostore" checked> <span>Also add it to the store, so it can be picked next time</span></label>':'')
+      : '<div class="field" style="margin-top:10px"><label>What is it</label>'+
+        '<input type="text" name="desc" list="common" placeholder="Fabrication labour" autocomplete="off">'+
+        '<datalist id="common">'+labourItems().map(function(p){return '<option>'+esc(p.name)+'</option>';}).join('')+'</datalist></div>')+
     '<div class="two"><div class="field"><label>Quantity</label><input type="number" name="qty" step="0.25" value="1" inputmode="decimal"></div>'+
     '<div class="field"><label>HSN / SAC</label><input type="text" name="hsn" class="mono" placeholder="'+(kind==='part'?'87141090':'998714')+'"></div></div>'+
     (canPrice?'<div class="two"><div class="field"><label>Rate each (\u20B9)</label><input type="number" name="rate" step="0.01" inputmode="decimal" placeholder="0.00"></div>'+
@@ -12375,16 +12387,34 @@ async function pickPart(id,batch,kind,quiet){
   if(inp){ inp.value=''; inp.focus(); paintPartResults(); }
 }
 async function addLineSave(kind,batch){
-  var j=S.job, g=function(n){ var e=document.querySelector('.sheet [name="'+n+'"]'); return e?e.value.trim():''; };
+  var j=S.job, g=function(n){ var e=document.querySelector('.sheet [name="'+n+'"]'); return e?(e.type==='checkbox'?(e.checked?'1':''):e.value.trim()):''; };
   if(!g('desc')){ toast('Write what it is','bad'); return; }
-  var canPrice=can('price.set');
-  var l={ id:uid('ln'), kind:kind, desc:titleCase(g('desc')), qty:qtyNum(g('qty')||1),
+  var canPrice=can('price.set'), name=titleCase(g('desc'));
+  var cb={cat:'Labour',brand:''};
+  if(kind==='part'){ cb=await readCatBrand(name); if(!cb.ok) return; }
+  var l={ id:uid('ln'), kind:kind, desc:name, qty:qtyNum(g('qty')||1),
     unit:canPrice?toPaise(g('rate')):0, gst:canPrice?parseInt(g('gst')||0,10):gstDefault(kind),
-    hsn:g('hsn'), batch:batch, addedBy:S.user.id, addedAt:Date.now(), done:false };
+    hsn:g('hsn'), cat:cb.cat, brand:cb.brand, batch:batch, addedBy:S.user.id, addedAt:Date.now(), done:false };
   if(canPrice&&l.unit>0){ l.pricedBy=S.user.id; l.pricedAt=Date.now(); }
+  /* a spare typed in by hand can join the store, filed with its category and
+     brand, so it is found by name next time. Nothing is taken off the shelf:
+     its stock starts when a purchase bill brings it in. */
+  if(kind==='part'&&g('tostore')&&can('parts')){
+    var nk=name.toLowerCase(), no=g('pno');
+    var p=(no?partByNo(no):null)||PARTS.filter(function(x){ return !isLabour(x)&&String(x.name).toLowerCase()===nk; })[0];
+    if(!p){
+      p={id:uid('pt'), no:no||autoPartNo(name), aliases:[], name:name, category:cb.cat, brand:cb.brand,
+        hsn:l.hsn, gst:l.gst, unit:'piece', buyUnit:'piece', conv:1, mrp:l.unit, sale:l.unit, minQty:0,
+        createdAt:Date.now(), updatedAt:Date.now(), createdBy:S.user.id, from:'job '+j.no};
+      PARTS.push(p);
+      if(!await saveStore('parts')){ PARTS.pop(); return; }
+      logAudit('Part','Added to the store from a job card',p.no+' '+p.name+' \u00B7 '+cb.cat+' ('+catGroup(cb.cat)+') \u00B7 '+cb.brand,j.no);
+    }
+    l.partId=p.id; l.partNo=p.no; l.fromList=true;
+  }
   j.lines.push(l);
-  logIt(j,'Added by hand \u2014 not in the price list',l.desc+' \u00D7 '+l.qty+(l.unit?' at '+money(l.unit)+' each':' (no rate yet)'));
-  closeModal(); await saveJob(j); rerender(); toast('Added','good');
+  logIt(j,'Added by hand \u2014 not in the price list',l.desc+(l.brand?' ('+l.brand+')':'')+' \u00D7 '+l.qty+(l.unit?' at '+money(l.unit)+' each':' (no rate yet)'));
+  closeModal(); await saveJob(j); rerender(); toast(l.partId?'Added, and now in the store':'Added','good');
 }
 async function toggleReq(r){
   var j=S.job;
