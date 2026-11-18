@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 18 NOV 2026
+  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 18 NOV 2026 (with the workshop team's update no. 10)
   This file IS the live app at motoreez.netlify.app. It is now the source of truth:
   make new changes on THIS file, not on an older copy.
 
@@ -46,6 +46,18 @@
        mechanic of the earlier job is told (sectionComeback, cbMark, cbVerdict).
      - A mechanic's Me page shows his pay plus his own work: bikes finished, time per
        job, comebacks against him; no customer details (sectionMyWork).
+  3. Added by the workshop team on 18 Nov (update no. 10), now live:
+     - Kunal, Jatin and Ram tick work from the job card itself ("Mark done", jobTick)
+       and "Mark all done" for the rest (tickAllAsk / tickAllDo).
+     - A mechanic finishing with items unticked alerts Kunal and Jatin (finishGapAlert);
+       such a bike stays on Floor rounds with a warning until all is ticked.
+     - Floor rounds: search by plate, customer name or phone; mechanic chips with counts.
+     - Ready for delivery: Kunal/Jatin can change a line's quantity (stock adjusts) and
+       GST % (0% = plain bill, else tax invoice; warns if bought with GST) (applyReadyEdits).
+     - Spares and labour grouped with subtotals on the job card and the bill (groupedRows).
+     - Store: With tax / Without tax switch; cost includes purchase GST; margin is now a
+       share of the selling price, both with tax (marginOn, batchCostIncl).
+     - Purchase bill lines: quantity editable while entering the bill.
 -->
 <html lang="en">
 <head>
@@ -1241,7 +1253,7 @@ async function guard(act,el,fn){
 /* Actions that write to storage. Anything listed here gets the lock. */
 var WRITES=['saveIntake','saveJobEdit','sendPricing','sendEstDo','ownerOkDo','custOkDo','custNoAdd',
   'startWork','raiseAddDo','ownerOkAddDo','workDoneDo','closeJob','newBill','finalBillDo','cancelBillDo',
-  'dropBill','payDo','addLineSave','pickPart','delLine','tick','notUsedDo','floorTick','floorDoneDo','cbMark','cbNo','cbVerdict','savePurchase','savePLine','savePart',
+  'dropBill','payDo','addLineSave','pickPart','delLine','tick','notUsedDo','floorTick','floorDoneDo','jobTick','tickAllDo','cbMark','cbNo','cbVerdict','savePurchase','savePLine','savePart',
   'saveSupplier','adjSave','savePartyRec','payPartyDo','saveExpense','delExpense','moveMoneyDo',
   'countCashDo','advanceDo','saveSalary','saveWorkshop','addUserDo','restoreDo','fitsSave','fitAdd',
   'verifyExp','verifyPay','reversePayDo','purchPayDo','autoFit','sendAddDo','dropAddDo','custOkTop',
@@ -1939,7 +1951,7 @@ var PERM={
   owner:['tech.assign','purch.edit','job.new','job.edit','work.add','work.tick','req.set','price.set','price.override',
          'estimate.send','approve.customer','addition.raise','bill.make','bill.final','pay.take',
          'see.money','see.phone','see.all','parts','ledgers','float','spend.own','spend.all',
-         'verify.all','reports','export','settings','users','wash.do','sale.new','cat.add','pay.vendor','pay.fix','floor.run','comeback.judge'],
+         'verify.all','reports','export','settings','users','wash.do','sale.new','cat.add','bill.edit','pay.vendor','pay.fix','floor.run','comeback.judge'],
   advisor:['job.new','job.edit','req.set','see.phone','see.all','float','spend.own','floor.run','comeback.judge'],
   foreman:['tech.assign','purch.edit','job.new','job.edit','work.add','work.tick','req.set','addition.raise','price.override',
            'see.money','see.phone','see.all','parts','ledgers','float','spend.own','verify.junior'],
@@ -2109,8 +2121,12 @@ function snapEstimate(job,mode,sentTo){
 function estimateText(job){
   var W=S.core.workshop, ls=mainLines(job), t=estimateTotal(job);
   var out=W.name+'\n'+regShow(job.reg)+' \u00B7 '+job.make+' '+job.model+'\nJob card '+job.no+'\n\nESTIMATE\n';
-  ls.forEach(function(l,i){
-    out+=(i+1)+'. '+l.desc+'  x'+qtyNum(l.qty)+'  '+money(lineAmount(l))+'\n';
+  var n=0;
+  [['SPARES',ls.filter(function(l){ return l.kind==='part'; })],['LABOUR',ls.filter(function(l){ return l.kind!=='part'; })]].forEach(function(g){
+    if(!g[1].length) return;
+    out+='\n'+g[0]+'\n';
+    g[1].forEach(function(l){ n++; out+=n+'. '+l.desc+'  x'+qtyNum(l.qty)+'  '+money(lineAmount(l))+'\n'; });
+    out+=g[0].charAt(0)+g[0].slice(1).toLowerCase()+' total '+money(sumLines(g[1]))+'\n';
   });
   out+='\nTotal '+money(t)+'\n\n';
   out+='Please reply YES to approve, or tell us what to remove. Work starts only after your approval.';
@@ -2268,7 +2284,7 @@ function billCalc(job,bill){
   (bill.lineIds||[]).forEach(function(id){
     var l=findLine(job,id); if(!l||l.void) return;
     var amt=lineAmount(l);
-    var rate=(bill.type==='gst')?(l.gst||0):0;
+    var rate=(bill.type==='gst')?lineBillGst(l):0;
     var t=splitTax(amt,rate,bill.incl!==false);
     rows.push({line:l, amount:amt, rate:rate, base:t.base, tax:t.tax, total:t.total});
     sub+=t.base; taxSum+=t.tax; gross+=t.total;
@@ -2287,6 +2303,14 @@ function billCalc(job,bill){
 /* Which bill a line belongs on. Labour is always taxable. A part follows
    the batch it was actually taken from \u2014 a filter from a no-GST supplier
    stays no-GST even after the same filter is later bought on a tax invoice. */
+/* The GST % a line is billed at decides its bill: 0% goes on the plain
+   bill, anything else on the tax invoice. It starts from where the part
+   was bought (no-GST batch = 0%) or the line's own rate; Kunal or Jatin
+   can change it while making the bills. */
+function lineBillGst(l){
+  if(l.billGst!==undefined&&l.billGst!==null) return l.billGst;
+  return lineNoGst(l)?0:(l.gst||0);
+}
 function lineNoGst(l){
   if(l.kind!=='part') return false;
   if(l.batchId){ for(var i=0;i<BATCHES.length;i++) if(BATCHES[i].id===l.batchId) return BATCHES[i].supplyType==='composition'; }
@@ -2294,7 +2318,7 @@ function lineNoGst(l){
 }
 function billSplit(job){
   var ub=unbilledApproved(job);
-  return { tax:ub.filter(function(l){ return !lineNoGst(l); }), plain:ub.filter(lineNoGst) };
+  return { tax:ub.filter(function(l){ return lineBillGst(l)>0; }), plain:ub.filter(function(l){ return !(lineBillGst(l)>0); }) };
 }
 /* what this customer still owes on this job: before billing, against what
    they approved; once billed, against the bills */
@@ -4230,7 +4254,7 @@ function viewSale(j){
   h+='<div class="card"><div class="card-h"><h2>Items</h2><span class="tag t-grey" style="margin-left:auto">'+ls.length+'</span></div>';
   if(ls.length){
     h+='<div class="card-b tight" style="overflow-x:auto"><table class="lines"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th><th></th></tr></thead><tbody>';
-    ls.forEach(function(l){ var open=!billed[l.id]; h+=lineRow(j,l,open,open&&(can('price.set')||can('price.override')),true); });
+    h+=groupedRows(ls,function(l){ var open=!billed[l.id]; return lineRow(j,l,open,open&&(can('price.set')||can('price.override')),true); },5,true);
     h+='</tbody></table></div>'+
       '<div class="card-b" style="padding-top:0"><div class="totrow grand"><span>Total</span><span class="money">'+money(sumLines(ls))+'</span></div></div>';
   } else h+='<div class="card-b"><div class="small muted">Nothing added yet.</div></div>';
@@ -4831,6 +4855,18 @@ function sectionRequired(j){
   return h+'</div></div>';
 }
 
+/* spares first, then labour, each with its own subtotal */
+function groupedRows(ls,rowFn,cols,showMoney){
+  var parts=ls.filter(function(l){ return l.kind==='part'; }), lab=ls.filter(function(l){ return l.kind!=='part'; }), h='';
+  [['Spares',parts],['Labour',lab]].forEach(function(g){
+    if(!g[1].length) return;
+    h+='<tr class="grprow"><td colspan="'+cols+'" style="background:var(--rule2,#eef1f5);padding:8px 10px">'+
+      '<div style="display:flex;align-items:center;gap:8px"><b>'+g[0]+'</b><span class="small muted">'+g[1].length+' item'+(g[1].length>1?'s':'')+'</span>'+
+      (showMoney?'<span class="money" style="margin-left:auto;font-weight:700">'+money(sumLines(g[1]))+'</span>':'')+'</div></td></tr>';
+    g[1].forEach(function(l){ h+=rowFn(l); });
+  });
+  return h;
+}
 /* ---- work & parts ---- */
 function sectionWork(j){
   var lines=mainLines(j);
@@ -4845,7 +4881,7 @@ function sectionWork(j){
   } else {
     h+='<div class="card-b tight"><table class="lines"><thead><tr><th>Item</th><th class="num">Qty</th>'+
        (showMoney?'<th class="num">Rate</th><th class="num">Amount</th>':'')+'<th></th></tr></thead><tbody>';
-    lines.forEach(function(l){ h+=lineRow(j,l,editable,priceable,showMoney); });
+    h+=groupedRows(lines,function(l){ return lineRow(j,l,editable,priceable,showMoney); },showMoney?5:3,showMoney);
     h+='</tbody></table></div>';
   }
   if(editable){
@@ -4857,12 +4893,63 @@ function sectionWork(j){
   }
   return h+'</div>';
 }
+/* Kunal, Jatin and Ram can tick any approved item until it is billed,
+   from the job card itself. It is the same tick the mechanic and the
+   floor round use, so it shows everywhere at once. */
+function canTickLine(j,l){
+  if(!j||j.direct||!can('floor.run')||l.void) return false;
+  if(['customer_ok','in_progress','work_done'].indexOf(j.stage)<0) return false;
+  if(billedLineIds(j)[l.id]) return false;
+  return approvedLines(j).some(function(x){ return x.id===l.id; });
+}
+async function jobTick(lineId){
+  var j=S.job, l=j&&findLine(j,lineId); if(!l||!canTickLine(j,l)) return;
+  if(jobOnHold(j)){ toast('Work is stopped on this bike','bad'); return; }
+  var on=!l.done, doer=j.mechanicId||S.user.id;
+  l.done=on; l.doneBy=doer; l.doneAt=Date.now();
+  if(doer!==S.user.id) l.markedBy=S.user.id; else delete l.markedBy;
+  logIt(j,on?'Work done':'Marked not done',l.desc+(doer!==S.user.id?' \u00B7 '+coreUser(doer).name+', marked by '+S.user.name:''));
+  if(on&&j.stage==='customer_ok') j.stage='in_progress';
+  if(!await saveJob(j)){ rerender(); return; }
+  rerender();
+  var ap=approvedLines(j), left=ap.filter(function(x){ return !x.done; }).length;
+  if(on&&!left&&j.stage==='work_done') toast('All ticked \u2014 ready for delivery','good');
+  notify(watchers(j).concat(j.mechanicId?[j.mechanicId]:[]),j,'work',on
+    ? 'ticked \u201C'+l.desc+'\u201D done \u00B7 '+(ap.length-left)+' of '+ap.length+' done'
+    : 'un-ticked \u201C'+l.desc+'\u201D');
+}
+function tickAllAsk(){
+  var j=S.job, left=approvedLines(j).filter(function(l){ return !l.done&&canTickLine(j,l); });
+  if(!left.length) return;
+  confirmBox('Mark all done?',left.length+' not ticked: '+left.map(function(l){ return l.desc; }).join(', ')+
+    '. If a spare was not fitted, press \u201CSpare not used\u201D on it instead.','Yes, all done','tickAllDo');
+}
+async function tickAllDo(){
+  var j=S.job, now=Date.now(), doer=j.mechanicId||S.user.id;
+  var left=approvedLines(j).filter(function(l){ return !l.done&&canTickLine(j,l); });
+  left.forEach(function(l){ l.done=true; l.doneBy=doer; l.doneAt=now; if(doer!==S.user.id) l.markedBy=S.user.id; });
+  logIt(j,'Work done',left.map(function(l){ return l.desc; }).join(', ')+' \u00B7 marked by '+S.user.name);
+  if(j.stage==='customer_ok') j.stage='in_progress';
+  closeModal(); if(!await saveJob(j)){ rerender(); return; }
+  rerender(); toast(left.length+' ticked done','good');
+  notify(watchers(j).concat(j.mechanicId?[j.mechanicId]:[]),j,'work','ticked the rest done: '+left.map(function(l){ return l.desc; }).join(', '));
+}
+/* a mechanic who finishes with items unticked: tell Kunal and Jatin which */
+function finishGapAlert(j){
+  var left=approvedLines(j).filter(function(l){ return !l.done; });
+  if(!left.length) return;
+  notify(userIdsWith('bill.edit'),j,'gap','finished with '+left.length+' not ticked: '+
+    left.map(function(l){ return l.desc; }).join(', ').slice(0,160)+' \u2014 tick them on the job card to bill');
+}
 function lineRow(j,l,editable,priceable,showMoney){
   var amt=lineAmount(l);
   var h='<tr data-line="'+l.id+'"><td><div style="font-weight:700">'+esc(l.desc)+'</div>'+
     '<div style="margin-top:4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+
     '<span class="linekind '+(l.kind==='part'?'k-part':'k-labour')+'">'+(l.kind==='part'?'PART':'LABOUR')+'</span>'+
-    (l.done?'<span class="tag t-green">Done</span>':'')+
+    (canTickLine(j,l)
+      ? '<button class="btn sm'+(l.done?' go':'')+'" style="min-height:30px;padding:2px 10px" data-act="jobTick" data-line="'+l.id+'">'+(l.done?'\u2713 Done':'Mark done')+'</button>'
+      : (l.done?'<span class="tag t-green">Done</span>':''))+
+    (l.done&&l.markedBy?'<span class="small muted">'+esc(coreUser(l.doneBy).name)+', ticked by '+esc(coreUser(l.markedBy).name)+'</span>':'')+
     (l.partNo?'<span class="small muted mono">'+esc(l.partNo)+'</span>':'')+
     (l.hsn?'<span class="small muted mono">HSN '+esc(l.hsn)+'</span>':'')+
     (l.fromList?'':'<span class="tag t-amber" style="font-size:9px;padding:2px 5px">off-list</span>')+
@@ -4899,11 +4986,12 @@ function sectionEstimate(j){
     '<div class="totrow grand"><span>Estimate</span><span class="money">'+money(total)+'</span></div>';
   if(!allPriced(lines)) h+='<div class="banner warn small" style="margin-top:12px">Some items still have no price. The owner must price every line before this can be approved.</div>';
   if(anyCost&&can('price.set')){
-    var exSale=0; lines.forEach(function(l){ exSale+=exTax(lineAmount(l),l.gst||0); });
-    var mg=cost?Math.round(((exSale-cost)/cost)*1000)/10:null;
+    var cI=0, sP=0; lines.forEach(function(l){ if(l.kind==='part'&&(l.cost||l.batchId)){ cI+=lineCostIncl(l); sP+=lineAmount(l); } });
+    var mg=marginOn(sP,cI);
     h+='<div class="sub" style="margin:12px -14px 0"><div class="eyebrow">What it costs you</div>'+
-      '<div class="totrow"><span>Spares at cost</span><span class="money">'+money(cost)+'</span></div>'+
-      '<div class="totrow"><span>Margin on this job</span><span>'+pctTag(mg,25)+'</span></div>'+
+      '<div class="totrow"><span>Spares at cost (with tax)</span><span>'+moneyTax(cI,cost)+'</span></div>'+
+      '<div class="totrow"><span>Spares billed</span><span class="money">'+money(sP)+'</span></div>'+
+      '<div class="totrow"><span>Margin on spares</span><span><span class="money">'+money(sP-cI)+'</span> '+pctTag(mg,20)+'</span></div>'+
       '<div class="hint">Only you see this line.</div></div>';
   }
 
@@ -4970,7 +5058,7 @@ function sectionAdditions(j){
       '<div style="margin:10px 0;font-weight:600;border-left:5px solid '+(a.fin?'var(--brand)':'var(--red)')+';padding-left:12px">'+esc(a.reason)+'</div>';
     if(ls.length){
       h+='<table class="lines"><tbody>';
-      ls.forEach(function(l){ h+=lineRow(j,l,can('work.add')&&!a.customer,priceable,seeMoney()); });
+      h+=groupedRows(ls,function(l){ return lineRow(j,l,can('work.add')&&!a.customer,priceable,seeMoney()); },seeMoney()?5:3,seeMoney());
       h+='</tbody></table>';
       if(seeMoney()) h+='<div class="totrow grand" style="font-size:19px"><span>Extra</span><span class="money">'+money(tot)+'</span></div>';
     }
@@ -5183,8 +5271,11 @@ function jobActionBar(j){
     if(can('addition.raise')&&!fw) b.push(N('Extra work found','raiseAdd'));
     if(can('bill.make')){
       var rp=readyProblems(j);
+      var nt=approvedLines(j).filter(function(l){ return !l.done&&canTickLine(j,l); }).length;
       b.push(fw?'<button class="btn lg" disabled>Waiting for wash approval</button>'
-        :(rp.length?'<button class="btn lg" disabled title="'+esc(rp.join('; '))+'">Not ready: '+esc(rp[0])+'</button>':P('Ready for delivery','readyModal')));
+        :(rp.length&&rp[0]==='some work is not ticked done'&&nt&&!jobOnHold(j)
+          ? '<button class="btn lg warn" data-act="tickAllAsk">'+nt+' item'+(nt>1?'s':'')+' not ticked \u2014 mark done</button>'
+          : (rp.length?'<button class="btn lg" disabled title="'+esc(rp.join('; '))+'">Not ready: '+esc(rp[0])+'</button>':P('Ready for delivery','readyModal'))));
     }
   }
   if(st==='billed'){
@@ -5349,7 +5440,7 @@ async function notUsedDo(lineId){
 var FLOOR={jobs:{}, stamp:{}, loading:false};
 var FLOOR_STALE=2*3600000;   /* a bike nobody has updated for two hours is flagged */
 function floorEntries(){
-  return S.index.filter(function(e){ return !e.direct&&!e.imported&&(e.stage==='customer_ok'||e.stage==='in_progress'); });
+  return S.index.filter(function(e){ return !e.direct&&!e.imported&&(e.stage==='customer_ok'||e.stage==='in_progress'||e.stage==='work_done'); });
 }
 async function floorLoad(force){
   if(FLOOR.loading) return; FLOOR.loading=true;
@@ -5374,27 +5465,55 @@ function viewFloor(){
   var es=floorEntries();
   var need=es.some(function(e){ return !FLOOR.jobs[e.id]||FLOOR.stamp[e.id]!==e.updatedAt; });
   if(need) setTimeout(function(){ floorLoad(false); },0);
-  var jobs=es.map(function(e){ return FLOOR.jobs[e.id]; }).filter(Boolean);
+  /* finished bikes stay only while something on them is not ticked */
+  var jobs=es.map(function(e){ return FLOOR.jobs[e.id]; }).filter(function(j){
+    return j&&(j.stage!=='work_done'||approvedLines(j).some(function(l){ return !l.done; })); });
   var now=Date.now();
   jobs.sort(function(a,b){ return lastTouch(a)-lastTouch(b); });   /* longest without news first */
+  /* who is on what, with counts, and a search across plate, name and phone */
+  var byM={}; jobs.forEach(function(j){ var k=j.mechanicId||'tba'; byM[k]=(byM[k]||0)+1; });
+  var fm=S.floorMech||'', fq=String(S.floorQ||'').trim().toLowerCase(), fqd=fq.replace(/[^0-9a-z]/g,'');
+  var allN=jobs.length;
+  jobs=jobs.filter(function(j){
+    if(fm&&(j.mechanicId||'tba')!==fm) return false;
+    if(!fq) return true;
+    var reg=String(j.reg||'').toLowerCase().replace(/[^0-9a-z]/g,''), ph=String(j.cust&&j.cust.phone||'').replace(/[^0-9]/g,'');
+    var nm=String(j.cust&&j.cust.name||'').toLowerCase();
+    return (fqd&&reg.indexOf(fqd)>=0)||nm.indexOf(fq)>=0||(/[0-9]/.test(fq)&&ph.indexOf(fq.replace(/[^0-9]/g,''))>=0)||
+      String(j.no||'').toLowerCase().indexOf(fq)>=0;
+  });
   var stale=jobs.filter(function(j){ return now-lastTouch(j)>FLOOR_STALE; }).length;
   var h=pageHead('Floor rounds','Ask each mechanic, tick for him',
     '<button class="btn sm" data-act="floorRefresh">Refresh</button>');
+  if(allN){
+    h+='<div class="searchbar" style="position:static;margin:0;padding:0 0 10px;border:0">'+
+      '<input type="text" id="floorq" placeholder="Registration, customer name or phone" value="'+esc(S.floorQ||'')+'" autocomplete="off"></div>';
+    var ms=Object.keys(byM).sort(function(a,b){ return a==='tba'?1:(b==='tba'?-1:coreUser(a).name.localeCompare(coreUser(b).name)); });
+    h+='<div class="chips" style="margin:0 0 10px">'+
+      '<button class="chip filter" data-act="floorMech" data-k="" aria-pressed="'+(!fm)+'">All ('+allN+')</button>'+
+      ms.map(function(k){ return '<button class="chip filter" data-act="floorMech" data-k="'+esc(k)+'" aria-pressed="'+(fm===k)+'">'+
+        esc(k==='tba'?'TBA':coreUser(k).name.split(' ')[0])+' ('+byM[k]+')</button>'; }).join('')+'</div>';
+  }
   h+='<div class="small muted" style="margin:-4px 0 10px">'+jobs.length+' bike'+(jobs.length===1?'':'s')+' on the floor'+
     (stale?' · <b style="color:var(--red)">'+stale+' not updated in 2 hours</b>':'')+'</div>';
   if(!es.length) return h+'<div class="empty"><b>No bikes being worked on.</b>Bikes appear here once the customer has approved the work.</div>';
-  if(!jobs.length) return h+'<div class="empty"><b>Loading the bikes…</b></div>';
+  if(!jobs.length&&allN) return h+'<div class="small muted" style="margin:-4px 0 10px">0 bikes shown</div><div class="empty"><b>Nothing matches.</b>'+
+    '<button class="btn sm" style="margin-top:10px" data-act="floorClear">Clear the filters</button></div>';
+  if(!jobs.length) return h+(need||FLOOR.loading?'<div class="empty"><b>Loading the bikes…</b></div>'
+    :'<div class="empty"><b>No bikes being worked on.</b>Bikes appear here once the customer has approved the work.</div>');
   jobs.forEach(function(j){
     var T=techTasks(j), n=T.tasks.filter(function(t){ return t.done; }).length, hold=jobOnHold(j);
     var old=now-lastTouch(j)>FLOOR_STALE, mech=j.mechanicId?coreUser(j.mechanicId):null;
     h+='<div class="card" style="'+(old?'border-color:var(--red)':'')+'"><div class="card-h" style="flex-wrap:wrap;gap:8px">'+
       '<span class="plate">'+esc(regShow(j.reg))+'</span>'+
-      '<div style="min-width:0"><b>'+esc(j.make+' '+j.model)+'</b><div class="small muted">'+esc(mech?mech.name:'Not assigned')+
+      '<div style="min-width:0"><b>'+esc(j.make+' '+j.model)+'</b>'+(j.cust&&j.cust.name?' <span class="small muted">· '+esc(j.cust.name)+'</span>':'')+
+        '<div class="small muted">'+esc(mech?mech.name:'Not assigned')+
         ' · last update '+ago(lastTouch(j))+'</div></div>'+
       '<span class="tag '+(n===T.tasks.length&&n?'t-green':(old?'t-red':'t-grey'))+'" style="margin-left:auto">'+n+' of '+T.tasks.length+'</span></div>'+
       (j.cb&&j.cb.of?'<div class="banner warn small" style="margin:10px 14px 0"><b>COMEBACK</b> of '+esc(j.cb.ofNo)+
         (j.cb.mechName?' ('+esc(j.cb.mechName)+')':'')+'</div>':'')+
       (hold?'<div class="banner warn small" style="margin:10px 14px 0"><b>Stopped</b> — extra work waiting for the customer</div>':'')+
+      (j.stage==='work_done'?'<div class="banner warn small" style="margin:10px 14px 0"><b>Finished with items not ticked</b> — tick them so it can be billed</div>':'')+
       '<div class="card-b tight">';
     T.tasks.forEach(function(t){
       h+='<div style="display:flex;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--rule2)">'+
@@ -5406,7 +5525,7 @@ function viewFloor(){
     });
     h+='<div class="btn-row" style="padding:10px 14px">'+
       '<button class="btn sm" data-act="openJob" data-id="'+j.id+'">Open job card</button>'+
-      (!hold?'<button class="btn sm primary" data-act="floorDone" data-id="'+j.id+'">Work finished</button>':'')+
+      (!hold&&j.stage!=='work_done'?'<button class="btn sm primary" data-act="floorDone" data-id="'+j.id+'">Work finished</button>':'')+
       '</div></div></div>';
   });
   return h;
@@ -5430,8 +5549,10 @@ async function floorDoneDo(jobId){
   j.stage='work_done'; j.workDoneAt=Date.now();
   logIt(j,'Work finished',j.mechanicId&&j.mechanicId!==S.user.id?'marked by '+S.user.name+' for '+coreUser(j.mechanicId).name:'');
   closeModal(); if(!await saveJob(j)) return;
-  delete FLOOR.jobs[jobId]; rerender(); toast(regShow(j.reg)+' ready to bill','good');
+  if(!approvedLines(j).some(function(l){ return !l.done; })) delete FLOOR.jobs[jobId];
+  rerender(); toast(regShow(j.reg)+' ready to bill','good');
   notify(watchers(j),j,'done','marked the work finished — ready to bill');
+  finishGapAlert(j);
 }
 
 /* =====================================================================
@@ -6009,10 +6130,17 @@ function pickBatch(partId){
 function costOf(partId){
   var b=pickBatch(partId); return b?b.cost:0;
 }
-function stockValue(){
+function stockValue(incl){
   var t=0;
-  BATCHES.forEach(function(b){ var q=stockOfBatch(b.id); if(q>0) t+=Math.round(q*b.cost); });
+  BATCHES.forEach(function(b){ var q=stockOfBatch(b.id); if(q>0) t+=Math.round(q*(incl?batchCostIncl(b):b.cost)); });
   return t;
+}
+/* the store's With tax / Without tax switch */
+function svIncl(){ return S.svIncl!==false; }
+function svSwitch(){
+  return '<span class="seg" style="display:inline-flex;vertical-align:middle;margin-left:6px">'+
+    '<button class="btn sm" data-act="svTax" data-k="1" aria-pressed="'+svIncl()+'" style="min-height:28px;padding:2px 8px">With tax</button>'+
+    '<button class="btn sm" data-act="svTax" data-k="0" aria-pressed="'+(!svIncl())+'" style="min-height:28px;padding:2px 8px">Without tax</button></span>';
 }
 /* Parts the books say you have less than none of. The shelf is the truth,
    so nothing is blocked \u2014 but somebody has to go and count these. */
@@ -6026,11 +6154,30 @@ function negativeStock(){
    Both worked out, never typed. Compared without tax so that two different
    GST rates cannot make the number lie. */
 function exTax(amountInclusive, rate){ return splitTax(amountInclusive, rate||0, true).base; }
-function marginPct(part){
-  var cost=costOf(part.id); if(!cost) return null;
-  var sale=exTax(part.sale||0, part.gst||0);
-  if(!sale) return null;
-  return Math.round(((sale-cost)/cost)*1000)/10;
+/* What a batch really cost with the tax paid on it. A GST batch is kept
+   without tax (the tax comes back as credit); a no-GST batch already is
+   the full price paid. Prices are shown with tax so the margin reads the
+   way the money does at the counter. */
+function batchCostIncl(b){
+  if(!b) return 0;
+  return b.supplyType==='composition'?(b.cost||0):Math.round((b.cost||0)*(100+(b.gst||0))/100);
+}
+function costInclOf(partId){ return batchCostIncl(pickBatch(partId)); }
+function lineCostIncl(l){
+  var b=l.batchId?BATCHES.filter(function(x){ return x.id===l.batchId; })[0]:null;
+  if(b) return Math.round(qtyNum(l.qty)*batchCostIncl(b));
+  return l.cost?Math.round(qtyNum(l.qty)*l.cost*(100+(l.gst||0))/100):0;
+}
+/* margin = what you keep out of the selling price, both with tax */
+function marginOn(saleIncl,costIncl){
+  if(!saleIncl||!costIncl) return null;
+  return Math.round(((saleIncl-costIncl)/saleIncl)*1000)/10;
+}
+function marginPct(part){ return marginOn(part.sale||0,costInclOf(part.id)); }
+/* a with-tax amount, and the same without tax in small grey under it */
+function moneyTax(incl,ex){
+  return '<span class="money">'+money(incl)+'</span>'+(ex!==undefined&&ex!==null&&ex!==incl?
+    '<div class="small muted" style="font-weight:400">'+money(ex)+' without tax</div>':'');
 }
 function discountPct(mrpIncl, buyIncl){
   if(!mrpIncl||!buyIncl) return null;
@@ -9341,13 +9488,13 @@ function repStaffSales(R){
 /* ---------- items ---------- */
 function repStock(){
   var rows=shelfParts().map(function(p){
-    var q=stockOf(p.id), c=costOf(p.id);
+    var q=stockOf(p.id), c=svIncl()?costInclOf(p.id):costOf(p.id);
     return {name:p.name, no:p.no, grp:catGroup(p.category)||'', cat:catIsSet(p.category)?p.category:'', brand:p.brand||'', qty:q, unit:p.unit,
       cost:money(c), value:money(q>0?Math.round(q*c):0)};
   }).sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
   return repTable([{k:'no',label:'Part number',mono:1},{k:'name',label:'Name'},{k:'grp',label:'Group'},{k:'cat',label:'Category'},{k:'brand',label:'Brand'},
-    {k:'qty',label:'On the shelf',num:1},{k:'unit',label:'Unit'},{k:'cost',label:'Cost',num:1},
-    {k:'value',label:'Value',num:1}],rows,{no:'',name:shelfParts().length+' items',value:money(stockValue())});
+    {k:'qty',label:'On the shelf',num:1},{k:'unit',label:'Unit'},{k:'cost',label:svIncl()?'Cost with tax':'Cost without tax',num:1},
+    {k:'value',label:svIncl()?'Value with tax':'Value without tax',num:1}],rows,{no:'',name:shelfParts().length+' items',value:money(stockValue(svIncl()))});
 }
 function repLowStock(){
   var rows=shelfParts().map(function(p){ return {p:p,q:stockOf(p.id)}; })
@@ -11817,7 +11964,7 @@ function viewDesk(){
   var h='<div style="display:flex;align-items:center;gap:12px;margin:16px 0 4px;flex-wrap:wrap">'+
     '<h1>The store</h1>'+
     '<span class="muted small">'+shelfParts().length+' parts \u00B7 '+labourItems().length+' labour jobs \u00B7 '+SUPPLIERS.length+' suppliers'+
-    (seeMoney()?' \u00B7 stock worth <b class="money">'+money(stockValue())+'</b>':'')+'</span></div>';
+    (seeMoney()?' \u00B7 stock worth <b class="money">'+money(stockValue(svIncl()))+'</b> '+(svIncl()?'with tax':'without tax')+svSwitch():'')+'</span></div>';
   if(can('reports')&&PURCHASES.length){
     var bought=0, credit=0;
     PURCHASES.forEach(function(x){ var T=billTotals(x); bought+=T.grand; if(x.supplyType!=='composition') credit+=T.tax; });
@@ -11906,6 +12053,12 @@ async function labDel(id){
   await saveStore('parts'); rerender(); toast(p.name+' removed');
 }
 document.addEventListener('change',function(e){
+  var pq=e.target&&e.target.dataset&&e.target.dataset.pq;
+  if(pq!==undefined&&S.purch&&!S.purch.saved&&S.purch.lines[pq]){
+    var nq=Math.round((parseFloat(e.target.value)||0)*100)/100;
+    if(nq<=0){ toast('Quantity must be more than 0 \u2014 use \u2715 to take the item off','bad'); rerender(); return; }
+    grabPurchaseHeader(); S.purch.lines[pq].qty=nq; rerender(); return;
+  }
   var n=e.target&&e.target.name;
   if((n==='charges'||n==='roundoff')&&S.view&&S.view.name==='purchase'&&S.purch&&!S.purch.saved){
     grabPurchaseHeader(); rerender(); return; }
@@ -11992,9 +12145,9 @@ function viewPurchase(){
        '<th>Part</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">MRP</th>'+
        '<th class="num">Sale</th>'+(can('reports')?'<th class="num">Disc</th><th class="num">Margin</th>':'')+'<th></th></tr></thead><tbody>';
     p.lines.forEach(function(l,i){
-      var baseEx=exTax(l.rate,l.gst), costPer=Math.round(baseEx/(l.conv||1));
-      var saleEx=exTax(l.sale||0,l.gst);
-      var mg=costPer?Math.round(((saleEx-costPer)/costPer)*1000)/10:null;
+      var costPer=lineCostPer(p,l);
+      var costIncl=(p.supplyType==='composition')?costPer:Math.round(costPer*(100+(l.gst||0))/100);
+      var mg=marginOn(l.sale||0,costIncl);
       h+='<tr><td><div style="font-weight:800">'+esc(l.name)+'</div>'+
         '<div class="small muted mono">'+esc(l.no)+(l.hsn?' \u00B7 HSN '+esc(l.hsn):'')+
         (l.batchLabel?' \u00B7 '+esc(l.batchLabel):'')+((l.lot||l.batchNo)?' \u00B7 lot '+esc(l.lot||l.batchNo):'')+'</div>'+
@@ -12002,11 +12155,14 @@ function viewPurchase(){
           return u?'<div class="small" style="color:var(--amber);font-weight:700">'+u+' already used on job cards</div>':''; })():'')+
         '<div class="small muted">'+esc(l.category||'')+(l.brand?' \u00B7 '+esc(l.brand):'')+
         ((l.conv||1)!==1?' \u00B7 1 '+esc(l.buyUnit)+' = '+l.conv+' '+esc(l.unit):'')+'</div></td>'+
-        '<td class="num">'+l.qty+'<br><span class="small muted">'+esc(l.buyUnit)+'</span></td>'+
-        '<td class="num">'+money(l.rate)+'<br><span class="small muted">GST '+l.gst+'%</span></td>'+
+        '<td class="num">'+(done||(l.serials&&l.serials.length)?l.qty:
+          '<input type="number" step="0.01" min="0" inputmode="decimal" data-pq="'+i+'" value="'+l.qty+'" style="width:72px;min-height:38px;text-align:right">')+
+          '<br><span class="small muted">'+esc(l.buyUnit)+'</span></td>'+
+        '<td class="num">'+money(l.rate)+'<br><span class="small muted">GST '+l.gst+'%'+(l.incl?' incl':'')+'</span>'+
+          (costPer?'<div class="small" style="color:var(--steel)">'+money(costIncl)+' with tax / '+esc(l.unit||'unit')+'</div>':'')+'</td>'+
         '<td class="num">'+(l.mrp?money(l.mrp):'—')+'</td>'+
         '<td class="num">'+(l.sale?money(l.sale):'—')+'</td>'+
-        (can('reports')?'<td class="num">'+pctTag(discountPct(l.mrp,l.rate),20)+'</td>'+
+        (can('reports')?'<td class="num">'+pctTag(discountPct(l.mrp,costIncl),20)+'</td>'+
           '<td class="num">'+pctTag(mg,15)+'</td>':'')+
         '<td class="num">'+(done?'':'<button class="btn sm" data-act="editPLine" data-i="'+i+'">Edit</button> '+
           '<button class="btn sm danger" data-act="delPLine" data-i="'+i+'">\u2715</button>')+'</td></tr>';
@@ -12157,7 +12313,7 @@ function deskParts(){
   if(!list.length) return h+'<div class="empty"><b>Nothing matches that.</b>'+((S.pcf||S.pbf)?'Clear the filters to see every part.':'Try the part number without dashes.')+'</div>';
   if(S.pcf||S.pbf||q) h+='<div class="small muted" style="margin:0 0 6px">'+list.length+' part'+(list.length===1?'':'s')+' shown'+(list.length>150?' (first 150)':'')+'</div>';
   h+='<div class="card"><div class="card-b tight" style="overflow-x:auto"><table class="lines"><thead><tr>'+
-     '<th>Part</th><th class="num">In stock</th><th class="num">Cost</th><th class="num">Sale</th>'+
+     '<th>Part</th><th class="num">In stock</th><th class="num">Cost (with tax)</th><th class="num">Sale</th>'+
      '<th class="num">MRP</th>'+(can('reports')?'<th class="num">Margin</th>':'')+'</tr></thead><tbody>';
   list.slice(0,150).forEach(function(p){
     var q2=stockOf(p.id), low=(p.minQty&&q2<=p.minQty);
@@ -12166,7 +12322,7 @@ function deskParts(){
       '<div class="small muted">'+catLabel(p)+' \u00B7 '+brandLabel(p)+'</div></td>'+
       '<td class="num"><b style="font-size:17px'+(q2<=0?';color:var(--red)':(low?';color:var(--amber)':''))+'">'+q2+'</b>'+
       '<br><span class="small muted">'+esc(p.unit)+'</span>'+(low&&q2>0?'<br><span class="tag t-amber">low</span>':'')+'</td>'+
-      '<td class="num">'+(seeMoney()?money(costOf(p.id)):'—')+'</td>'+
+      '<td class="num">'+(seeMoney()?moneyTax(costInclOf(p.id),costOf(p.id)):'—')+'</td>'+
       '<td class="num">'+(seeMoney()?money(p.sale||0):'—')+'</td>'+
       '<td class="num">'+(p.mrp?money(p.mrp):'—')+'</td>'+
       (can('reports')?'<td class="num">'+pctTag(marginPct(p),15)+'</td>':'')+'</tr>';
@@ -12187,10 +12343,14 @@ function viewPart(){
     '<button class="btn sm" style="margin-left:auto" data-act="editPart" data-id="'+p.id+'">Edit</button></div><div class="card-b">'+
     kv('In stock','<b style="font-size:19px">'+stockOf(p.id)+'</b> '+esc(p.unit))+
     ((p.conv||1)!==1?kv('Bought as','1 '+esc(p.buyUnit)+' = '+p.conv+' '+esc(p.unit)):'')+
-    (seeMoney()?kv('Cost now','<span class="money">'+money(costOf(p.id))+'</span> <span class="small muted">per '+esc(p.unit)+'</span>'):'')+
-    (seeMoney()?kv('Selling price','<span class="money">'+money(p.sale||0)+'</span>'):'')+
+    (seeMoney()?kv('Cost now (with tax)','<div style="text-align:right">'+moneyTax(costInclOf(p.id),costOf(p.id))+'</div> <span class="small muted">per '+esc(p.unit)+'</span>'):'')+
+    (seeMoney()?kv('Selling price','<div style="text-align:right">'+moneyTax(p.sale||0,exTax(p.sale||0,p.gst||0))+'</div>'):'')+
     kv('MRP',p.mrp?money(p.mrp):'—')+
-    (can('reports')?kv('Margin',pctTag(marginPct(p),15)):'')+
+    (can('reports')?kv('Margin',(function(){
+      var ci=costInclOf(p.id), s=p.sale||0; if(!ci||!s) return pctTag(null,15);
+      var ex=exTax(s,p.gst||0)-costOf(p.id);
+      return '<div style="text-align:right"><span class="money">'+money(s-ci)+'</span> '+pctTag(marginPct(p),15)+
+        (ex!==s-ci?'<div class="small muted" style="font-weight:400">'+money(ex)+' without tax</div>':'')+'</div>'; })()):'')+
     kv('Reorder at',(p.minQty||0)+' '+esc(p.unit))+
     ((p.aliases&&p.aliases.length)?kv('Also known as','<span class="mono small">'+esc(p.aliases.join(', '))+'</span>'):'')+
     '</div>'+
@@ -12207,13 +12367,14 @@ function viewPart(){
   if(!bs.length) h+='<div class="empty" style="padding:20px 8px"><b>This part has never been received.</b>'+
     'Enter the purchase bill it came on and its cost and stock start here.</div>';
   else{
-    h+='<table class="lines"><thead><tr><th>Batch</th><th class="num">Left</th>'+(seeMoney()?'<th class="num">Cost</th>':'')+'</tr></thead><tbody>';
+    h+='<table class="lines"><thead><tr><th>Batch</th><th class="num">Left</th>'+(seeMoney()?'<th class="num">Cost (with tax)</th>':'')+'</tr></thead><tbody>';
     bs.forEach(function(b){
       var left=stockOfBatch(b.id);
       h+='<tr'+(left<=0?' style="opacity:.45"':'')+'><td><b class="mono">'+esc(b.batchNo||'—')+'</b>'+
         '<div class="small muted">'+dOnly(b.at)+' \u00B7 '+esc(b.invNo||'')+'</div></td>'+
         '<td class="num"><b>'+left+'</b> <span class="small muted">of '+b.qtyIn+'</span></td>'+
-        (seeMoney()?'<td class="num money">'+money(b.cost)+(b.freight?'<br><span class="small muted">incl freight</span>':'')+'</td>':'')+'</tr>';
+        (seeMoney()?'<td class="num">'+moneyTax(batchCostIncl(b),b.cost)+(b.freight?'<span class="small muted">incl freight</span>':'')+
+          (b.supplyType==='composition'?'<span class="small muted">no-GST batch</span>':'')+'</td>':'')+'</tr>';
     });
     h+='</tbody></table>';
   }
@@ -12277,8 +12438,10 @@ function deskStock(){
   h+='</div></div>';
   if(seeMoney()){
     h+='<div class="card"><div class="card-h"><h2>What the shelves are worth</h2></div><div class="card-b">'+
-      '<div class="totrow grand"><span>Stock at cost</span><span class="money">'+money(stockValue())+'</span></div>'+
-      '<p class="hint">Every batch still on the shelf, at what it actually cost including freight.</p></div></div>';
+      '<div style="margin-bottom:8px">'+svSwitch()+'</div>'+
+      '<div class="totrow grand"><span>Stock at cost '+(svIncl()?'with tax':'without tax')+'</span><span class="money">'+money(stockValue(svIncl()))+'</span></div>'+
+      '<div class="small muted">'+(svIncl()?money(stockValue(false))+' without tax':money(stockValue(true))+' with tax')+'</div>'+
+      '<p class="hint">Every batch still on the shelf, at what it actually cost including freight. No-GST stock is the same both ways.</p></div></div>';
   }
   var recent=MOVES.slice().sort(function(a,b){ return b.at-a.at; }).slice(0,40);
   h+='<div class="card"><div class="card-h"><h2>Latest movements</h2></div><div class="card-b tight"><table class="lines"><tbody>';
@@ -12441,9 +12604,9 @@ function addPLineModal(idx){
     '<button type="button" data-act="incl" data-v="0" aria-pressed="true">Without tax</button>'+
     '<button type="button" data-act="incl" data-v="1" aria-pressed="false">Tax included</button></div>'+
     '<div class="hint">Whatever the bill shows.</div></div></div>'+
-    '<div class="two"><div class="field"><label>MRP incl. tax (per issued unit)</label>'+
+    '<div class="two"><div class="field"><label class="req">MRP incl. tax (per issued unit)</label>'+
     '<input type="number" step="0.01" inputmode="decimal" name="pmrp" placeholder="0.00"></div>'+
-    '<div class="field"><label>Selling price incl. tax (per issued unit)</label>'+
+    '<div class="field"><label class="req">Selling price incl. tax (per issued unit)</label>'+
     '<input type="number" step="0.01" inputmode="decimal" name="psale" placeholder="0.00"></div></div>'+
     '<div class="field" style="margin-top:12px"><label>Goes into</label><select name="pbsel" id="pbsel"><option value="auto">Decide by cost (recommended)</option></select>'+
     '<div class="hint" id="pbhint">Same cost as an earlier lot goes into that batch; a new cost starts a new one.</div></div>'+
@@ -12521,9 +12684,10 @@ function paintPCalc(){
   var netEx=(incl&&gst)?exTax(net,gst):net;
   var costPer=Math.round(netEx/conv);
   var paidIncl=(incl||!gst)?net:Math.round(net*(100+gst)/100);
-  var saleEx=exTax(sale,gst);
-  var mg=(costPer&&sale)?Math.round(((saleEx-costPer)/costPer)*1000)/10:null;
-  var dc=discountPct(mrp,paidIncl);
+  var comp=!!(S.purch&&S.purch.supplyType==='composition');
+  var costInclPer=comp?costPer:Math.round(costPer*(100+gst)/100);
+  var mg=marginOn(sale,costInclPer);
+  var dc=discountPct(mrp,costInclPer);
   var warn='';
   /* a cost above MRP almost always means the tax toggle is the wrong way round */
   if(!incl&&gst&&mrp&&paidIncl>mrp*conv&&exTax(net,gst)<=mrp*conv)
@@ -12534,7 +12698,8 @@ function paintPCalc(){
   else if(mg!==null&&mg<0) warn+='<div class="banner small" style="margin:8px 0 0;background:var(--red-bg);border-color:var(--red);color:var(--red)"><b>You would lose money on this.</b> The selling price is below what it cost.</div>';
   box.innerHTML='<div class="banner info small" style="margin:10px 0 0">'+
     '<div style="display:flex;gap:18px;flex-wrap:wrap">'+
-    '<div><div class="eyebrow">Cost per '+esc(dg('punit')||'unit')+'</div><b class="money">'+money(costPer)+'</b> <span class="small">no tax</span></div>'+
+    '<div><div class="eyebrow">Cost per '+esc(dg('punit')||'unit')+'</div><b class="money">'+money(costInclPer)+'</b> <span class="small">with tax</span>'+
+      (costInclPer!==costPer?'<div class="small muted">'+money(costPer)+' without tax</div>':'')+'</div>'+
     (disc?'<div><div class="eyebrow">Net rate paid</div><b class="money">'+money(paidIncl)+'</b> <span class="small">with tax</span></div>':'')+
     (can('reports')?'<div><div class="eyebrow">Supplier discount off MRP</div>'+pctTag(dc,20)+'</div>'+
       '<div><div class="eyebrow">Your margin</div>'+pctTag(mg,15)+'</div>':'')+'</div></div>'+warn;
@@ -12545,6 +12710,8 @@ async function savePLine(){
   var qty=parseFloat(dg('pqty')||0)||0, rate=toPaise(dg('prate'));
   if(qty<=0){ toast('Put in the quantity','bad'); return; }
   if(rate<=0){ toast('Put in the purchase rate','bad'); return; }
+  if(toPaise(dg('pmrp'))<=0){ toast('Put in the MRP','bad'); return; }
+  if(toPaise(dg('psale'))<=0){ toast('Put in the selling price','bad'); return; }
   var conv=parseFloat(dg('pconv')||1)||1;
   if(conv<=0){ toast('The conversion cannot be zero','bad'); return; }
   var cb=await readCatBrand(); if(!cb.ok) return;
@@ -13106,6 +13273,7 @@ async function workDoneDo(){
   var j=S.job; j.stage='work_done'; j.workDoneAt=Date.now(); logIt(j,'Work finished','');
   closeModal(); await saveJob(j); rerender(); toast('Ready to bill','good');
   notify(watchers(j),j,'done','marked the work finished \u2014 ready to bill');
+  finishGapAlert(j);
 }
 async function closeJob(){
   var j=S.job;
@@ -13287,14 +13455,15 @@ function billPreview(j){
   function part(title,ls){
     if(!ls.length) return '';
     return '<div class="eyebrow" style="margin:12px 0 6px">'+title+' \u00B7 '+money(sumLines(ls))+'</div><table class="lines"><tbody>'+
-      ls.map(function(l){ return '<tr><td><div style="font-weight:700">'+esc(l.desc)+'</div><span class="small muted">'+
-        (l.kind==='part'?'Part':'Labour')+' \u00B7 '+qtyNum(l.qty)+' \u00D7 '+money(l.unit)+'</span></td>'+
-        '<td class="num"><b class="money">'+money(lineAmount(l))+'</b></td></tr>'; }).join('')+'</tbody></table>';
+      groupedRows(ls,function(l){ return '<tr><td><div style="font-weight:700">'+esc(l.desc)+'</div><span class="small muted">'+
+        qtyNum(l.qty)+' \u00D7 '+money(l.unit)+' \u00B7 GST '+lineBillGst(l)+'%</span></td>'+
+        '<td class="num"><b class="money">'+money(lineAmount(l))+'</b></td></tr>'; },2,true)+'</tbody></table>';
   }
   return '<div class="card"><div class="card-h"><h2>'+(j.direct?'The bill':'The bills, when the bike is ready')+'</h2>'+
     '<span class="tag t-grey" style="margin-left:auto">preview \u00B7 no number yet</span></div><div class="card-b">'+
-    part('Tax invoice',sp.tax)+part('Plain bill \u2014 bought without a tax invoice',sp.plain)+
-    '<p class="hint">Sorted by the app from where each part was bought. Labour is always on the tax invoice.</p></div></div>';
+    part('Tax invoice',sp.tax)+part('Plain bill \u2014 0% GST',sp.plain)+
+    '<p class="hint">Anything at 0% GST goes on the plain bill, the rest on the tax invoice. '+
+    (can('bill.edit')?'You can change qty and GST % when you make the bills.':'')+'</p></div></div>';
 }
 function billCard(j,b){
   var c=billCalc(j,b), draft=(b.status==='draft'), fin=(b.status==='final'), can_=can('bill.make');
@@ -13343,7 +13512,7 @@ function billCard(j,b){
   }
   if(true){
     h+='<div class="eyebrow" style="margin:16px 0 6px">Items</div><table class="lines"><tbody>';
-    c.rows.forEach(function(r){
+    c.rows.slice().sort(function(a,b2){ return (a.line.kind==='part'?0:1)-(b2.line.kind==='part'?0:1); }).forEach(function(r){
       h+='<tr><td><div style="font-weight:700">'+esc(r.line.desc)+'</div><span class="small muted">'+qtyNum(r.line.qty)+' × '+money(r.line.unit)+
         (r.rate?' · GST '+r.rate+'%':'')+'</span></td><td class="num"><b class="money">'+money(r.total)+'</b></td></tr>';
     });
@@ -13413,13 +13582,74 @@ function readyProblems(j){
 function readyModal(){
   var j=S.job, p=readyProblems(j);
   if(p.length){ toast('Not yet: '+p.join('; '),'bad'); return; }
-  var sp=billSplit(j), T=function(ls){ return money(sumLines(ls)); };
-  openModal('<h2>'+(j.direct?'Make the bill':'Ready for delivery')+'</h2>'+
-    '<p class="muted small">The bills are made now, dated today, and can\u2019t be changed afterwards.</p>'+
-    (sp.tax.length?'<div class="totrow"><span>Tax invoice \u00B7 '+sp.tax.length+' item'+(sp.tax.length>1?'s':'')+'</span><span class="money">'+T(sp.tax)+'</span></div>':'')+
-    (sp.plain.length?'<div class="totrow"><span>Plain bill (no GST) \u00B7 '+sp.plain.length+' item'+(sp.plain.length>1?'s':'')+'</span><span class="money">'+T(sp.plain)+'</span></div>':'')+
+  S.readyEd={}; paintReady();
+}
+/* what a line will be billed as, with any change typed in the preview */
+function readyEff(l){
+  var e=(S.readyEd||{})[l.id]||{};
+  return {qty:e.qty!==undefined?e.qty:qtyNum(l.qty), gst:e.gst!==undefined?e.gst:lineBillGst(l)};
+}
+function boughtWithGst(l){ return l.kind==='part'&&!lineNoGst(l)&&(l.gst||0)>0; }
+function paintReady(){
+  var j=S.job, ed=can('bill.edit');
+  var ub=unbilledApproved(j), tax=[], plain=[], tt=0, tp=0;
+  ub.forEach(function(l){ var e=readyEff(l); if(e.qty<=0) return; var a=Math.round(e.qty*(l.unit||0));
+    if(e.gst>0){ tax.push(l); tt+=a; } else { plain.push(l); tp+=a; } });
+  var row=function(l){
+    var e=readyEff(l), a=Math.round(e.qty*(l.unit||0)), warn=boughtWithGst(l)&&e.gst===0;
+    return '<tr'+(e.qty<=0?' style="opacity:.5"':'')+'><td><div style="font-weight:700">'+esc(l.desc)+'</div>'+
+      '<span class="small muted">'+money(l.unit)+' each</span>'+
+      (warn?'<div class="small" style="color:var(--red);font-weight:700">Bought with '+(l.gst||0)+'% GST \u2014 billing at 0%?</div>':'')+
+      (e.qty<=0?'<div class="small" style="color:var(--amber);font-weight:700">0 \u2014 comes off the job, back to the store</div>':'')+'</td>'+
+      '<td class="num">'+(ed?'<input type="number" step="0.25" min="0" inputmode="decimal" data-rq="'+l.id+'" value="'+e.qty+'" style="width:76px;min-height:38px">':'<b>'+e.qty+'</b>')+'</td>'+
+      '<td class="num">'+(ed?'<select data-rg="'+l.id+'" style="min-height:38px;width:76px">'+gstOpts(e.gst,'')+'</select>':e.gst+'%')+'</td>'+
+      '<td class="num"><b class="money">'+money(a)+'</b></td></tr>';
+  };
+  var h='<h2>'+(j.direct?'Make the bill':'Ready for delivery')+'</h2>'+
+    '<p class="muted small">'+(ed?'Change qty or GST % here if needed. ':'')+'0% goes on the plain bill, the rest on the tax invoice. '+
+    'The bills are made now, dated today, and can\u2019t be changed afterwards.</p>'+
+    '<div style="overflow-x:auto;margin:10px 0"><table class="lines"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">GST</th><th class="num">Amount</th></tr></thead><tbody>'+
+    groupedRows(ub,row,4,false)+'</tbody></table></div>'+
+    (tax.length?'<div class="totrow"><span>Tax invoice \u00B7 '+tax.length+' item'+(tax.length>1?'s':'')+'</span><span class="money">'+money(tt)+'</span></div>':'')+
+    (plain.length?'<div class="totrow"><span>Plain bill (no GST) \u00B7 '+plain.length+' item'+(plain.length>1?'s':'')+'</span><span class="money">'+money(tp)+'</span></div>':'')+
     '<div class="btn-row" style="margin-top:14px"><button class="btn" data-act="closeModal">Cancel</button>'+
-    '<button class="btn primary" data-act="readyDo">Make '+((sp.tax.length&&sp.plain.length)?'both bills':'the bill')+'</button></div>');
+    ((tax.length||plain.length)?'<button class="btn primary" data-act="readyDo">Make '+((tax.length&&plain.length)?'both bills':'the bill')+'</button>'
+      :'<button class="btn" disabled>Nothing left to bill</button>')+'</div>';
+  var y=document.querySelector('.sheet')?document.querySelector('.sheet').scrollTop:0;
+  openModal(h); var sh=document.querySelector('.sheet'); if(sh) sh.scrollTop=y;
+}
+document.addEventListener('change',function(e){
+  var el=e.target; if(!el||!el.dataset) return;
+  var id=el.dataset.rq||el.dataset.rg; if(!id||!S.readyEd) return;
+  if(!can('bill.edit')) return;
+  S.readyEd[id]=S.readyEd[id]||{};
+  if(el.dataset.rq){ var q=Math.max(0,Math.round((parseFloat(el.value)||0)*100)/100); S.readyEd[id].qty=q; }
+  else S.readyEd[id].gst=parseInt(el.value,10)||0;
+  setTimeout(paintReady,0);
+});
+/* put the preview's changes on the job: qty moves stock, GST picks the bill */
+async function applyReadyEdits(j){
+  var ed=S.readyEd||{}, moved=false;
+  if(!can('bill.edit')) return;
+  Object.keys(ed).forEach(function(id){
+    var l=findLine(j,id), e=ed[id]; if(!l||l.void) return;
+    if(e.qty!==undefined&&e.qty!==qtyNum(l.qty)){
+      var oq=qtyNum(l.qty), nq=e.qty;
+      if(l.partId&&l.kind==='part'){
+        moveIn({partId:l.partId, batchId:l.batchId||'', qty:oq-nq, kind:(nq>oq?'issue':'return'), ref:j.no,
+          note:'quantity changed at billing'});
+        moved=true;
+      }
+      if(nq<=0){ l.void=true; l.notUsed={by:S.user.id, byName:S.user.name, at:Date.now(), atBilling:true};
+        logIt(j,'Taken off at billing',l.desc+(l.partId?' \u2014 back on the shelf':'')); }
+      else { l.qty=nq; logIt(j,'Quantity changed at billing',l.desc+': '+oq+' \u2192 '+nq+(l.partId&&nq<oq?' \u2014 '+(oq-nq)+' back on the shelf':'')); }
+    }
+    if(e.gst!==undefined&&e.gst!==lineBillGst(l)){
+      var og=lineBillGst(l); l.billGst=e.gst; l.gst=e.gst;
+      logIt(j,'GST changed at billing',l.desc+': '+og+'% \u2192 '+e.gst+'%'+(e.gst===0&&boughtWithGst(l)?' (bought with GST)':''));
+    }
+  });
+  if(moved) await saveStore('moves');
 }
 async function makeBill(j,type,lines){
   var W=S.core.workshop, cs=j.direct?supplyStateCode(j):custStateCode(j);
@@ -13438,6 +13668,8 @@ async function makeBill(j,type,lines){
 async function readyDo(){
   var j=S.job; closeModal();
   var p=readyProblems(j); if(p.length){ toast('Not yet: '+p.join('; '),'bad'); return; }
+  await applyReadyEdits(j); S.readyEd=null;
+  p=readyProblems(j); if(p.length){ await saveJob(j); rerender(); toast('Not yet: '+p.join('; '),'bad'); return; }
   var sp=billSplit(j), made=[];
   try{
     if(sp.tax.length) made.push(await makeBill(j,'gst',sp.tax));
@@ -13648,18 +13880,27 @@ function billDocHtml(j,b){
     '<td style="width:50%"><b>Place of supply:</b> '+esc(sn?sn.placeOfSupply:(W.stateCode+' — '+W.state))+'</td>'+
     '<td><b>Reverse charge:</b> No</td></tr></table>';
 
-  h+='<table><thead><tr><th style="width:26px">#</th><th>Particulars</th>'+
-    (gst?'<th>HSN/SAC</th>':'')+'<th class="num">Qty</th><th class="num">Rate</th>'+
-    (gst?'<th class="num">Taxable</th><th class="num">GST</th>':'')+'<th class="num">Amount</th></tr></thead><tbody>';
-  c.rows.forEach(function(r,i){
-    var half=Math.floor(r.tax/2);
-    h+='<tr><td>'+(i+1)+'</td><td>'+esc(r.line.desc)+' <span style="font-size:10px">('+(r.line.kind==='part'?'part':'labour')+')</span></td>'+
-      (gst?'<td class="num">'+esc(r.line.hsn||'')+'</td>':'')+
-      '<td class="num">'+qtyNum(r.line.qty)+'</td><td class="num">'+money(r.line.unit,{bare:1})+'</td>'+
-      (gst?'<td class="num">'+money(r.base,{bare:1})+'</td><td class="num">'+r.rate+'%<br>'+money(r.tax,{bare:1})+'</td>':'')+
-      '<td class="num">'+money(r.total,{bare:1})+'</td></tr>';
+  /* spares in one box, labour in the next, numbered straight through */
+  var grpN=0, cols=gst?8:5;
+  [['Spares',c.rows.filter(function(r){ return r.line.kind==='part'; })],
+   ['Labour',c.rows.filter(function(r){ return r.line.kind!=='part'; })]].forEach(function(g){
+    if(!g[1].length) return;
+    h+='<div style="margin-top:10px;font-weight:800;letter-spacing:.06em;font-size:12px">'+g[0].toUpperCase()+'</div>';
+    h+='<table style="margin-top:4px"><thead><tr><th style="width:26px">#</th><th>Particulars</th>'+
+      (gst?'<th>HSN/SAC</th>':'')+'<th class="num">Qty</th><th class="num">Rate</th>'+
+      (gst?'<th class="num">Taxable</th><th class="num">GST</th>':'')+'<th class="num">Amount</th></tr></thead><tbody>';
+    var sub=0;
+    g[1].forEach(function(r){
+      grpN++; sub+=r.total;
+      h+='<tr><td>'+grpN+'</td><td>'+esc(r.line.desc)+'</td>'+
+        (gst?'<td class="num">'+esc(r.line.hsn||'')+'</td>':'')+
+        '<td class="num">'+qtyNum(r.line.qty)+'</td><td class="num">'+money(r.line.unit,{bare:1})+'</td>'+
+        (gst?'<td class="num">'+money(r.base,{bare:1})+'</td><td class="num">'+r.rate+'%<br>'+money(r.tax,{bare:1})+'</td>':'')+
+        '<td class="num">'+money(r.total,{bare:1})+'</td></tr>';
+    });
+    h+='<tr><td colspan="'+(cols-1)+'" style="text-align:right;font-weight:800">'+g[0]+' total</td>'+
+      '<td class="num" style="font-weight:800">'+money(sub,{bare:1})+'</td></tr></tbody></table>';
   });
-  h+='</tbody></table>';
 
   if(gst){
     h+='<table style="margin-top:10px"><thead><tr><th>GST rate</th><th class="num">Taxable value</th>'+
@@ -15637,6 +15878,7 @@ async function dispatch(a,arg,d,t){
     case 'editPurchase': editPurchase(d.id); break;
     case 'delPLine': delPLine(d.i); break;
     case 'catLevel': S.catLevel=d.k; rerender(); break;
+    case 'svTax': S.svIncl=(d.k==='1'); rerender(); break;
     case 'partFiltClear': S.pcf=''; S.pbf=''; rerender(); break;
     case 'roundManual': grabPurchaseHeader(); S.purch.roundMode='manual'; rerender(); break;
     case 'roundAuto': grabPurchaseHeader(); S.purch.roundMode='auto'; rerender(); break;
@@ -15673,6 +15915,11 @@ async function dispatch(a,arg,d,t){
       'Yes, not used','notUsedDo|'+d.line,'danger'); break;
     case 'notUsedDo': return notUsedDo(arg);
     case 'floorTick': return floorTick(d.id,d.task);
+    case 'floorMech': S.floorMech=d.k||''; rerender(); return;
+    case 'floorClear': S.floorMech=''; S.floorQ=''; rerender(); return;
+    case 'jobTick': return jobTick(d.line);
+    case 'tickAllAsk': return tickAllAsk();
+    case 'tickAllDo': return tickAllDo();
     case 'floorDone': return floorDone(d.id);
     case 'floorDoneDo': return floorDoneDo(arg);
     case 'floorRefresh': await syncFromServer(); return floorLoad(true);
@@ -15855,6 +16102,7 @@ document.addEventListener('input',function(e){
   if(e.target.id==='plno'){ paintPnoResults(); return; }
   if(['prate','pmrp','psale','pconv','pdisc','pqty','pno'].indexOf(e.target.name)>=0){ if(e.target.id==='plno') paintPnoResults(); paintPCalc(); return; }
   if(e.target.id==='pq'){ S.pq=e.target.value; searchRedraw('pq'); return; }
+  if(e.target.id==='floorq'){ S.floorQ=e.target.value; searchRedraw('floorq'); return; }
   if(e.target.id==='q'){ S.q=e.target.value; searchRedraw('q'); return; }
 });
 /* A search box redraws the whole screen \u2014 sidebar, top bar and bottom bar
