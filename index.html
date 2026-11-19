@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 18 NOV 2026 (with the workshop team's update no. 10)
+  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 19 NOV 2026 (with the workshop team's updates no. 10 and 11)
   This file IS the live app at motoreez.netlify.app. It is now the source of truth:
   make new changes on THIS file, not on an older copy.
 
@@ -58,6 +58,20 @@
      - Store: With tax / Without tax switch; cost includes purchase GST; margin is now a
        share of the selling price, both with tax (marginOn, batchCostIncl).
      - Purchase bill lines: quantity editable while entering the bill.
+  4. Added by the workshop team on 19 Nov (update no. 11), now live:
+     - Discounts: per line (% or rupees) and on the whole job, everything / spares /
+       labour; rupee discounts are spread across lines (discOf, parseDisc, spreadDisc,
+       discAllModal / discAllDo, readyDiscAll). Bills show the discount and GST after it.
+     - Kunal/Jatin (bill.edit) can edit a final bill under the same number: qty, rate,
+       GST %, discount, buyer name / GSTIN / address. Stock moves, the change is logged,
+       and an edit made after a GSTR-1 export is flagged (billEditModal, billEditDo,
+       refreezeBill, billEditedAfterExport).
+     - Invoices show CGST / SGST / IGST on each line.
+     - Bike list: add a missing make or model (addBike, S.core.customBikes, shared).
+     - Bike history page from the job card, party page and search (viewBikeHist, openBikeHist).
+     - Search ignores spaces and dashes everywhere (smatch / nq); phone tables turn
+       into cards (labelTables).
+     - Floor rounds: slim rows, tap to open (floorOpen); a search with one match opens it.
 -->
 <html lang="en">
 <head>
@@ -846,6 +860,30 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand); box-shadow:0 
 .lines th{font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--steel); text-align:left;
   font-weight:650; padding:9px 10px; border-bottom:1px solid var(--rule)}
 .lines td{padding:11px 10px; border-bottom:1px solid var(--rule2); vertical-align:middle}
+.sheet:has(.widemodal){max-width:880px !important; width:calc(100vw - 32px)}
+/* Phones: a table of many columns becomes one card a row, each value under
+   its own small label, so nothing needs sliding sideways. The labels are
+   copied from the table's header when the screen is drawn. */
+@media (max-width:640px){
+  table.lines thead{display:none}
+  table.lines, table.lines tbody{display:block; width:100%}
+  table.lines tr{display:flex; flex-wrap:wrap; align-items:flex-start; gap:6px 14px; padding:10px 8px;
+    border-bottom:1px solid var(--rule2)}
+  table.lines td{display:block; border:0 !important; padding:0 !important; text-align:left !important; min-width:0}
+  table.lines td:first-child, table.lines td[colspan]{flex:1 1 100%}
+  table.lines td:empty{display:none}
+  table.lines td[data-label]:not(:first-child)::before{content:attr(data-label); display:block; font-size:10px; font-weight:700;
+    color:var(--steel); text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px}
+  table.lines td:last-child:not(:first-child){margin-left:auto}
+  table.lines tr.grprow{padding:0; background:var(--rule2,#eef1f5)}
+  table.lines tr.grprow td{padding:8px 10px !important}
+  .kv{flex-wrap:wrap}
+  .kv .v{min-width:0; overflow-wrap:anywhere; margin-left:auto}
+  .dock-actions{flex-wrap:wrap; gap:8px; padding:9px 10px}
+  .dock-actions > .btn{flex:1 1 calc(50% - 8px) !important; min-width:0; font-size:15px; padding-left:8px; padding-right:8px}
+  .subtab{white-space:nowrap}
+  .wrap{overflow-x:hidden}
+}
 
 /* ---------- totals ---------- */
 .totrow{display:flex; justify-content:space-between; gap:16px; padding:7px 0; font-size:15px; color:var(--ink2)}
@@ -1253,7 +1291,7 @@ async function guard(act,el,fn){
 /* Actions that write to storage. Anything listed here gets the lock. */
 var WRITES=['saveIntake','saveJobEdit','sendPricing','sendEstDo','ownerOkDo','custOkDo','custNoAdd',
   'startWork','raiseAddDo','ownerOkAddDo','workDoneDo','closeJob','newBill','finalBillDo','cancelBillDo',
-  'dropBill','payDo','addLineSave','pickPart','delLine','tick','notUsedDo','floorTick','floorDoneDo','jobTick','tickAllDo','cbMark','cbNo','cbVerdict','savePurchase','savePLine','savePart',
+  'dropBill','payDo','addLineSave','pickPart','delLine','tick','notUsedDo','floorTick','floorDoneDo','jobTick','tickAllDo','discAllDo','billEditDo','cbMark','cbNo','cbVerdict','savePurchase','savePLine','savePart',
   'saveSupplier','adjSave','savePartyRec','payPartyDo','saveExpense','delExpense','moveMoneyDo',
   'countCashDo','advanceDo','saveSalary','saveWorkshop','addUserDo','restoreDo','fitsSave','fitAdd',
   'verifyExp','verifyPay','reversePayDo','purchPayDo','autoFit','sendAddDo','dropAddDo','custOkTop',
@@ -2076,9 +2114,27 @@ function toast(msg,kind){
     setTimeout(function(){ el.remove(); },320); }, kind==='bad'?4200:2400);
 }
 var MODAL=null;
+/* give every cell of a table the name of its column, for the phone cards */
+function labelTables(root){
+  try{
+    (root||document).querySelectorAll('table.lines').forEach(function(t){
+      var ths=Array.prototype.map.call(t.querySelectorAll('thead th'),function(th){ return th.textContent.trim(); });
+      if(!ths.length) return;
+      t.querySelectorAll('tbody tr').forEach(function(tr){
+        var i=0;
+        Array.prototype.forEach.call(tr.children,function(td){
+          var sp=parseInt(td.getAttribute('colspan')||'1',10)||1;
+          if(sp===1&&ths[i]&&!td.hasAttribute('data-label')) td.setAttribute('data-label',ths[i]);
+          i+=sp;
+        });
+      });
+    });
+  }catch(e){}
+}
 function openModal(html,onMount){
   MODAL=true;
   document.getElementById('modalroot').innerHTML='<div class="scrim" data-act="scrim"><div class="sheet">'+html+'</div></div>';
+  labelTables(document.getElementById('modalroot'));
   if(onMount) onMount();
   var f=document.querySelector('.sheet input,.sheet select,.sheet textarea');
   if(f&&!('ontouchstart' in window)) f.focus();
@@ -2125,9 +2181,12 @@ function estimateText(job){
   [['SPARES',ls.filter(function(l){ return l.kind==='part'; })],['LABOUR',ls.filter(function(l){ return l.kind!=='part'; })]].forEach(function(g){
     if(!g[1].length) return;
     out+='\n'+g[0]+'\n';
-    g[1].forEach(function(l){ n++; out+=n+'. '+l.desc+'  x'+qtyNum(l.qty)+'  '+money(lineAmount(l))+'\n'; });
+    g[1].forEach(function(l){ n++; var dd=lineDisc(l);
+      out+=n+'. '+l.desc+'  x'+qtyNum(l.qty)+'  '+(dd?money(lineGross(l))+' \u2212 '+discLabel(l.disc)+' = ':'')+money(lineAmount(l))+'\n'; });
     out+=g[0].charAt(0)+g[0].slice(1).toLowerCase()+' total '+money(sumLines(g[1]))+'\n';
   });
+  var dsum=ls.reduce(function(a,l){ return a+lineDisc(l); },0);
+  if(dsum) out+='\nDiscount '+money(dsum)+'\n';
   out+='\nTotal '+money(t)+'\n\n';
   out+='Please reply YES to approve, or tell us what to remove. Work starts only after your approval.';
   return out;
@@ -2141,7 +2200,40 @@ function smsLink(phone,text){
 }
 function findLine(job,id){ for(var i=0;i<job.lines.length;i++) if(job.lines[i].id===id) return job.lines[i]; return null; }
 function findAdd(job,id){ for(var i=0;i<job.additions.length;i++) if(job.additions[i].id===id) return job.additions[i]; return null; }
-function lineAmount(l){ return Math.round(qtyNum(l.qty)*(l.unit||0)); }
+/* A line's discount is a % of the line or a rupee amount off the line.
+   lineAmount is what the customer pays for it, after the discount, so
+   every total, bill and report follows. */
+function lineGross(l){ return Math.round(qtyNum(l.qty)*(l.unit||0)); }
+function discOf(d,gross){
+  if(!d||!d.v) return 0;
+  var x=d.t==='pct'?Math.round(gross*d.v/100):Math.round(d.v);
+  return Math.max(0,Math.min(gross,x));
+}
+function lineDisc(l,gross){ return discOf(l.disc,gross===undefined?lineGross(l):gross); }
+function lineAmount(l){ var g=lineGross(l); return g-lineDisc(l,g); }
+/* "10%" or "10 %" is a percent; a plain number is rupees off the line */
+function parseDisc(s){
+  s=String(s===undefined||s===null?'':s).trim().replace(/[\u20B9,\s]/g,'');
+  if(!s||s==='0'||s==='0%') return null;
+  if(/%$/.test(s)){ var p=parseFloat(s); return p>0?{t:'pct',v:Math.min(100,Math.round(p*100)/100)}:null; }
+  var r=toPaise(s); return r>0?{t:'amt',v:r}:null;
+}
+function fmtDisc(d){ if(!d||!d.v) return ''; return d.t==='pct'?(d.v+'%'):paiseToInput(d.v); }
+function discLabel(d){ if(!d||!d.v) return ''; return d.t==='pct'?(d.v+'%'):money(d.v); }
+/* one discount over many lines: a % goes on each line, rupees are shared by value */
+function spreadDisc(lines,d){
+  var out={};
+  if(!d){ lines.forEach(function(l){ out[l.id]=null; }); return out; }
+  if(d.t==='pct'){ lines.forEach(function(l){ out[l.id]={t:'pct',v:d.v}; }); return out; }
+  var gs=lines.map(function(l){ return Math.max(0,lineGross(l)); }), tot=gs.reduce(function(a,b){ return a+b; },0);
+  if(!tot) return out;
+  var want=Math.min(d.v,tot), left=want;
+  lines.forEach(function(l,i){
+    var x=(i===lines.length-1)?left:Math.round(want*gs[i]/tot);
+    x=Math.min(x,gs[i],left); left-=x; out[l.id]=x>0?{t:'amt',v:x}:null;
+  });
+  return out;
+}
 function mainLines(job){ return job.lines.filter(function(l){return !l.void && l.batch==='main';}); }
 function addLines(job,aid){ return job.lines.filter(function(l){return !l.void && l.batch===aid;}); }
 function sumLines(ls){ var t=0; ls.forEach(function(l){ t+=lineAmount(l); }); return t; }
@@ -2212,7 +2304,8 @@ function freezeBill(j,b,c){
     incl:b.incl!==false, inter:!!b.inter, roundOffOn:b.roundOff!==false,
     rows:c.rows.map(function(r){
       return { desc:r.line.desc, kind:r.line.kind, hsn:r.line.hsn||'', qty:r.line.qty,
-               unit:r.line.unit, amount:r.amount, rate:r.rate, base:r.base, tax:r.tax, total:r.total };
+               unit:r.line.unit, amount:r.amount, rate:r.rate, base:r.base, tax:r.tax, total:r.total,
+               grossAmt:lineGross(r.line), discAmt:lineDisc(r.line), discTxt:discLabel(r.line.disc) };
     }),
     byRate:JSON.parse(JSON.stringify(c.byRate)),
     hsnSummary:hsnSummary(c.rows,b),
@@ -2526,6 +2619,7 @@ function render(){
     case 'floor':    body=viewFloor(); break;
     case 'intake':   body=viewIntake(); break;
     case 'job':      body=viewJob(); break;
+    case 'bikehist': body=viewBikeHist(); break;
     case 'bill':     body=viewBill(); break;
     case 'invoice':  body=viewInvoice(); break;
     case 'settings': body=viewSettings(); break;
@@ -2555,6 +2649,7 @@ function render(){
   /* Views still emit their action bar inline. Lift it out of the page and
      into the dock so it can never be painted underneath the navigation. */
   app.innerHTML=shell(body);
+  labelTables(app);
   measureDock();
   if(S.view.name==='intake') mountIntake();
   if(S.view.name==='job') mountJobMedia();
@@ -2848,6 +2943,10 @@ function matchFilter(e,k){
   if(k==='bill')   return e.stage==='work_done'||(e.stage==='billed'&&e.balance>0);
   return true;
 }
+/* Search that ignores spaces, dashes, dots, slashes and capitals, so
+   UP53CE5335, up 53 ce 5335 and 5335 all find the same bike. */
+function nq(s){ return String(s===undefined||s===null?'':s).toLowerCase().replace(/[\s\-\.\/_,()+]/g,''); }
+function smatch(q,hay){ var a=nq(q); if(!a) return true; return nq(hay).indexOf(a)>=0; }
 function filterJobs(){
   var q=regKey(S.q), qt=S.q.trim().toLowerCase();
   var list=S.index.slice();
@@ -2855,10 +2954,9 @@ function filterJobs(){
   if(qt){
     list=list.filter(function(e){
       return (q && regKey(e.reg).indexOf(q)>=0) ||
-        (e.name||'').toLowerCase().indexOf(qt)>=0 ||
-        (seePhone() && (e.phone||'').indexOf(qt)>=0) ||
-        (e.no||'').toLowerCase().indexOf(qt)>=0 ||
-        (e.model||'').toLowerCase().indexOf(qt)>=0;
+        smatch(qt,e.reg)||smatch(qt,e.name)||
+        (seePhone() && smatch(qt,e.phone)) ||
+        smatch(qt,e.no) || smatch(qt,(e.make||'')+' '+(e.model||''));
     });
   } else {
     list=list.filter(function(e){ return matchFilter(e,S.filter); });
@@ -2885,6 +2983,12 @@ function viewBoard(){
                    '<button class="btn sm" data-act="remind">Follow-ups</button>':'')+
     '<div class="searchbar"><input type="text" id="q" placeholder="Registration no., name or bill no." '+
     'value="'+esc(S.q)+'" autocomplete="off"></div>';
+  if(S.q&&nq(S.q).length>=4){
+    var regs={}; list.forEach(function(e){ if(e.reg&&smatch(S.q,e.reg)) regs[regKey(e.reg)]=1; });
+    var rk=Object.keys(regs);
+    if(rk.length&&rk.length<=3) h+='<div class="btn-row" style="margin:8px 0 0">'+rk.map(function(k){
+      return '<button class="btn sm" data-act="bikeHist" data-k="'+esc(k)+'">Bike history \u00B7 '+esc(regShow(k))+'</button>'; }).join('')+'</div>';
+  }
   if(!isShared()) h+='<div class="banner '+(MODE==='memory'?'':'warn')+' small" style="margin-top:12px'+
     (MODE==='memory'?';background:var(--red-bg);border-color:var(--red);color:var(--red)':'')+'"><b>'+
     (MODE==='memory'?'Nothing is being saved.':'This device only.')+'</b> '+esc(storeNote())+'</div>';
@@ -3013,10 +3117,29 @@ var BIKES={
 "Tork":"Kratos R|e",
 "Ultraviolette":"F77 Mach 2|e,F77 Recon|e,Shockwave|e,Tesseract|e"
 };
-function allMakes(){ var o=[]; BIKE_GROUPS.forEach(function(g){ o=o.concat(g[1]); }); return o; }
+/* Bikes anyone in the workshop has added: kept for everyone, and offered
+   everywhere the built-in list is. S.core.customBikes = {make:[{n,cc}]} */
+function customBikes(){ return (S.core&&S.core.customBikes)||{}; }
+function bikeGroups(){
+  var built={}; BIKE_GROUPS.forEach(function(g){ g[1].forEach(function(m){ built[m]=1; }); });
+  var extra=Object.keys(customBikes()).filter(function(m){ return !built[m]; }).sort();
+  return extra.length?BIKE_GROUPS.concat([['Added here',extra]]):BIKE_GROUPS;
+}
+function allMakes(){ var o=[]; bikeGroups().forEach(function(g){ o=o.concat(g[1]); }); return o; }
 function modelsFor(make){
-  var s=BIKES[make]; if(!s) return [];
-  return s.split(',').map(function(x){ var p=x.split('|'); return {n:p[0],cc:p[1]||''}; });
+  var s=BIKES[make], out=s?s.split(',').map(function(x){ var p=x.split('|'); return {n:p[0],cc:p[1]||''}; }):[];
+  (customBikes()[make]||[]).forEach(function(m){ if(!out.some(function(x){ return pkey(x.n)===pkey(m.n); })) out.push({n:m.n,cc:m.cc||''}); });
+  return out;
+}
+/* add a make or a model once; after that it is on every list */
+function addBike(make,model,cc){
+  make=titleCase(String(make||'').trim()); model=titleCase(String(model||'').trim());
+  if(!make||!model) return false;
+  var mk=allMakes().filter(function(m){ return pkey(m)===pkey(make); })[0]||make;
+  if(modelsFor(mk).some(function(x){ return pkey(x.n)===pkey(model); })) return false;
+  S.core.customBikes=S.core.customBikes||{};
+  S.core.customBikes[mk]=(S.core.customBikes[mk]||[]).concat([{n:model, cc:String(cc||'').replace(/[^0-9e]/gi,''), by:S.user?S.user.id:'', at:Date.now()}]);
+  return {make:mk, model:model};
 }
 function ccFor(make,model){
   var m=modelsFor(make).filter(function(x){ return x.n===model; })[0];
@@ -3041,7 +3164,7 @@ function makeOptions(sel){
   var h='<option value="">— pick the make —</option>';
   var of=oftenMakes();
   if(of.length) h+='<optgroup label="Often here">'+of.map(function(m){return opt(m,sel);}).join('')+'</optgroup>';
-  BIKE_GROUPS.forEach(function(g){
+  bikeGroups().forEach(function(g){
     h+='<optgroup label="'+esc(g[0])+'">'+g[1].map(function(m){return opt(m,sel);}).join('')+'</optgroup>';
   });
   if(sel&&allMakes().indexOf(sel)<0) h+='<optgroup label="On this bike\u2019s record">'+opt(sel,sel)+'</optgroup>';
@@ -3676,6 +3799,76 @@ function bikeVisits(k){
   return S.index.filter(function(e){ return keys.indexOf(regKey(e.reg))>=0; })
     .sort(function(a,b2){ return b2.createdAt-a.createdAt; });
 }
+/* =====================================================================
+   ONE BIKE'S WHOLE HISTORY
+   Every visit, every bill and payment, the last service and the next one,
+   for one registration number (and any number it had before).
+   ===================================================================== */
+function bikeKeys(k){ var b=S.core.bikes[k]||{}; return [k].concat(b.prevRegs||[]); }
+function bikeBills(k){
+  var ks=bikeKeys(k);
+  return SALES.filter(function(s){ return s.status==='final'&&s.reg&&ks.indexOf(regKey(s.reg))>=0; })
+    .sort(function(a,b){ return b.at-a.at; });
+}
+function bikeHistoryCards(k,opt){
+  opt=opt||{};
+  var b=S.core.bikes[k]||{}, v=bikeVisits(k), bills=bikeBills(k), W=S.core.workshop;
+  var closed=v.filter(function(e){ return e.stage==='closed'; });
+  var last=closed[0]||null, lastAt=last?(last.closedAt||last.createdAt):0;
+  var nextAt=lastAt?lastAt+(W.svcMonths||4)*30*86400000:0;
+  var spent=bills.reduce(function(a,s){ return a+(s.grand||0); },0), due=bills.reduce(function(a,s){ return a+saleDue(s); },0);
+  var model=(b.make||(v[0]&&v[0].make)||'')+' '+(b.model||(v[0]&&v[0].model)||'');
+  var h='<div class="card"><div class="card-h" style="flex-wrap:wrap;gap:8px"><span class="plate">'+esc(regShow(k))+'</span>'+
+    '<b>'+esc(model.trim()||'\u2014')+'</b>'+(b.cc?' <span class="small muted">'+esc(ccLabel(b.cc))+'</span>':'')+'</div><div class="card-b">'+
+    (opt.noOwner?'':kv('Owner',esc(b.name||(v[0]&&v[0].name)||'\u2014')+(seePhone()&&(b.phone||(v[0]&&v[0].phone))?'<br><span class="small mono">'+esc(fmtPhone(b.phone||v[0].phone))+'</span>':'')))+
+    (b.prevRegs&&b.prevRegs.length?kv('Earlier numbers','<span class="mono small">'+esc(b.prevRegs.map(regShow).join(', '))+'</span>'):'')+
+    kv('Visits',String(v.length))+
+    (seeMoney()?kv('Total spent','<span class="money">'+money(spent)+'</span>'+(due>0?'<br><span class="small" style="color:var(--red)">'+money(due)+' still due</span>':'')):'')+
+    kv('Last service',last?dOnly(lastAt)+(last.odo?' \u00B7 '+esc(last.odo)+' km':''):'\u2014')+
+    kv('Next service due',nextAt?'<b style="color:'+(nextAt<Date.now()?'var(--red)':'var(--ink)')+'">'+dOnly(nextAt)+'</b>'+(nextAt<Date.now()?' <span class="small" style="color:var(--red)">overdue</span>':''):'\u2014')+
+    ((b.phone||(v[0]&&v[0].phone))&&last&&can('estimate.send')?'<div class="btn-row" style="margin-top:10px"><button class="btn sm primary" data-act="waSend" data-k="service" data-id="'+esc(k)+'">Send service reminder</button></div>':'')+
+    '</div></div>';
+  h+='<div class="card"><div class="card-h"><h2>Visits</h2><span class="tag t-grey" style="margin-left:auto">'+v.length+'</span></div><div class="card-b tight">';
+  if(!v.length) h+='<div class="empty" style="padding:18px 8px"><b>No visits yet.</b></div>';
+  else{
+    h+='<table class="lines"><tbody>';
+    v.forEach(function(e){
+      var mech=e.mechanicId?coreUser(e.mechanicId).name.split(' ')[0]:'';
+      h+='<tr><td><button class="linkish mono" data-act="openJob" data-id="'+e.id+'">'+esc(e.no)+'</button>'+
+        '<div class="small muted">'+dOnly(e.createdAt)+(e.odo?' \u00B7 '+esc(e.odo)+' km':'')+(mech?' \u00B7 '+esc(mech):'')+'</div>'+
+        '<div class="small">'+esc(titleCase(e.jobType||''))+(e.complaint?' \u2014 '+esc(e.complaint.slice(0,80)):'')+'</div>'+
+        (e.cb?'<span class="tag t-red">comeback</span>':'')+'</td>'+
+        '<td class="num"><span class="tag t-grey">'+esc(stageName(e.stage))+'</span></td></tr>';
+    });
+    h+='</tbody></table>';
+  }
+  h+='</div></div>';
+  if(seeMoney()){
+    h+='<div class="card"><div class="card-h"><h2>Bills</h2><span class="tag t-grey" style="margin-left:auto">'+bills.length+'</span></div><div class="card-b tight">';
+    if(!bills.length) h+='<div class="empty" style="padding:18px 8px"><b>No bills yet.</b></div>';
+    else{
+      h+='<table class="lines"><tbody>';
+      bills.forEach(function(s){
+        var d=saleDue(s);
+        h+='<tr><td><button class="linkish mono" data-act="openInvoice" data-job="'+esc(s.jobId)+'" data-bill="'+esc(s.id)+'">'+esc(s.number)+'</button>'+
+          '<div class="small muted">'+dOnly(s.at)+'</div></td><td class="num"><b class="money">'+money(s.grand)+'</b>'+
+          '<div class="small" style="color:'+(d>0?'var(--red)':'var(--green)')+'">'+(d>0?money(d)+' due':'paid')+'</div></td></tr>';
+      });
+      h+='<tr><td><b>Total</b></td><td class="num"><b class="money">'+money(spent)+'</b></td></tr></tbody></table>';
+    }
+    h+='</div></div>';
+  }
+  return h;
+}
+function viewBikeHist(){
+  var k=S.view.reg;
+  return pageHead('Bike history',esc(regShow(k)),'')+bikeHistoryCards(k)+
+    '<div class="actionbar"><div class="actionbar-in"><button class="btn lg" data-act="histBack">Back</button></div></div>';
+}
+function openBikeHist(k){
+  if(!k) return;
+  S.view={name:'bikehist', reg:regKey(k), back:S.view}; window.scrollTo(0,0); render();
+}
 function bikesOfParty(p){
   var ks=[phoneKey(p.phone),phoneKey(p.altPhone)].filter(function(x){ return x&&x.length>=6; });
   return Object.keys(S.core.bikes||{}).map(function(r){ return S.core.bikes[r]; })
@@ -3765,8 +3958,12 @@ async function plateRenewDo(k){
 function sectionPartyBikes(p){
   if(!isCustomer(p)) return '';
   var bs=bikesOfParty(p); if(!bs.length) return '';
+  var sel=S.partyBike&&bs.some(function(b){ return regKey(b.reg)===S.partyBike; })?S.partyBike:'';
   var h='<div class="card"><div class="card-h"><h2>Bikes</h2><span class="tag t-grey" style="margin-left:auto">'+bs.length+'</span></div><div class="card-b">';
+  if(bs.length>1) h+='<div class="chips" style="margin-bottom:10px"><button class="chip filter" data-act="partyBike" data-k="" aria-pressed="'+(!sel)+'">All</button>'+
+    bs.map(function(b){ var k=regKey(b.reg); return '<button class="chip filter" data-act="partyBike" data-k="'+esc(k)+'" aria-pressed="'+(sel===k)+'">'+esc(regShow(k))+'</button>'; }).join('')+'</div>';
   bs.forEach(function(b){
+    if(sel&&regKey(b.reg)!==sel) return;
     var k=regKey(b.reg), v=bikeVisits(k);
     h+='<details class="bikeitem"><summary><span class="plate sm">'+esc(plateLabel(b))+'</span> <b>'+esc((b.make||'')+' '+(b.model||''))+'</b>'+
       '<span class="small muted" style="margin-left:auto">'+v.length+' visit'+(v.length===1?'':'s')+(b.lastOdo?' \u00B7 '+esc(b.lastOdo)+' km':'')+'</span></summary>';
@@ -3777,9 +3974,13 @@ function sectionPartyBikes(p){
     });
     if((b.plateType==='temp'||b.plateType==='none')&&can('job.edit'))
       h+='<button class="btn sm" style="margin-top:8px" data-act="plateRenew" data-k="'+esc(k)+'">The number has changed</button>';
+    h+='<button class="btn sm" style="margin-top:8px" data-act="bikeHist" data-k="'+esc(k)+'">Full bike history</button>';
     h+='</details>';
   });
-  return h+'</div></div>';
+  h+='</div></div>';
+  /* one bike picked: its own visits, bills and next service, above the full ledger */
+  if(sel) h+='<div class="eyebrow" style="margin:6px 0">'+esc(regShow(sel))+' only</div>'+bikeHistoryCards(sel,{noOwner:true});
+  return h;
 }
 
 /* =====================================================================
@@ -4618,6 +4819,8 @@ async function saveIntake(){
     return;
   }
   j.reg=reg; j.make=String(make).trim(); j.model=String(model).trim(); j.cc=g('cc'); j.odo=g('odo');
+  var nb=addBike(j.make,j.model,j.cc);
+  if(nb){ j.make=nb.make; j.model=nb.model; await saveCore(); logAudit('Bike list','Bike added at intake',nb.make+' '+nb.model,''); }
   var fsel=document.querySelector('#fuelseg [aria-pressed="true"]');
   j.fuel=fsel?fsel.dataset.v:'1/2';
   j.plateType=ptype; if(ptype==='foreign') j.plateCountry=g('platecountry');
@@ -4673,7 +4876,7 @@ function viewJob(){
   var h='';
 
   h+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0 10px">'+
-     '<span class="plate lg">'+esc(regShow(j.reg))+'</span>'+
+     '<button class="plate lg" style="cursor:pointer" title="Bike history" data-act="bikeHist" data-k="'+esc(regKey(j.reg))+'">'+esc(regShow(j.reg))+'</button>'+
      '<div><div class="jid">'+esc(j.no)+'</div><div style="font-weight:800;font-size:19px">'+esc(j.make)+' '+esc(j.model)+
      (j.cc?' · '+esc(ccLabel(j.cc)):'')+'</div></div>'+
      '<div style="margin-left:auto">'+stageTag(j)+'</div></div>';
@@ -4962,8 +5165,10 @@ function lineRow(j,l,editable,priceable,showMoney){
     h+='<td class="num">'+(priceable
       ? '<input class="rate" type="number" step="0.01" inputmode="decimal" placeholder="0.00" value="'+(l.unit?paiseToInput(l.unit):'')+'" data-f="rate" data-line="'+l.id+'">'+
         '<div style="margin-top:4px"><select data-f="gst" data-line="'+l.id+'" style="min-height:34px;padding:2px 4px;font-size:13px;width:78px">'+
-        gstOpts(l.gst||0,'GST ')+'</select></div>'
-      : (l.unit?money(l.unit):'<span class="tag t-amber">no price</span>'))+'</td>';
+        gstOpts(l.gst||0,'GST ')+'</select></div>'+
+        (can('bill.edit')?'<div style="margin-top:4px"><input type="text" inputmode="decimal" placeholder="Disc % or \u20B9" value="'+esc(fmtDisc(l.disc))+'" data-f="disc" data-line="'+l.id+'" style="width:96px;min-height:34px;font-size:13px"></div>':'')
+      : (l.unit?money(l.unit):'<span class="tag t-amber">no price</span>'))+
+      (lineDisc(l)?'<div class="small" style="color:var(--green);font-weight:700">Disc '+esc(discLabel(l.disc))+' \u2212'+money(lineDisc(l))+'</div>':'')+'</td>';
     h+='<td class="num"><b class="money" data-amt="'+l.id+'">'+(l.unit?money(amt):'—')+'</b></td>';
   }
   h+='<td class="num">'+(editable||priceable
@@ -4971,6 +5176,39 @@ function lineRow(j,l,editable,priceable,showMoney){
   return h;
 }
 
+/* the lines a whole-job discount can still go on: before approval the
+   estimate, after it whatever is approved and not yet billed */
+function discTargets(j){ return (j.approvals&&j.approvals.customer)?unbilledApproved(j):mainLines(j); }
+function discAllModal(){
+  var j=S.job, ls=discTargets(j); if(!ls.length) return;
+  openModal('<h2>Discount on the whole job</h2>'+
+    '<p class="muted small">Type a % (like 10%) or rupees (like 500). Rupees are shared across the items by value. It replaces any discount already on those items.</p>'+
+    '<div class="field"><label>Discount</label><input type="text" name="dall" inputmode="decimal" placeholder="10% or 500"></div>'+
+    '<div class="field"><label>On</label><div class="seg" id="dscope">'+
+      '<button type="button" data-act="segPick" data-v="all" aria-pressed="true">Everything</button>'+
+      '<button type="button" data-act="segPick" data-v="part" aria-pressed="false">Spares only</button>'+
+      '<button type="button" data-act="segPick" data-v="labour" aria-pressed="false">Labour only</button></div></div>'+
+    '<div class="btn-row"><button class="btn" data-act="closeModal">Cancel</button>'+
+    '<button class="btn primary" data-act="discAllDo">Apply</button></div>');
+}
+function segVal(id){ var b=document.querySelector('#'+id+' [aria-pressed="true"]'); return b?b.dataset.v:''; }
+function segPick(el){
+  var seg=el.closest('.seg'); if(!seg) return;
+  seg.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed',b===el?'true':'false'); });
+}
+function scopeLines(ls,sc){ return ls.filter(function(l){ return sc==='all'||(sc==='part'?l.kind==='part':l.kind!=='part'); }); }
+async function discAllDo(){
+  var j=S.job; if(!can('bill.edit')) return;
+  var raw=dg('dall'), d=parseDisc(raw), sc=segVal('dscope')||'all';
+  if(String(raw||'').trim()&&!d){ toast('Type a % like 10% or rupees like 500','bad'); return; }
+  var ls=scopeLines(discTargets(j),sc); if(!ls.length){ toast('Nothing to discount there','bad'); return; }
+  var sp=spreadDisc(ls,d), before=ls.reduce(function(a,l){ return a+lineDisc(l); },0);
+  ls.forEach(function(l){ if(sp[l.id]) l.disc=sp[l.id]; else delete l.disc; });
+  var after=ls.reduce(function(a,l){ return a+lineDisc(l); },0);
+  logIt(j,'Discount on the whole job',(d?discLabel(d):'removed')+' on '+(sc==='all'?'everything':(sc==='part'?'spares':'labour'))+
+    ' \u00B7 '+money(before)+' \u2192 '+money(after));
+  closeModal(); await saveJob(j); rerender(); toast(d?'Discount of '+money(after)+' given':'Discount removed','good');
+}
 /* ---- estimate + approvals ---- */
 function sectionEstimate(j){
   if(!seeMoney()) return '';
@@ -4983,7 +5221,10 @@ function sectionEstimate(j){
   var h='<div class="card"><div class="card-h"><h2>Estimate</h2></div><div class="card-b">'+
     '<div class="totrow"><span>Parts ('+lines.filter(function(l){return l.kind==='part';}).length+')</span><span class="money">'+money(parts)+'</span></div>'+
     '<div class="totrow"><span>Labour ('+lines.filter(function(l){return l.kind==='labour';}).length+')</span><span class="money">'+money(labour)+'</span></div>'+
-    '<div class="totrow grand"><span>Estimate</span><span class="money">'+money(total)+'</span></div>';
+    (function(){ var dt=lines.reduce(function(a,l){ return a+lineDisc(l); },0);
+      return dt?'<div class="totrow" style="color:var(--green)"><span>Discount included</span><span class="money">\u2212'+money(dt)+'</span></div>':''; })()+
+    '<div class="totrow grand"><span>Estimate</span><span class="money">'+money(total)+'</span></div>'+
+    (can('bill.edit')&&discTargets(j).length?'<div style="margin-top:8px"><button class="btn sm" data-act="discAllModal">Discount on the whole job</button></div>':'');
   if(!allPriced(lines)) h+='<div class="banner warn small" style="margin-top:12px">Some items still have no price. The owner must price every line before this can be approved.</div>';
   if(anyCost&&can('price.set')){
     var cI=0, sP=0; lines.forEach(function(l){ if(l.kind==='part'&&(l.cost||l.batchId)){ cI+=lineCostIncl(l); sP+=lineAmount(l); } });
@@ -5501,20 +5742,29 @@ function viewFloor(){
     '<button class="btn sm" style="margin-top:10px" data-act="floorClear">Clear the filters</button></div>';
   if(!jobs.length) return h+(need||FLOOR.loading?'<div class="empty"><b>Loading the bikes…</b></div>'
     :'<div class="empty"><b>No bikes being worked on.</b>Bikes appear here once the customer has approved the work.</div>');
+  /* one slim line a bike; a tap opens its checklist under it and closes
+     whichever was open. A search with one match opens that one. */
+  var openId=(jobs.length===1&&fq)?jobs[0].id:S.floorOpen;
   jobs.forEach(function(j){
     var T=techTasks(j), n=T.tasks.filter(function(t){ return t.done; }).length, hold=jobOnHold(j);
-    var old=now-lastTouch(j)>FLOOR_STALE, mech=j.mechanicId?coreUser(j.mechanicId):null;
-    h+='<div class="card" style="'+(old?'border-color:var(--red)':'')+'"><div class="card-h" style="flex-wrap:wrap;gap:8px">'+
-      '<span class="plate">'+esc(regShow(j.reg))+'</span>'+
-      '<div style="min-width:0"><b>'+esc(j.make+' '+j.model)+'</b>'+(j.cust&&j.cust.name?' <span class="small muted">· '+esc(j.cust.name)+'</span>':'')+
-        '<div class="small muted">'+esc(mech?mech.name:'Not assigned')+
-        ' · last update '+ago(lastTouch(j))+'</div></div>'+
-      '<span class="tag '+(n===T.tasks.length&&n?'t-green':(old?'t-red':'t-grey'))+'" style="margin-left:auto">'+n+' of '+T.tasks.length+'</span></div>'+
-      (j.cb&&j.cb.of?'<div class="banner warn small" style="margin:10px 14px 0"><b>COMEBACK</b> of '+esc(j.cb.ofNo)+
+    var old=now-lastTouch(j)>FLOOR_STALE, mech=j.mechanicId?coreUser(j.mechanicId):null, isOpen=(openId===j.id);
+    var tagC=(n===T.tasks.length&&n)?'t-green':(old?'t-red':'t-grey');
+    h+='<div class="card" style="margin-bottom:8px;'+(old?'border-left:5px solid var(--red);':'')+'">'+
+      '<button class="floorrow" data-act="floorOpen" data-id="'+j.id+'" aria-expanded="'+isOpen+'" '+
+        'style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;background:none;border:0;text-align:left;cursor:pointer;flex-wrap:wrap">'+
+      '<span class="plate sm">'+esc(regShow(j.reg))+'</span>'+
+      '<span style="flex:1;min-width:140px"><b>'+esc(j.model||j.make)+'</b>'+(j.cust&&j.cust.name?' <span class="small muted">· '+esc(j.cust.name)+'</span>':'')+
+        '<span class="small muted" style="display:block">'+esc(mech?mech.name.split(' ')[0]:'TBA')+' · '+ago(lastTouch(j))+
+        (hold?' · <b style="color:var(--red)">stopped</b>':'')+(j.stage==='work_done'?' · <b style="color:var(--amber)">finished, not ticked</b>':'')+
+        (j.cb&&j.cb.of?' · <b style="color:var(--red)">comeback</b>':'')+'</span></span>'+
+      '<span class="tag '+tagC+'">'+n+' of '+T.tasks.length+'</span>'+
+      '<span style="font-size:18px;color:var(--steel)">'+(isOpen?'\u25BE':'\u25B8')+'</span></button>';
+    if(!isOpen){ h+='</div>'; return; }
+    h+=(j.cb&&j.cb.of?'<div class="banner warn small" style="margin:10px 14px 0"><b>COMEBACK</b> of '+esc(j.cb.ofNo)+
         (j.cb.mechName?' ('+esc(j.cb.mechName)+')':'')+'</div>':'')+
       (hold?'<div class="banner warn small" style="margin:10px 14px 0"><b>Stopped</b> — extra work waiting for the customer</div>':'')+
       (j.stage==='work_done'?'<div class="banner warn small" style="margin:10px 14px 0"><b>Finished with items not ticked</b> — tick them so it can be billed</div>':'')+
-      '<div class="card-b tight">';
+      '<div class="card-b tight" style="border-top:1px solid var(--rule2)">';
     T.tasks.forEach(function(t){
       h+='<div style="display:flex;gap:12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--rule2)">'+
         '<button class="btn '+(t.done?'go':'')+'" style="flex:0 0 52px;min-height:52px;font-size:22px" '+(hold?'disabled':'')+
@@ -6929,7 +7179,7 @@ function paintExpParty(){
   if(!box||!inp) return;
   var q=inp.value.trim().toLowerCase();
   if(!q){ box.innerHTML=''; S.expParty=''; return; }
-  var res=PARTIES.filter(function(p){ return String(p.name).toLowerCase().indexOf(q)>=0; }).slice(0,6);
+  var res=PARTIES.filter(function(p){ return smatch(q,p.name); }).slice(0,6);
   box.innerHTML='<div class="presults" style="max-height:150px">'+
     res.map(function(p){ return '<button type="button" class="partrow" data-act="pickExpParty" data-id="'+p.id+'">'+
       '<div style="flex:1"><div style="font-weight:800">'+esc(p.name)+'</div>'+
@@ -8278,16 +8528,27 @@ function fitsModal(partId){
   }
   h+='<div class="field"><label>Add another bike</label>'+
     '<div class="two"><select id="fitmake"><option value="">\u2014 make \u2014</option>'+
-    makeOptions('').replace(/<option value="__other">[\s\S]*?<\/option>/,'')+'</select>'+
+    makeOptions('').replace(/<option value="__other">[\s\S]*?<\/option>/,'<option value="__new">+ Add new bike\u2026</option>')+'</select>'+
     '<select id="fitmodel"><option value="">\u2014 pick the make \u2014</option></select></div>'+
+    '<div id="fitnew" hidden style="margin-top:8px"><div class="two">'+
+      '<div class="field" id="fitnewmakebox"><label>Make</label><input type="text" id="fitnewmake" placeholder="E.g. Royal Enfield"></div>'+
+      '<div class="field"><label>Model</label><input type="text" id="fitnewmodel" placeholder="E.g. Classic 650"></div></div>'+
+      '<div class="field"><label>Engine cc <span class="small muted">(e for electric)</span></label><input type="text" id="fitnewcc" inputmode="numeric" style="max-width:140px"></div></div>'+
     '<button class="btn sm" style="margin-top:8px" data-act="fitAddManual">Add this one</button></div>'+
     '<div class="btn-row"><button class="btn" data-act="closeModal">Close</button>'+
     '<button class="btn primary" data-act="fitsSave" data-id="'+p.id+'">Save</button></div>';
   openModal(h, function(){
     var mk=document.getElementById('fitmake');
     if(mk) mk.addEventListener('change',function(){
-      var md=document.getElementById('fitmodel');
-      if(md) md.innerHTML=modelOptions(mk.value,'').replace(/<option value="__other">[\s\S]*?<\/option>/,'');
+      var md=document.getElementById('fitmodel'), nw=document.getElementById('fitnew'), nmb=document.getElementById('fitnewmakebox');
+      if(mk.value==='__new'){ if(md) md.innerHTML='<option value="__new">New bike \u2014 type it below</option>'; nw.hidden=false; nmb.hidden=false; return; }
+      if(md) md.innerHTML=modelOptions(mk.value,'').replace(/<option value="__other">[\s\S]*?<\/option>/,'<option value="__new">+ Add new model\u2026</option>');
+      nw.hidden=true;
+    });
+    var md0=document.getElementById('fitmodel');
+    if(md0) md0.addEventListener('change',function(){
+      var nw=document.getElementById('fitnew'), nmb=document.getElementById('fitnewmakebox');
+      if(md0.value==='__new'){ nw.hidden=false; nmb.hidden=true; } else if(mk.value!=='__new') nw.hidden=true;
     });
   });
 }
@@ -8299,7 +8560,17 @@ function fitToggle(el){
 function fitAddManual(){
   var mk=document.getElementById('fitmake'), md=document.getElementById('fitmodel');
   if(!mk||!md||!mk.value||!md.value){ toast('Pick a make and a model','bad'); return; }
-  var key=fitKey(mk.value,md.value);
+  var mkV=mk.value, mdV=md.value;
+  if(mkV==='__new'||mdV==='__new'){
+    var nm=mkV==='__new'?(document.getElementById('fitnewmake').value||''):mkV, nd=document.getElementById('fitnewmodel').value||'';
+    if(!nm.trim()||!nd.trim()){ toast('Type the make and the model','bad'); return; }
+    var added=addBike(nm,nd,document.getElementById('fitnewcc').value);
+    var mk2=allMakes().filter(function(m){ return pkey(m)===pkey(nm); })[0]||titleCase(nm.trim());
+    var md2=modelsFor(mk2).filter(function(m){ return pkey(m.n)===pkey(nd); })[0];
+    mkV=mk2; mdV=md2?md2.n:titleCase(nd.trim());
+    if(added){ saveCore(); logAudit('Bike list','Bike added',mkV+' '+mdV,''); toast(mkV+' '+mdV+' added to the bike list','good'); }
+  }
+  var key=fitKey(mkV,mdV);
   var box=document.getElementById('fitshave');
   if(!box){
     var f=document.querySelector('.sheet .field');
@@ -8308,8 +8579,8 @@ function fitAddManual(){
   }
   if(box.querySelector('[data-k="'+key+'"]')){ toast('Already on the list'); return; }
   box.insertAdjacentHTML('beforeend','<button type="button" class="chip" aria-pressed="true" '+
-    'data-act="fitToggle" data-k="'+esc(key)+'">'+esc(mk.value+' '+md.value)+' \u2715</button>');
-  toast(mk.value+' '+md.value+' added');
+    'data-act="fitToggle" data-k="'+esc(key)+'">'+esc(mkV+' '+mdV)+' \u2715</button>');
+  toast(mkV+' '+mdV+' added');
 }
 async function fitsSave(partId){
   var keys=[];
@@ -9631,6 +9902,9 @@ function gstDate(ts){
 }
 function exportGstr1Range(R){
   var g=gstr1(R.from,R.to), W=S.core.workshop;
+  /* remembered, so a bill edited afterwards can say so */
+  S.core.gstrExports=(S.core.gstrExports||[]).concat([{from:R.from, to:R.to, at:Date.now(), by:S.user.id}]).slice(-60);
+  saveCore();
   var rows=[];
   rows.push(['GSTIN of supplier', W.gstin||'']);
   rows.push(['Legal name', W.name||'']);
@@ -10349,6 +10623,15 @@ function listEmpty(msg){
 /* =====================================================================
    SALES
    ===================================================================== */
+/* what a payment or a return can be found by */
+function docHay(x){
+  var pty=x&&x.partyId?partyById(x.partyId):null;
+  return [pty?pty.name:'', x.ref, x.no, x.number, x.billNo, x.invNo, x.custName, x.reg, x.label].filter(Boolean).join(' ');
+}
+function searchNote(q,act){
+  return '<div class="small" style="margin:6px 0 2px;display:flex;align-items:center;gap:8px">Showing only \u201C<b>'+esc(q)+'</b>\u201D \u2014 every number on this page follows it'+
+    '<button class="btn sm" data-act="'+act+'">\u2715 Clear</button></div>';
+}
 function saleStatus(s){
   if(s.status==='cancelled') return 'cancelled';
   if(saleDue(s)<=0) return 'paid';
@@ -10361,9 +10644,18 @@ function viewSalesSection(){
   var all=SALES.filter(function(s){ return s.at>=R.from&&s.at<=R.to; });
   var cn=returnsIn('sales',R.from,R.to);
   var pin=paymentsIn(R.from,R.to);
-  var h=pageHead('','Sales','',can('sale.new')?'<button class="btn primary" data-act="newSale">+ New sale</button>':'')+openSalesCard()+periodBar('salesPeriod',per);
+  var sq=(S.salesQ||'').trim();
+  if(sq){
+    all=all.filter(function(s){ return smatch(sq,s.number+' '+s.custName+' '+s.reg+' '+s.jobNo); });
+    pin=pin.filter(function(x){ return smatch(sq,docHay(x)); });
+    cn=cn.filter(function(x){ return smatch(sq,docHay(x)); });
+  }
+  var h=pageHead('','Sales','')+openSalesCard()+periodBar('salesPeriod',per);
   h+=sectionTabs([['over','Overview'],['bills','Invoices',all.length],
     ['in','Payments in',pin.length],['cn','Credit notes',cn.length]],tab,'salesTab');
+  if(sq&&tab!=='over') h+=searchNote(sq,'salesQClear');
+  if(can('sale.new')) h+='<div class="actionbar"><div class="actionbar-in">'+
+    '<button class="btn primary lg" data-act="newSale">+ New Sale</button></div></div>';
   if(tab==='over')  h+=salesOverview(R);
   if(tab==='bills') h+=salesInvoices(all);
   if(tab==='in')    h+=paymentsInList(pin);
@@ -10388,9 +10680,7 @@ function salesInvoices(all){
   if(f==='paid') list=paid;
   if(f==='unpaid') list=unpaid;
   if(f==='cancelled') list=canc;
-  var q=(S.salesQ||'').trim().toLowerCase();
-  if(q) list=list.filter(function(s){
-    return (s.number+' '+s.custName+' '+regShow(s.reg)+' '+s.jobNo).toLowerCase().indexOf(q)>=0; });
+
   list=list.slice().sort(function(a,b){ return b.at-a.at; });
 
   h+='<div class="searchbar" style="position:static;margin:0;padding:6px 0;border:0">'+
@@ -10439,9 +10729,16 @@ function viewPurchSection(){
   });
   var dn=returnsIn('purchase',R.from,R.to);
   var pout=paymentsOut(R.from,R.to);
+  var pq=(S.purchQ||'').trim();
+  if(pq){
+    all=all.filter(function(p){ return smatch(pq,p.invNo+' '+supplierOf(p).name+' '+((partyById(p.supplierId)||{}).gstin||'')); });
+    pout=pout.filter(function(x){ return smatch(pq,docHay(x)); });
+    dn=dn.filter(function(x){ return smatch(pq,docHay(x)); });
+  }
   var h=pageHead('','Purchases')+periodBar('purchPeriod',per);
   h+=sectionTabs([['over','Overview'],['bills','Bills',all.length],
     ['out','Payments out',pout.length],['dn','Debit notes',dn.length]],tab,'purchTab');
+  if(pq&&tab!=='over') h+=searchNote(pq,'purchQClear');
   if(tab==='over')  h+=purchOverview(R);
   if(tab==='bills') h+=purchBills(all);
   if(tab==='out')   h+=paymentsOutList(pout);
@@ -10473,9 +10770,7 @@ function purchBills(all){
   if(f==='unpaid') list=unpaidL;
   if(f==='notax') list=noTax;
   if(f==='withtax') list=withTax;
-  var q=(S.purchQ||'').trim().toLowerCase();
-  if(q) list=list.filter(function(p){
-    return (p.invNo+' '+((partyById(p.supplierId)||{name:''}).name)).toLowerCase().indexOf(q)>=0; });
+
   list=list.slice().sort(function(a,b){
     return new Date(b.invDate).getTime()-new Date(a.invDate).getTime(); });
 
@@ -11356,7 +11651,7 @@ function viewParties(){
   if(q){
     var qk=phoneKey(q), gk=pkey(q);
     list=list.filter(function(p){
-      return String(p.name).toLowerCase().indexOf(q)>=0 ||
+      return smatch(q,p.name) ||
         (qk.length>=4&&phoneKey(p.phone).indexOf(qk)>=0) ||
         (gk.length>=4&&pkey(p.gstin).indexOf(gk)>=0);
     });
@@ -13057,6 +13352,13 @@ async function editLineField(lineId,field,value){
     var og=l.gst||0, ng=parseInt(value,10)||0; if(og===ng) return;
     l.gst=ng; logIt(j,'GST rate changed',l.desc+': '+og+'% → '+ng+'%');
   }
+  if(field==='disc'){
+    if(!can('bill.edit')){ toast('Only Kunal or Jatin can give a discount','bad'); rerender(); return; }
+    var nd=parseDisc(value), od=l.disc||null;
+    if(JSON.stringify(nd)===JSON.stringify(od)) return;
+    if(nd) l.disc=nd; else delete l.disc;
+    logIt(j,'Discount',l.desc+': '+(od?discLabel(od):'none')+' \u2192 '+(nd?discLabel(nd)+' (\u2212'+money(lineDisc(l))+')':'none'));
+  }
   await saveJob(j); rerender();
 }
 async function delLine(lineId){
@@ -13554,10 +13856,20 @@ function billCard(j,b){
     btn.push('<button class="btn" data-act="sendInvoice" data-bill="'+b.id+'">Send to customer</button>');
     if(can('bill.make')) btn.push('<button class="btn" data-act="salesReturn" data-job="'+j.id+'" data-bill="'+b.id+'">Goods returned</button>');
     if(billDue(j,b)>0&&can('pay.take')) btn.push('<button class="btn go" data-act="payModal" data-bill="'+b.id+'">Take payment</button>');
+    if(can('bill.edit')) btn.push('<button class="btn" data-act="billEditModal" data-bill="'+b.id+'">Edit bill</button>');
     if(can('bill.final')) btn.push('<button class="btn danger sm" data-act="cancelBill" data-bill="'+b.id+'">Cancel this bill</button>');
   }
   if(btn.length) h+='<div class="btn-row" style="margin-top:16px">'+btn.join('')+'</div>';
-  if(fin) h+='<p class="hint">A finalised bill cannot be edited. Cancel it and raise a new one.</p>';
+  if(fin&&billEditedAfterExport(b)) h+='<div class="banner warn small" style="margin-top:10px"><b>Edited after GSTR-1 export.</b> '+
+    'This month was already exported. If it was filed, tell your CA about this change.</div>';
+  if(fin&&(b.edits||[]).length){
+    h+='<div class="sub" style="margin:14px -14px 0"><div class="eyebrow">Changes to this bill ('+b.edits.length+')</div>'+
+      b.edits.slice().reverse().slice(0,20).map(function(e){
+        return '<div class="small" style="margin-top:6px"><b>'+dts(e.at)+'</b> \u00B7 '+esc(e.byName)+
+          (e.from!==undefined?' \u00B7 '+money(e.from)+' \u2192 '+money(e.to):'')+
+          '<div class="muted">'+esc((e.changes||[]).join('; '))+'</div></div>'; }).join('')+
+      (b.edits.length>20?'<div class="hint">Showing the latest 20.</div>':'')+'</div>';
+  }
   return h+'</div></div>';
 }
 /* One action makes every bill the job needs: a tax invoice for labour and
@@ -13587,29 +13899,40 @@ function readyModal(){
 /* what a line will be billed as, with any change typed in the preview */
 function readyEff(l){
   var e=(S.readyEd||{})[l.id]||{};
-  return {qty:e.qty!==undefined?e.qty:qtyNum(l.qty), gst:e.gst!==undefined?e.gst:lineBillGst(l)};
+  return {qty:e.qty!==undefined?e.qty:qtyNum(l.qty), gst:e.gst!==undefined?e.gst:lineBillGst(l),
+    disc:e.disc!==undefined?e.disc:(l.disc||null)};
 }
 function boughtWithGst(l){ return l.kind==='part'&&!lineNoGst(l)&&(l.gst||0)>0; }
 function paintReady(){
   var j=S.job, ed=can('bill.edit');
   var ub=unbilledApproved(j), tax=[], plain=[], tt=0, tp=0;
-  ub.forEach(function(l){ var e=readyEff(l); if(e.qty<=0) return; var a=Math.round(e.qty*(l.unit||0));
+  var effAmt=function(l,e){ var g=Math.round(e.qty*(l.unit||0)); return g-discOf(e.disc,g); };
+  ub.forEach(function(l){ var e=readyEff(l); if(e.qty<=0) return; var a=effAmt(l,e);
     if(e.gst>0){ tax.push(l); tt+=a; } else { plain.push(l); tp+=a; } });
   var row=function(l){
-    var e=readyEff(l), a=Math.round(e.qty*(l.unit||0)), warn=boughtWithGst(l)&&e.gst===0;
+    var e=readyEff(l), a=effAmt(l,e), warn=boughtWithGst(l)&&e.gst===0, dd=discOf(e.disc,Math.round(e.qty*(l.unit||0)));
     return '<tr'+(e.qty<=0?' style="opacity:.5"':'')+'><td><div style="font-weight:700">'+esc(l.desc)+'</div>'+
       '<span class="small muted">'+money(l.unit)+' each</span>'+
       (warn?'<div class="small" style="color:var(--red);font-weight:700">Bought with '+(l.gst||0)+'% GST \u2014 billing at 0%?</div>':'')+
       (e.qty<=0?'<div class="small" style="color:var(--amber);font-weight:700">0 \u2014 comes off the job, back to the store</div>':'')+'</td>'+
       '<td class="num">'+(ed?'<input type="number" step="0.25" min="0" inputmode="decimal" data-rq="'+l.id+'" value="'+e.qty+'" style="width:76px;min-height:38px">':'<b>'+e.qty+'</b>')+'</td>'+
       '<td class="num">'+(ed?'<select data-rg="'+l.id+'" style="min-height:38px;width:76px">'+gstOpts(e.gst,'')+'</select>':e.gst+'%')+'</td>'+
-      '<td class="num"><b class="money">'+money(a)+'</b></td></tr>';
+      '<td class="num">'+(ed?'<input type="text" inputmode="decimal" data-rd="'+l.id+'" value="'+esc(fmtDisc(e.disc))+'" placeholder="% or \u20B9" style="width:76px;min-height:38px">':(dd?esc(discLabel(e.disc)):'—'))+'</td>'+
+      '<td class="num"><b class="money">'+money(a)+'</b>'+(dd?'<div class="small" style="color:var(--green)">\u2212'+money(dd)+'</div>':'')+'</td></tr>';
   };
-  var h='<h2>'+(j.direct?'Make the bill':'Ready for delivery')+'</h2>'+
+  var h='<div class="widemodal"></div><h2>'+(j.direct?'Make the bill':'Ready for delivery')+'</h2>'+
     '<p class="muted small">'+(ed?'Change qty or GST % here if needed. ':'')+'0% goes on the plain bill, the rest on the tax invoice. '+
     'The bills are made now, dated today, and can\u2019t be changed afterwards.</p>'+
-    '<div style="overflow-x:auto;margin:10px 0"><table class="lines"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">GST</th><th class="num">Amount</th></tr></thead><tbody>'+
-    groupedRows(ub,row,4,false)+'</tbody></table></div>'+
+    '<div style="overflow-x:auto;margin:10px 0"><table class="lines"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">GST</th><th class="num">Disc</th><th class="num">Amount</th></tr></thead><tbody>'+
+    groupedRows(ub,row,5,false)+'</tbody></table></div>'+
+    (ed?'<div class="sub" style="margin:0 -14px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+      '<b class="small">Whole bill discount</b><input type="text" id="rdall" inputmode="decimal" placeholder="10% or 500" style="width:110px;min-height:38px">'+
+      '<div class="seg" id="rdscope"><button type="button" data-act="segPick" data-v="all" aria-pressed="true">All</button>'+
+      '<button type="button" data-act="segPick" data-v="part" aria-pressed="false">Spares</button>'+
+      '<button type="button" data-act="segPick" data-v="labour" aria-pressed="false">Labour</button></div>'+
+      '<button class="btn sm" data-act="readyDiscAll">Apply</button></div>':'')+
+    (function(){ var t=0; ub.forEach(function(l){ var e=readyEff(l); if(e.qty>0) t+=discOf(e.disc,Math.round(e.qty*(l.unit||0))); });
+      return t?'<div class="totrow" style="color:var(--green)"><span>Total discount</span><span class="money">\u2212'+money(t)+'</span></div>':''; })()+
     (tax.length?'<div class="totrow"><span>Tax invoice \u00B7 '+tax.length+' item'+(tax.length>1?'s':'')+'</span><span class="money">'+money(tt)+'</span></div>':'')+
     (plain.length?'<div class="totrow"><span>Plain bill (no GST) \u00B7 '+plain.length+' item'+(plain.length>1?'s':'')+'</span><span class="money">'+money(tp)+'</span></div>':'')+
     '<div class="btn-row" style="margin-top:14px"><button class="btn" data-act="closeModal">Cancel</button>'+
@@ -13620,13 +13943,25 @@ function paintReady(){
 }
 document.addEventListener('change',function(e){
   var el=e.target; if(!el||!el.dataset) return;
-  var id=el.dataset.rq||el.dataset.rg; if(!id||!S.readyEd) return;
+  var id=el.dataset.rq||el.dataset.rg||el.dataset.rd; if(!id||!S.readyEd) return;
   if(!can('bill.edit')) return;
   S.readyEd[id]=S.readyEd[id]||{};
   if(el.dataset.rq){ var q=Math.max(0,Math.round((parseFloat(el.value)||0)*100)/100); S.readyEd[id].qty=q; }
-  else S.readyEd[id].gst=parseInt(el.value,10)||0;
+  else if(el.dataset.rg) S.readyEd[id].gst=parseInt(el.value,10)||0;
+  else { var pd=parseDisc(el.value); if(String(el.value||'').trim()&&!pd){ toast('Type a % like 10% or rupees like 500','bad'); } S.readyEd[id].disc=pd; }
   setTimeout(paintReady,0);
 });
+function readyDiscAll(){
+  if(!can('bill.edit')||!S.readyEd) return;
+  var inp=document.getElementById('rdall'), raw=inp?inp.value:'', d=parseDisc(raw), sc=segVal('rdscope')||'all';
+  if(String(raw||'').trim()&&!d){ toast('Type a % like 10% or rupees like 500','bad'); return; }
+  var ls=scopeLines(unbilledApproved(S.job).filter(function(l){ return readyEff(l).qty>0; }),sc);
+  /* spread on the qty as it now stands in the preview */
+  var tmp=ls.map(function(l){ return {id:l.id, qty:readyEff(l).qty, unit:l.unit, kind:l.kind}; });
+  var sp=spreadDisc(tmp,d);
+  ls.forEach(function(l){ S.readyEd[l.id]=S.readyEd[l.id]||{}; S.readyEd[l.id].disc=sp[l.id]||null; });
+  paintReady();
+}
 /* put the preview's changes on the job: qty moves stock, GST picks the bill */
 async function applyReadyEdits(j){
   var ed=S.readyEd||{}, moved=false;
@@ -13643,6 +13978,10 @@ async function applyReadyEdits(j){
       if(nq<=0){ l.void=true; l.notUsed={by:S.user.id, byName:S.user.name, at:Date.now(), atBilling:true};
         logIt(j,'Taken off at billing',l.desc+(l.partId?' \u2014 back on the shelf':'')); }
       else { l.qty=nq; logIt(j,'Quantity changed at billing',l.desc+': '+oq+' \u2192 '+nq+(l.partId&&nq<oq?' \u2014 '+(oq-nq)+' back on the shelf':'')); }
+    }
+    if(e.disc!==undefined&&JSON.stringify(e.disc||null)!==JSON.stringify(l.disc||null)){
+      var od=l.disc||null; if(e.disc) l.disc=e.disc; else delete l.disc;
+      logIt(j,'Discount at billing',l.desc+': '+(od?discLabel(od):'none')+' \u2192 '+(e.disc?discLabel(e.disc):'none'));
     }
     if(e.gst!==undefined&&e.gst!==lineBillGst(l)){
       var og=lineBillGst(l); l.billGst=e.gst; l.gst=e.gst;
@@ -13752,6 +14091,145 @@ async function dropBill(billId){
   var j=S.job; j.bills=j.bills.filter(function(x){return !(x.id===billId&&x.status==='draft');});
   logIt(j,'Draft bill deleted','No number was used');
   await saveJob(j); rerender();
+}
+/* =====================================================================
+   EDITING A BILL
+   Kunal and Jatin can change any bill at any time, under the same number.
+   The job, the stock, the customer's account and every report follow the
+   latest version; the bill keeps a list of what changed, by whom, when.
+   ===================================================================== */
+function billById(j,id){ return (j.bills||[]).filter(function(x){ return x.id===id; })[0]; }
+function billEditedAfterExport(b){
+  if(!b||!b.editedAt) return false;
+  return (S.core.gstrExports||[]).some(function(x){ return b.finalAt>=x.from&&b.finalAt<=x.to&&x.at<b.editedAt; });
+}
+function billEditModal(billId){
+  var j=S.job, b=billById(j,billId); if(!b||b.status!=='final'||!can('bill.edit')) return;
+  var sn=b.snapshot&&b.snapshot.buyer?b.snapshot.buyer:j.cust;
+  S.billEd={billId:billId, rows:{}, buyer:{name:sn.name||'', phone:sn.phone||'', gstin:sn.gstin||'', address:sn.address||''}};
+  paintBillEdit();
+}
+function billEdEff(l){
+  var e=(S.billEd.rows||{})[l.id]||{};
+  return {qty:e.qty!==undefined?e.qty:qtyNum(l.qty), unit:e.unit!==undefined?e.unit:(l.unit||0),
+    gst:e.gst!==undefined?e.gst:lineBillGst(l), disc:e.disc!==undefined?e.disc:(l.disc||null)};
+}
+function paintBillEdit(){
+  var j=S.job, E=S.billEd, b=billById(j,E.billId); if(!b) return;
+  var gst=b.type==='gst', ls=(b.lineIds||[]).map(function(id){ return findLine(j,id); }).filter(function(l){ return l&&!l.void; });
+  var tot=0, dt=0;
+  var row=function(l){
+    var e=billEdEff(l), g=Math.round(e.qty*e.unit), d=discOf(e.disc,g), a=g-d; if(e.qty>0){ tot+=a; dt+=d; }
+    return '<tr'+(e.qty<=0?' style="opacity:.5"':'')+'><td><div style="font-weight:700">'+esc(l.desc)+'</div>'+
+      (e.qty<=0?'<div class="small" style="color:var(--amber);font-weight:700">0 \u2014 comes off this bill'+(l.partId?', back to the store':'')+'</div>':'')+'</td>'+
+      '<td class="num"><input type="number" step="0.25" min="0" inputmode="decimal" data-bq="'+l.id+'" value="'+e.qty+'" style="width:70px;min-height:38px"></td>'+
+      '<td class="num"><input type="number" step="0.01" min="0" inputmode="decimal" data-bu="'+l.id+'" value="'+paiseToInput(e.unit)+'" style="width:118px;min-height:38px"></td>'+
+      '<td class="num">'+(gst?'<select data-bg="'+l.id+'" style="min-height:38px;width:74px">'+
+        GST_SLABS.filter(function(x){ return x>0; }).map(function(x){ return '<option value="'+x+'"'+(x===e.gst?' selected':'')+'>'+x+'%</option>'; }).join('')+'</select>':'0%')+'</td>'+
+      '<td class="num"><input type="text" inputmode="decimal" data-bd="'+l.id+'" value="'+esc(fmtDisc(e.disc))+'" placeholder="% or \u20B9" style="width:92px;min-height:38px"></td>'+
+      '<td class="num"><b class="money">'+money(a)+'</b>'+(d?'<div class="small" style="color:var(--green)">\u2212'+money(d)+'</div>':'')+'</td></tr>';
+  };
+  var rows=groupedRows(ls,row,6,false);
+  var B=E.buyer;
+  var h='<div class="widemodal"></div><h2>Edit '+esc(b.number)+'</h2>'+
+    '<p class="muted small">Same bill number. Everything \u2014 stock, the customer\u2019s account, sales and GST reports \u2014 follows the latest version. '+
+    'Every change is kept on the bill.</p>'+
+    '<div class="two"><div class="field"><label>Customer name</label><input type="text" id="be_name" value="'+esc(B.name)+'"></div>'+
+    '<div class="field"><label>GSTIN</label><input type="text" id="be_gstin" value="'+esc(B.gstin)+'" class="mono"></div></div>'+
+    '<div class="field"><label>Address</label><input type="text" id="be_addr" value="'+esc(B.address)+'"></div>'+
+    '<div style="overflow-x:auto;margin:10px 0"><table class="lines"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">GST</th><th class="num">Disc</th><th class="num">Amount</th></tr></thead><tbody>'+
+    rows+'</tbody></table></div>'+
+    '<div class="sub" style="margin:0 -14px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+      '<b class="small">Whole bill discount</b><input type="text" id="bdall" inputmode="decimal" placeholder="10% or 500" style="width:110px;min-height:38px">'+
+      '<div class="seg" id="bdscope"><button type="button" data-act="segPick" data-v="all" aria-pressed="true">All</button>'+
+      '<button type="button" data-act="segPick" data-v="part" aria-pressed="false">Spares</button>'+
+      '<button type="button" data-act="segPick" data-v="labour" aria-pressed="false">Labour</button></div>'+
+      '<button class="btn sm" data-act="billDiscAll">Apply</button></div>'+
+    (dt?'<div class="totrow" style="color:var(--green)"><span>Total discount</span><span class="money">\u2212'+money(dt)+'</span></div>':'')+
+    '<div class="totrow grand"><span>Items total'+(gst?' (GST included)':'')+'</span><span class="money">'+money(tot)+'</span></div>'+
+    '<div class="hint">Was '+money(billCalc(j,b).grand)+'. Round off is worked out again on save.</div>'+
+    '<div class="btn-row" style="margin-top:14px"><button class="btn" data-act="closeModal">Cancel</button>'+
+    '<button class="btn primary" data-act="billEditDo">Save changes</button></div>';
+  var sh=document.querySelector('.sheet'), y=sh?sh.scrollTop:0;
+  openModal(h); sh=document.querySelector('.sheet'); if(sh) sh.scrollTop=y;
+}
+function billEdGrabBuyer(){
+  var E=S.billEd; if(!E) return;
+  var g=function(id){ var e=document.getElementById(id); return e?e.value.trim():null; };
+  var n=g('be_name'), gs=g('be_gstin'), ad=g('be_addr');
+  if(n!==null) E.buyer.name=titleCase(n); if(gs!==null) E.buyer.gstin=gs.toUpperCase(); if(ad!==null) E.buyer.address=titleCase(ad);
+}
+document.addEventListener('change',function(e){
+  var el=e.target; if(!el||!el.dataset||!S.billEd) return;
+  var id=el.dataset.bq||el.dataset.bu||el.dataset.bg||el.dataset.bd; if(!id) return;
+  billEdGrabBuyer();
+  var r=S.billEd.rows[id]=S.billEd.rows[id]||{};
+  if(el.dataset.bq) r.qty=Math.max(0,Math.round((parseFloat(el.value)||0)*100)/100);
+  else if(el.dataset.bu) r.unit=Math.max(0,toPaise(el.value));
+  else if(el.dataset.bg) r.gst=parseInt(el.value,10)||0;
+  else { var pd=parseDisc(el.value); if(String(el.value||'').trim()&&!pd) toast('Type a % like 10% or rupees like 500','bad'); r.disc=pd; }
+  setTimeout(paintBillEdit,0);
+});
+function billDiscAll(){
+  var E=S.billEd; if(!E) return; billEdGrabBuyer();
+  var j=S.job, b=billById(j,E.billId);
+  var inp=document.getElementById('bdall'), raw=inp?inp.value:'', d=parseDisc(raw), sc=segVal('bdscope')||'all';
+  if(String(raw||'').trim()&&!d){ toast('Type a % like 10% or rupees like 500','bad'); return; }
+  var ls=scopeLines((b.lineIds||[]).map(function(id){ return findLine(j,id); }).filter(function(l){ return l&&!l.void&&billEdEff(l).qty>0; }),sc);
+  var tmp=ls.map(function(l){ var e=billEdEff(l); return {id:l.id, qty:e.qty, unit:e.unit}; });
+  var sp=spreadDisc(tmp,d);
+  ls.forEach(function(l){ E.rows[l.id]=E.rows[l.id]||{}; E.rows[l.id].disc=sp[l.id]||null; });
+  paintBillEdit();
+}
+async function billEditDo(){
+  var E=S.billEd, j=S.job; if(!E||!can('bill.edit')) return;
+  billEdGrabBuyer();
+  var b=billById(j,E.billId); if(!b) return;
+  var before=billCalc(j,b).grand, ch=[], moved=false;
+  var keep=(b.lineIds||[]).filter(function(id){ var l=findLine(j,id); return l&&!l.void&&billEdEff(l).qty>0; });
+  if(!keep.length){ toast('A bill needs at least one item \u2014 cancel the bill instead','bad'); return; }
+  (b.lineIds||[]).forEach(function(id){
+    var l=findLine(j,id), e=(E.rows||{})[id]; if(!l||!e) return;
+    if(e.qty!==undefined&&e.qty!==qtyNum(l.qty)){
+      var oq=qtyNum(l.qty), nq=e.qty;
+      if(l.partId&&l.kind==='part'){ moveIn({partId:l.partId, batchId:l.batchId||'', qty:oq-nq, kind:(nq>oq?'issue':'return'), ref:b.number, note:'bill edited'}); moved=true; }
+      if(nq<=0){ l.void=true; l.notUsed={by:S.user.id, byName:S.user.name, at:Date.now(), billEdit:true}; ch.push(l.desc+' taken off'); }
+      else { l.qty=nq; ch.push(l.desc+' qty '+oq+' \u2192 '+nq); }
+    }
+    if(e.unit!==undefined&&e.unit!==(l.unit||0)){ ch.push(l.desc+' rate '+money(l.unit||0)+' \u2192 '+money(e.unit)); l.unit=e.unit; }
+    if(e.gst!==undefined&&e.gst!==lineBillGst(l)){ ch.push(l.desc+' GST '+lineBillGst(l)+'% \u2192 '+e.gst+'%'); l.billGst=e.gst; l.gst=e.gst; }
+    if(e.disc!==undefined&&JSON.stringify(e.disc||null)!==JSON.stringify(l.disc||null)){
+      ch.push(l.desc+' discount '+(l.disc?discLabel(l.disc):'none')+' \u2192 '+(e.disc?discLabel(e.disc):'none'));
+      if(e.disc) l.disc=e.disc; else delete l.disc;
+    }
+  });
+  b.lineIds=keep;
+  var ob=(b.snapshot&&b.snapshot.buyer)||{}, nb=E.buyer;
+  ['name','gstin','address'].forEach(function(k){ if(String(ob[k]||'')!==String(nb[k]||'')) ch.push('Customer '+k+': '+(ob[k]||'\u2014')+' \u2192 '+(nb[k]||'\u2014')); });
+  if(nb.gstin&&!gstinCheck(nb.gstin).ok){ toast('That GSTIN does not look right','bad'); return; }
+  if(!ch.length){ closeModal(); S.billEd=null; toast('Nothing changed'); return; }
+  b.buyerEdit={name:nb.name, gstin:nb.gstin, address:nb.address};
+  if(b.type==='gst'&&!j.direct){ var cs=/^[0-9]{2}/.test(nb.gstin||'')?nb.gstin.slice(0,2):''; b.inter=!!(cs&&cs!==String(S.core.workshop.stateCode)); }
+  refreezeBill(j,b);
+  var after=billCalc(j,b).grand;
+  if(b.advance&&b.advance>after) b.advance=after;
+  b.editedAt=Date.now();
+  b.edits=(b.edits||[]).concat([{at:b.editedAt, by:S.user.id, byName:S.user.name, from:before, to:after, changes:ch}]);
+  logIt(j,'Bill edited',b.number+' \u00B7 '+money(before)+' \u2192 '+money(after)+' \u00B7 '+ch.join('; '));
+  logAudit('Bill','Bill edited',b.number+' \u00B7 '+money(before)+' \u2192 '+money(after)+' \u00B7 '+ch.join('; '),j.no); saveAudit();
+  if(moved) await saveStore('moves');
+  closeModal(); S.billEd=null;
+  await saveJob(j); rerender(); toast(b.number+' saved \u00B7 '+money(after),'good');
+}
+/* a bill's frozen copy, made again from the job as it now is, keeping its
+   number, its date and any customer details changed on the bill */
+function refreezeBill(j,b){
+  var keepAt=b.snapshot&&b.snapshot.at;
+  delete b.snapshot;
+  var c=billCalc(j,b); b.snapshot=freezeBill(j,b,c);
+  if(keepAt) b.snapshot.firstAt=keepAt;
+  if(b.buyerEdit){ var bu=b.snapshot.buyer; bu.name=b.buyerEdit.name; bu.gstin=b.buyerEdit.gstin; bu.address=b.buyerEdit.address;
+    b.snapshot.placeOfSupply=placeOfSupply(Object.assign({},j,{cust:Object.assign({},j.cust,{gstin:b.buyerEdit.gstin})}),b); }
 }
 function cancelBill(billId){
   confirmBox('Cancel this bill?','The number stays used and is never given to another bill — that is what keeps the series gapless. The lines go back to being unbilled.','Cancel the bill','cancelBillDo|'+billId,'danger');
@@ -13880,22 +14358,34 @@ function billDocHtml(j,b){
     '<td style="width:50%"><b>Place of supply:</b> '+esc(sn?sn.placeOfSupply:(W.stateCode+' — '+W.state))+'</td>'+
     '<td><b>Reverse charge:</b> No</td></tr></table>';
 
-  /* spares in one box, labour in the next, numbered straight through */
-  var grpN=0, cols=gst?8:5;
+  /* spares in one box, labour in the next, numbered straight through.
+     Each line shows its rate, any discount, and its own tax: CGST and
+     SGST inside Haryana, IGST to another state. */
+  var rowDisc=function(r){ if(r.line.discAmt!==undefined) return r.line.discAmt; return (r.line.disc&&typeof r.line.disc==='object')?lineDisc(r.line):0; };
+  var rowDiscTxt=function(r){ if(r.line.discTxt!==undefined) return r.line.discTxt; return (r.line.disc&&typeof r.line.disc==='object')?discLabel(r.line.disc):''; };
+  var anyDisc=c.rows.some(function(r){ return rowDisc(r)>0; });
+  var IG=!!b.inter;
+  var grpN=0, cols=gst?(7+(IG?1:2)+(anyDisc?1:0)):(5+(anyDisc?1:0));
   [['Spares',c.rows.filter(function(r){ return r.line.kind==='part'; })],
    ['Labour',c.rows.filter(function(r){ return r.line.kind!=='part'; })]].forEach(function(g){
     if(!g[1].length) return;
     h+='<div style="margin-top:10px;font-weight:800;letter-spacing:.06em;font-size:12px">'+g[0].toUpperCase()+'</div>';
     h+='<table style="margin-top:4px"><thead><tr><th style="width:26px">#</th><th>Particulars</th>'+
       (gst?'<th>HSN/SAC</th>':'')+'<th class="num">Qty</th><th class="num">Rate</th>'+
-      (gst?'<th class="num">Taxable</th><th class="num">GST</th>':'')+'<th class="num">Amount</th></tr></thead><tbody>';
+      (anyDisc?'<th class="num">Disc</th>':'')+
+      (gst?'<th class="num">Taxable</th>'+(IG?'<th class="num">IGST</th>':'<th class="num">CGST</th><th class="num">SGST</th>'):'')+
+      '<th class="num">Amount</th></tr></thead><tbody>';
     var sub=0;
     g[1].forEach(function(r){
       grpN++; sub+=r.total;
+      var dA=rowDisc(r), cg=Math.floor(r.tax/2), sg=r.tax-cg, hr=r.rate/2;
       h+='<tr><td>'+grpN+'</td><td>'+esc(r.line.desc)+'</td>'+
         (gst?'<td class="num">'+esc(r.line.hsn||'')+'</td>':'')+
         '<td class="num">'+qtyNum(r.line.qty)+'</td><td class="num">'+money(r.line.unit,{bare:1})+'</td>'+
-        (gst?'<td class="num">'+money(r.base,{bare:1})+'</td><td class="num">'+r.rate+'%<br>'+money(r.tax,{bare:1})+'</td>':'')+
+        (anyDisc?'<td class="num">'+(dA?esc(rowDiscTxt(r))+(String(rowDiscTxt(r)).indexOf('%')>=0?'<br>'+money(dA,{bare:1}):''):'—')+'</td>':'')+
+        (gst?'<td class="num">'+money(r.base,{bare:1})+'</td>'+
+          (IG?'<td class="num">'+r.rate+'%<br>'+money(r.tax,{bare:1})+'</td>'
+             :'<td class="num">'+hr+'%<br>'+money(cg,{bare:1})+'</td><td class="num">'+hr+'%<br>'+money(sg,{bare:1})+'</td>'):'')+
         '<td class="num">'+money(r.total,{bare:1})+'</td></tr>';
     });
     h+='<tr><td colspan="'+(cols-1)+'" style="text-align:right;font-weight:800">'+g[0]+' total</td>'+
@@ -13917,6 +14407,8 @@ function billDocHtml(j,b){
   h+='<table style="margin-top:10px"><tbody>';
   function row(k,v,b2){ return '<tr><td style="border:0"></td><td style="text-align:right;'+(b2?'font-weight:800':'')+'">'+k+'</td>'+
     '<td class="num" style="width:130px;'+(b2?'font-weight:800;font-size:14px':'')+'">'+v+'</td></tr>'; }
+  var dTot=c.rows.reduce(function(a,r){ return a+rowDisc(r); },0);
+  if(dTot) h+=row('Total discount given','\u2212'+money(dTot,{bare:1}));
   if(gst){ h+=row('Taxable value',money(c.sub,{bare:1})); h+=row('Total GST',money(c.tax,{bare:1})); }
   else h+=row('Total',money(c.sub,{bare:1}));
   if(c.roundOff) h+=row('Round off',money(c.roundOff,{bare:1}));
@@ -13986,6 +14478,7 @@ function viewInvoice(){
     '<button class="btn lg" style="flex:0 0 96px" data-act="invBack">Back</button>'+
     '<button class="btn lg" data-act="invPdf" data-bill="'+b.id+'">Download PDF</button>'+
     '<button class="btn lg" style="flex:0 0 90px" data-act="printBill" data-bill="'+b.id+'">Print</button>'+
+    (b.status==='final'&&can('bill.edit')?'<button class="btn lg" style="flex:0 0 96px" data-act="billEditModal" data-bill="'+b.id+'">Edit</button>':'')+
     (b.status==='final'?'<button class="btn primary lg" data-act="sendInvoice" data-bill="'+b.id+'">'+
       (sends.length?'Send again':'Send to customer')+'</button>':'')+
     '</div></div>';
@@ -15734,6 +16227,11 @@ async function dispatch(a,arg,d,t){
     case 'remind': S.view={name:'remind'}; window.scrollTo(0,0); render(); break;
     case 'remindMark': return remindMark(d.id);
     case 'waSend': waSend(d.k,d.id); break;
+    case 'bikeHist': openBikeHist(d.k); break;
+    case 'salesQClear': S.salesQ=''; rerender(); break;
+    case 'purchQClear': S.purchQ=''; rerender(); break;
+    case 'histBack': S.view=(S.view.back&&S.view.back.name!=='bikehist')?S.view.back:{name:'board'}; window.scrollTo(0,0); render(); break;
+    case 'partyBike': S.partyBike=(d.k||''); rerender(); break;
     case 'copyText': copyText(d.t||''); break;
     case 'sigClear': sigClear(); break;
     case 'showApproval': showApproval(d.id||''); break;
@@ -15788,6 +16286,13 @@ async function dispatch(a,arg,d,t){
     case 'kitsReset': kitsReset(); break;
     case 'fitsEdit': fitsModal(d.id); break;
     case 'fitToggle': fitToggle(t); break;
+    case 'segPick': segPick(t); break;
+    case 'billEditModal': billEditModal(d.bill); break;
+    case 'billEditDo': return billEditDo();
+    case 'billDiscAll': billDiscAll(); break;
+    case 'discAllModal': discAllModal(); break;
+    case 'discAllDo': return discAllDo();
+    case 'readyDiscAll': readyDiscAll(); break;
     case 'fitAddManual': fitAddManual(); break;
     case 'fitsSave': return fitsSave(d.id);
     case 'fitOnly': S.fitOnly=!S.fitOnly; t.setAttribute('aria-pressed',S.fitOnly?'true':'false'); paintPartResults(); break;
@@ -15915,7 +16420,8 @@ async function dispatch(a,arg,d,t){
       'Yes, not used','notUsedDo|'+d.line,'danger'); break;
     case 'notUsedDo': return notUsedDo(arg);
     case 'floorTick': return floorTick(d.id,d.task);
-    case 'floorMech': S.floorMech=d.k||''; rerender(); return;
+    case 'floorMech': S.floorMech=d.k||''; S.floorOpen=''; rerender(); return;
+    case 'floorOpen': S.floorOpen=(S.floorOpen===d.id?'':d.id); rerender(); return;
     case 'floorClear': S.floorMech=''; S.floorQ=''; rerender(); return;
     case 'jobTick': return jobTick(d.line);
     case 'tickAllAsk': return tickAllAsk();
