@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 19 NOV 2026 (with the workshop team's updates no. 10 and 11)
+  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 21 NOV 2026 (with the workshop team's updates no. 10 and 11)
   This file IS the live app at motoreez.netlify.app. It is now the source of truth:
   make new changes on THIS file, not on an older copy.
 
@@ -72,6 +72,11 @@
      - Search ignores spaces and dashes everywhere (smatch / nq); phone tables turn
        into cards (labelTables).
      - Floor rounds: slim rows, tap to open (floorOpen); a search with one match opens it.
+  5. Our change on 21 Nov: staff sign in with an e-mail ID + PIN (viewLogin, loginSubmit,
+     loginId, userByLogin). The ID is u.email, or first name @ the workshop e-mail's domain.
+     The (i) icons list everyone's name, role and ID, never PINs (loginInfo). Owner can
+     change an ID in Settings > Staff & PINs (idModal / idSave). Due-day counts use
+     calendar days (dueLabel).
 -->
 <html lang="en">
 <head>
@@ -1297,7 +1302,7 @@ var WRITES=['saveIntake','saveJobEdit','sendPricing','sendEstDo','ownerOkDo','cu
   'verifyExp','verifyPay','reversePayDo','purchPayDo','autoFit','sendAddDo','dropAddDo','custOkTop',
   'bookNew','bookArrive','bookDrop','remindMark','voidReturnDo','salesReturnDo','purchReturnDo',
   'dviDone','dviSet','readyDo','advDo','advDelDo','labNewDo','labDelDo','updDo','plateRenewDo','newSale','saleShip','saleDiscardDo','saleParty','saleNoParty','saleBike','finAddDo','finDone','sendInvDo','invPdf','fitAdd','kitAdd','kitAll','kitsSave','loadReal','loadDemo','loadParts','backupAll',
-  'toggleReq','toggleLine','billOpt','attTap','toggleUser','clearParts','clearStore','importRun','pinSave',
+  'toggleReq','toggleLine','billOpt','attTap','toggleUser','clearParts','clearStore','importRun','pinSave','idSave',
   'chatSend','chatDel','techSave','kitsReset','soldYes','soldUndo'];
 "use strict";
 
@@ -2879,30 +2884,58 @@ function topbar(){
 /* =====================================================================
    LOGIN
    ===================================================================== */
+/* Staff sign in with an e-mail ID and their PIN. The ID is u.email when the
+   owner has set one in Settings, otherwise first name @ the workshop's domain. */
+function loginDomain(){ var e=String((S.core.workshop&&S.core.workshop.email)||''); return (e.split('@')[1]||'motoreez.com').toLowerCase(); }
+function loginId(u){
+  if(!u) return '';
+  if(u.email) return String(u.email).trim().toLowerCase();
+  var base=function(x){ return String(x.name||'').trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9]/g,'')||x.id; };
+  var mine=base(u), clash=S.core.users.filter(function(x){ return !x.email&&base(x)===mine; });
+  var i=clash.indexOf(u);
+  if(i>0){ var last=String(u.name||'').trim().split(/\s+/).slice(1).join('').toLowerCase().replace(/[^a-z0-9]/g,''); mine+=(last?'.'+last:String(i+1)); }
+  return mine+'@'+loginDomain();
+}
+function userByLogin(id){
+  id=String(id||'').trim().toLowerCase(); if(!id) return null;
+  if(id.indexOf('@')<0) id=id+'@'+loginDomain();          /* "kunal" works too */
+  return S.core.users.filter(function(x){ return x.active!==false&&loginId(x)===id; })[0]||null;
+}
 function viewLogin(){
-  var u=S.pickUser?coreUser(S.pickUser):null;
-  var h='<div class="login">'+
+  var info='<button type="button" class="iconbtn" data-act="loginInfo" title="Who can sign in" aria-label="Who can sign in" '+
+    'style="width:26px;height:26px;min-height:26px;font-size:14px;margin-left:6px;vertical-align:middle">ⓘ</button>';
+  var pre=S.loginEmail!==undefined?S.loginEmail:(S.pickUser&&coreUser(S.pickUser).id?loginId(coreUser(S.pickUser)):'');
+  return '<div class="login">'+
     '<div style="text-align:center;margin-bottom:6px" class="eyebrow">Job card system</div>'+
-    '<h1 style="text-align:center;margin:6px 0">'+logoImg(54,'max-width:100%')+'</h1>'+
-    '<p class="muted" style="text-align:center;margin:8px 0 0">Who is using the app?</p>';
-  h+='<div class="userpick">';
-  S.core.users.filter(function(x){return x.active;}).forEach(function(x){
-    h+='<button data-act="pickUser" data-id="'+x.id+'" aria-pressed="'+(S.pickUser===x.id)+'">'+
-       '<span class="role-pill">'+esc(userTitle(x))+'</span>'+
-       '<span class="nm">'+esc(x.name)+'</span></button>';
-  });
-  h+='</div>';
-  if(u){
-    h+='<div class="eyebrow" style="text-align:center">Enter '+esc(u.name.split(' ')[0])+'\u2019s 4-digit PIN</div>';
-    h+='<div class="pindots">';
-    for(var i=0;i<4;i++) h+='<i class="'+(S.pin.length>i?'on':'')+'"></i>';
-    h+='</div><div class="pinpad">';
-    ['1','2','3','4','5','6','7','8','9'].forEach(function(d){ h+='<button data-act="pin" data-d="'+d+'">'+d+'</button>'; });
-    h+='<button data-act="pinClear">clear</button><button data-act="pin" data-d="0">0</button>'+
-       '<button data-act="pinDel">←</button></div>';
-  }
-  h+='</div>';
-  return h;
+    '<h1 style="text-align:center;margin:6px 0 22px">'+logoImg(54,'max-width:100%')+'</h1>'+
+    '<div class="field"><label style="display:flex;align-items:center">E-mail ID'+info+'</label>'+
+    '<input type="email" id="lg_email" data-nocaps inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" '+
+      'value="'+esc(pre)+'" placeholder="name@'+esc(loginDomain())+'" style="width:100%"></div>'+
+    '<div class="field"><label style="display:flex;align-items:center">PIN'+info+'</label>'+
+    '<input type="password" id="lg_pin" class="mono" inputmode="numeric" maxlength="4" autocomplete="current-password" '+
+      'placeholder="\u2022\u2022\u2022\u2022" style="width:100%;letter-spacing:.3em"></div>'+
+    '<button class="btn primary lg" style="width:100%;margin-top:6px" data-act="loginSubmit">Sign in</button>'+
+    '</div>';
+}
+function loginInfo(){
+  var rows=S.core.users.filter(function(x){ return x.active!==false; }).map(function(x){
+    return '<div style="padding:10px 0;border-top:1px solid var(--line,#e5e7eb)"><b>'+esc(x.name)+'</b> '+
+      '<span class="small muted">\u00B7 '+esc(userTitle(x))+'</span>'+
+      '<div class="mono small" style="word-break:break-all;margin-top:2px">'+esc(loginId(x))+'</div></div>'; }).join('');
+  openModal('<h2>Who can sign in</h2>'+
+    '<p class="small muted" style="margin:6px 0 12px">Use your e-mail ID below and your own 4-digit PIN. '+
+    'Forgot your PIN? Ask Kunal or Jatin — they can set a new one in Settings.</p>'+
+    '<div>'+rows+'</div>'+
+    '<div class="btn-row" style="margin-top:14px"><button class="btn primary" data-act="closeModal">Got it</button></div>');
+}
+function loginSubmit(){
+  var em=(document.getElementById('lg_email')||{}).value||'', pin=((document.getElementById('lg_pin')||{}).value||'').replace(/\D/g,'');
+  S.loginEmail=em.trim();
+  if(!em.trim()||!pin){ toast('Put in your e-mail ID and PIN','bad'); var f=document.getElementById(em.trim()?'lg_pin':'lg_email'); if(f) f.focus(); return; }
+  var u=userByLogin(em);
+  if(!u||u.pin!==pin){ toast('That e-mail ID and PIN don’t match','bad'); var p=document.getElementById('lg_pin'); if(p){ p.value=''; p.focus(); } return; }
+  S.pickUser=u.id; S.pin=pin; S.loginEmail=undefined;
+  return tryLogin();
 }
 async function tryLogin(){
   var u=coreUser(S.pickUser);
@@ -11318,7 +11351,9 @@ function purchDueAt(p){
   return new Date((p.invDate||isoDate())+'T10:00:00').getTime()+d*86400000;
 }
 function dueLabel(dueAt){
-  var days=Math.ceil((dueAt-Date.now())/86400000);
+  /* whole calendar days, so the count doesn't change with the time of day */
+  var a=new Date(dueAt); a.setHours(0,0,0,0); var t=new Date(); t.setHours(0,0,0,0);
+  var days=Math.round((a-t)/86400000);
   if(days>0) return '<span class="due">Due in '+days+' day'+(days===1?'':'s')+'</span>';
   if(days===0) return '<span class="due">Due today</span>';
   return '<span class="due over">Overdue by '+(-days)+' day'+(days===-1?'':'s')+'</span>';
@@ -14627,7 +14662,9 @@ function viewSettings(){
     '<button class="btn primary" data-act="saveWorkshop">Save workshop details</button></div></div>';
   h+='<div class="card"><div class="card-h"><h2>Staff &amp; PINs</h2></div><div class="card-b tight"><table class="lines"><tbody>';
   S.core.users.forEach(function(u){
-    h+='<tr><td><b>'+esc(u.name)+'</b><br><span class="small muted">'+esc(roleDesc(u))+'</span></td>'+
+    h+='<tr><td><b>'+esc(u.name)+'</b><br><span class="small muted">'+esc(roleDesc(u))+'</span>'+
+      '<br><span class="mono small" style="word-break:break-all">'+esc(loginId(u))+'</span> '+
+      '<button class="btn sm" style="min-height:28px;padding:2px 8px" data-act="idModal" data-id="'+u.id+'">Change ID</button></td>'+
       '<td><span class="role-pill">'+esc(userTitle(u))+'</span></td>'+
       '<td class="num"><button class="btn sm" data-act="pinModal" data-id="'+u.id+'">'+
         (DEFAULT_PINS.indexOf(u.pin)>=0?'<span style="color:var(--red)">Set PIN</span>':'Change PIN')+'</button></td>'+
@@ -14903,6 +14940,23 @@ async function pinSave(id){
   if(S.core.users.some(function(x){ return x.id!==id&&x.active!==false&&x.pin===a; })){
     toast('Someone else already uses that PIN','bad'); return; }
   u.pin=a; await saveCore(); closeModal(); rerender(); toast('PIN changed for '+u.name,'good');
+}
+function idModal(id){
+  var u=S.core.users.filter(function(x){ return x.id===id; })[0]; if(!u) return;
+  openModal('<h2>E-mail ID for '+esc(u.name)+'</h2>'+
+    '<p class="small muted" style="margin:6px 0 10px">What '+esc(u.name.split(' ')[0])+' types on the sign-in screen, with their PIN.</p>'+
+    '<div class="field"><label>E-mail ID</label><input type="email" name="lid" data-nocaps autocapitalize="none" value="'+esc(loginId(u))+'"></div>'+
+    '<div class="btn-row"><button class="btn" data-act="closeModal">Cancel</button>'+
+    '<button class="btn primary" data-act="idSave" data-id="'+u.id+'">Save</button></div>');
+}
+async function idSave(id){
+  var u=S.core.users.filter(function(x){ return x.id===id; })[0]; if(!u) return;
+  var v=String(dg('lid')||'').trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){ toast('That doesn’t look like an e-mail ID','bad'); return; }
+  if(S.core.users.some(function(x){ return x.id!==id&&loginId(x)===v; })){ toast('Someone else already has that ID','bad'); return; }
+  /* pin everyone's current ID first, so changing one person never shifts another's */
+  S.core.users.forEach(function(x){ if(!x.email) x.email=loginId(x); });
+  u.email=v; await saveCore(); logAudit('Staff','E-mail ID changed',u.name,v); closeModal(); rerender(); toast('ID changed for '+u.name,'good');
 }
 function addUser(){
   openModal('<h2>Add a staff member</h2>'+
@@ -16184,6 +16238,8 @@ async function dispatch(a,arg,d,t){
     case 'pin': if(S.pin.length<4){ S.pin+=d.d; render(); if(S.pin.length===4) setTimeout(tryLogin,120); } break;
     case 'pinDel': S.pin=S.pin.slice(0,-1); render(); break;
     case 'pinClear': S.pin=''; render(); break;
+    case 'loginInfo': loginInfo(); break;
+    case 'loginSubmit': return loginSubmit();
     case 'logout': if(CHATREC.on) chatRecStop(false); S.user=null; S.pin=''; S.job=null; S.chat=null; NOTIFIED=null; S.q=''; S.pquery=''; S.pq=''; S.chatDraft=''; CHATSEEN={}; document.getElementById('toast').innerHTML=''; render(); break;
     case 'goBoard': if(VOICE.on) voiceStop(); S.view={name:'board'}; S.job=null; window.scrollTo(0,0); render(); break;
     case 'cancelIntake': leaveIntakeModal(); break;
@@ -16412,6 +16468,8 @@ async function dispatch(a,arg,d,t){
     case 'clearStore': closeModal(); return clearStore();
     case 'pinModal': pinModal(d.id); break;
     case 'pinSave': return pinSave(d.id);
+    case 'idModal': idModal(d.id); break;
+    case 'idSave': return idSave(d.id);
     case 'loadParts': return loadPartsCsv();
     case 'clearParts': return clearParts();
     case 'delLine': return delLine(d.line);
@@ -16622,6 +16680,8 @@ function searchRedraw(id){
 }
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'&&MODAL) closeModal();
+  if(e.key==='Enter'&&!S.user&&(e.target.id==='lg_email'||e.target.id==='lg_pin')){
+    e.preventDefault(); if(e.target.id==='lg_email'){ var pp=document.getElementById('lg_pin'); if(pp) pp.focus(); } else loginSubmit(); }
   /* Enter sends on a keyboard; on a phone it is a new line, as people expect */
   if(e.key==='Enter'&&!e.shiftKey&&e.target.id==='chatbox'&&!('ontouchstart' in window)){
     e.preventDefault(); guard('chatSend',null,chatSend); }
