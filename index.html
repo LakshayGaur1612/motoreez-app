@@ -77,6 +77,8 @@
      The (i) icons list everyone's name, role and ID, never PINs (loginInfo). Owner can
      change an ID in Settings > Staff & PINs (idModal / idSave). Due-day counts use
      calendar days (dueLabel).
+     Sign-in screens (viewLogin, viewCloudSignIn) use the motoreez.com look: black, Teko +
+     DM Sans (Google Fonts), red #E81938. All styles are under .mzl and touch nothing else.
 -->
 <html lang="en">
 <head>
@@ -88,6 +90,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Motoreez">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Teko:wght@500;600&display=swap">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -391,6 +395,47 @@ details[open] summary{color:var(--ink)}
 @media (prefers-reduced-motion:reduce){ .veq i{animation:none;height:55%} .reclight{animation:none} }
 
 /* ---------- login ---------- */
+/* ---- sign-in screens only, in the motoreez.com look (black, Teko + DM Sans, red #E81938) ---- */
+.mzl{position:fixed; inset:0; overflow-y:auto; z-index:0; color:#fff; font-family:"DM Sans",system-ui,sans-serif;
+  background:radial-gradient(120% 70% at 85% -10%, rgba(232,25,56,.28), transparent 55%),
+             radial-gradient(90% 60% at -10% 110%, rgba(0,122,204,.16), transparent 60%), #000;
+  display:flex; align-items:center; justify-content:center; padding:32px 16px}
+.mzl::before{content:""; position:fixed; inset:0; pointer-events:none;
+  background:repeating-linear-gradient(115deg, transparent 0 46px, rgba(255,255,255,.022) 46px 47px)}
+.mzl-in{position:relative; width:100%; max-width:400px; margin:auto 0}
+.mzl .logo{display:block; height:44px; max-width:100%}
+.mzl-eyebrow{margin-top:34px; font-size:12px; font-weight:700; letter-spacing:.18em; text-transform:uppercase; color:#E81938}
+.mzl-h{font-family:Teko,"DM Sans",sans-serif; font-weight:600; font-size:56px; line-height:.88; text-transform:uppercase;
+  letter-spacing:.005em; margin:8px 0 10px; color:#fff}
+.mzl-h span{color:#E81938}
+.mzl-sub{color:rgba(255,255,255,.7); font-size:15px; line-height:1.55; margin:0 0 26px; text-transform:none}
+.mzl .field{margin:0 0 18px}
+.mzl .field label{display:flex; align-items:center; gap:8px; margin:0 0 8px; color:rgba(255,255,255,.75);
+  font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase}
+.mzl input{width:100%; box-sizing:border-box; min-height:54px; padding:0 16px; border-radius:4px; text-transform:none;
+  background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.2); color:#fff; font:400 16px "DM Sans",system-ui,sans-serif;
+  outline:none; transition:border-color .15s, box-shadow .15s}
+.mzl input::placeholder{color:rgba(255,255,255,.35); text-transform:none}
+.mzl input:focus{border-color:#E81938; box-shadow:0 0 0 3px rgba(232,25,56,.25)}
+.mzl input:-webkit-autofill{-webkit-box-shadow:0 0 0 100px #141414 inset; -webkit-text-fill-color:#fff; caret-color:#fff}
+.mzl input#lg_pin{letter-spacing:.5em; font-weight:700}
+.mzl-info{width:20px; height:20px; min-height:0; min-width:0; padding:0; border-radius:50%; border:1px solid rgba(255,255,255,.35);
+  background:transparent; color:rgba(255,255,255,.8); font:700 12px/1 "DM Sans",sans-serif; cursor:pointer; display:inline-flex;
+  align-items:center; justify-content:center; text-transform:none; letter-spacing:0; box-shadow:none}
+.mzl-info:hover,.mzl-info:focus-visible{border-color:#E81938; color:#fff; background:#E81938}
+.mzl-btn{width:100%; min-height:58px; margin-top:8px; border:0; border-radius:4px; cursor:pointer;
+  background:#E81938; color:#fff; font:700 15px "DM Sans",system-ui,sans-serif; letter-spacing:.1em; text-transform:uppercase;
+  box-shadow:0 10px 30px -10px rgba(232,25,56,.6); transition:background .15s, transform .05s}
+.mzl-btn:hover{background:#c8122e} .mzl-btn:active{transform:translateY(1px)}
+.mzl-err{background:rgba(232,25,56,.12); border:1px solid rgba(232,25,56,.5); border-radius:4px; padding:10px 12px;
+  font-size:14px; margin:0 0 18px; color:#fff}
+.mzl .mzl-h, .mzl .field label, .mzl .mzl-eyebrow, .mzl .mzl-btn{text-transform:uppercase !important}
+.mzl .mzl-h{letter-spacing:.005em !important} .mzl .mzl-eyebrow{letter-spacing:.18em !important}
+.mzl .field label{letter-spacing:.14em !important} .mzl .mzl-btn{letter-spacing:.1em !important}
+.mzl input, .mzl input:focus{background:rgba(255,255,255,.05) !important; color:#fff !important}
+.mzl input:focus{border-color:#E81938 !important; box-shadow:0 0 0 3px rgba(232,25,56,.25) !important}
+.mzl-foot{margin-top:30px; padding-top:18px; border-top:1px solid rgba(255,255,255,.1); color:rgba(255,255,255,.45);
+  font-size:13px; line-height:1.5; text-transform:none}
 .login{max-width:420px; margin:0 auto; padding:28px 16px 60px}
 .userpick{display:grid; gap:10px; margin:18px 0}
 .userpick button{display:flex; align-items:center; gap:12px; min-height:64px; padding:10px 14px;
@@ -1784,18 +1829,16 @@ async function loadCounters(){
 
 /* ---------- the screen before the PIN ---------- */
 function viewCloudSignIn(){
-  var err=S.cloudErr?'<div class="banner small" style="background:var(--red-bg);border-color:var(--red-rim);border-left-color:var(--red)">'+
-    esc(S.cloudErr)+'</div>':'';
-  return '<div class="login">'+
-    '<div style="text-align:center;margin-bottom:6px" class="eyebrow">Job card system</div>'+
-    '<h1 style="font-size:38px;text-align:center;letter-spacing:-.04em">MOTO<span style="background:var(--hivis);padding:0 6px">REEZ</span></h1>'+
-    '<p class="muted" style="text-align:center;margin:8px 0 18px">Connect this phone to the workshop. This is done once per device — '+
-    'after that, staff only need their PIN.</p>'+err+
-    '<div class="field"><label>Workshop e-mail</label><input type="text" id="cl_email" inputmode="email" autocomplete="username" '+
+  var err=S.cloudErr?'<div class="mzl-err">'+esc(S.cloudErr)+'</div>':'';
+  return '<div class="mzl"><div class="mzl-in">'+logoImg(44)+
+    '<div class="mzl-eyebrow">Job card system</div>'+
+    '<h1 class="mzl-h">Connect <span>this device</span></h1>'+
+    '<p class="mzl-sub">Done once per phone. After this, staff only need their e-mail ID and PIN.</p>'+err+
+    '<div class="field"><label for="cl_email">Workshop e-mail</label><input type="text" id="cl_email" data-nocaps inputmode="email" autocomplete="username" autocapitalize="none" '+
     'value="'+esc((Cloud.session&&Cloud.session.email)||S.cloudEmail||'')+'"></div>'+
-    '<div class="field"><label>Workshop password</label><input type="password" id="cl_pw" autocomplete="current-password"></div>'+
-    '<button class="btn primary lg" data-act="cloudSignIn">Connect this device</button>'+
-    '<p class="hint" style="text-align:center;margin-top:14px">Ask the owner for these. They are not a staff PIN.</p></div>';
+    '<div class="field"><label for="cl_pw">Workshop password</label><input type="password" id="cl_pw" autocomplete="current-password"></div>'+
+    '<button class="mzl-btn" data-act="cloudSignIn">Connect this device</button>'+
+    '<div class="mzl-foot">Ask the owner for these. They are not a staff PIN.</div></div></div>';
 }
 function viewBootError(){
   return '<div class="login"><h1 style="font-size:28px">Can’t reach the workshop server</h1>'+
@@ -2902,20 +2945,20 @@ function userByLogin(id){
   return S.core.users.filter(function(x){ return x.active!==false&&loginId(x)===id; })[0]||null;
 }
 function viewLogin(){
-  var info='<button type="button" class="iconbtn" data-act="loginInfo" title="Who can sign in" aria-label="Who can sign in" '+
-    'style="width:26px;height:26px;min-height:26px;font-size:14px;margin-left:6px;vertical-align:middle">ⓘ</button>';
+  var info='<button type="button" class="mzl-info" data-act="loginInfo" title="Who can sign in" aria-label="Who can sign in">i</button>';
   var pre=S.loginEmail!==undefined?S.loginEmail:(S.pickUser&&coreUser(S.pickUser).id?loginId(coreUser(S.pickUser)):'');
-  return '<div class="login">'+
-    '<div style="text-align:center;margin-bottom:6px" class="eyebrow">Job card system</div>'+
-    '<h1 style="text-align:center;margin:6px 0 22px">'+logoImg(54,'max-width:100%')+'</h1>'+
-    '<div class="field"><label style="display:flex;align-items:center">E-mail ID'+info+'</label>'+
+  return '<div class="mzl"><div class="mzl-in">'+logoImg(44)+
+    '<div class="mzl-eyebrow">Job card system</div>'+
+    '<h1 class="mzl-h">Staff <span>sign in</span></h1>'+
+    '<p class="mzl-sub">Welcome to the home of Motoreez. Use your e-mail ID and 4-digit PIN.</p>'+
+    '<div class="field"><label for="lg_email">E-mail ID'+info+'</label>'+
     '<input type="email" id="lg_email" data-nocaps inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" '+
-      'value="'+esc(pre)+'" placeholder="name@'+esc(loginDomain())+'" style="width:100%"></div>'+
-    '<div class="field"><label style="display:flex;align-items:center">PIN'+info+'</label>'+
-    '<input type="password" id="lg_pin" class="mono" inputmode="numeric" maxlength="4" autocomplete="current-password" '+
-      'placeholder="\u2022\u2022\u2022\u2022" style="width:100%;letter-spacing:.3em"></div>'+
-    '<button class="btn primary lg" style="width:100%;margin-top:6px" data-act="loginSubmit">Sign in</button>'+
-    '</div>';
+      'value="'+esc(pre)+'" placeholder="name@'+esc(loginDomain())+'"></div>'+
+    '<div class="field"><label for="lg_pin">PIN'+info+'</label>'+
+    '<input type="password" id="lg_pin" inputmode="numeric" maxlength="4" autocomplete="current-password" placeholder="••••"></div>'+
+    '<button class="mzl-btn" data-act="loginSubmit">Sign in</button>'+
+    '<div class="mzl-foot">'+esc((S.core.workshop&&S.core.workshop.tagline)||'Premium Motorcycle Workshop')+' · Gurugram</div>'+
+    '</div></div>';
 }
 function loginInfo(){
   var rows=S.core.users.filter(function(x){ return x.active!==false; }).map(function(x){
