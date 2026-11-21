@@ -106,6 +106,11 @@
      Everyone else keeps the current app. Once the change is approved, remove the
      preview() check and the PREVIEWS line so everyone gets it. The developer can tap
      the Preview pill to see the app as everyone else does (kept on that phone only).
+     On trial now: preview('v2'), the "PREVIEW V2" block. motoreez.com look (light/dark,
+     WCAG AAA), Home dashboard (8-stage month pipeline, delivery calendar, technicians),
+     Jobs board by technician or stage, Money hub, nav Home/Jobs/Store/Money/Me, and a
+     stepped job card journey: draft (plate, bike, customer) -> inspection (6 photos +
+     dents, reading, reason, plan). Styles live under html.v2 only.
 -->
 <html lang="en">
 <head>
@@ -436,6 +441,200 @@ details[open] summary{color:var(--ink)}
 .devpill{position:fixed; left:10px; bottom:calc(env(safe-area-inset-bottom,0px) + 86px); z-index:60; border:0; border-radius:999px;
   padding:6px 12px; font:700 12px system-ui,sans-serif; background:#7c3aed; color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.25); cursor:pointer}
 .devpill.off{background:#475569}
+/* ---- PREVIEW V2: developer login only (html.v2). motoreez.com branding,
+   light and dark, every text pair at WCAG AAA (7:1), 44px targets. ---- */
+:root.v2{
+  --canvas:#F4F4F5; --surface:#FFFFFF; --surface-2:#ECECEE; --ink:#0A0A0B; --ink2:#3A3A40; --steel:#4A4A52; --onink:#FFFFFF;
+  --rule:#D9D9DE; --rule2:#E7E7EA;
+  --solid:#A30D26; --solid-d:#8A0A20; --brand:#A30D26; --brand-d:#8A0A20; --brand-lt:#FBE9EC; --brand-rim:#F0B9C2;
+  --red:#A30D26; --v2red:#A30D26; --v2redtxt:#A30D26; --focus:#0A0A0B;
+  --v2hero:#000; --v2herotxt:#FFFFFF; --v2herosub:#D4D4D8;
+  --r:16px; --r-sm:12px; --r-lg:22px;
+}
+:root.v2[data-theme="dark"]{
+  --canvas:#000000; --surface:#111113; --surface-2:#1B1B1F; --ink:#FFFFFF; --ink2:#D4D4D8; --steel:#A8A8B0; --onink:#FFFFFF;
+  --rule:#2A2A30; --rule2:#202025;
+  --solid:#A30D26; --solid-d:#8A0A20; --brand:#FF8A99; --brand-d:#FF8A99; --brand-lt:#2A0E14; --brand-rim:#5A1A26;
+  --v2redtxt:#FF8A99; --focus:#FFFFFF; --v2hero:#0B0B0D;
+}
+:root.v2 body{font-family:"DM Sans",system-ui,-apple-system,sans-serif; background:var(--canvas); color:var(--ink)}
+:root.v2 h1,:root.v2 h2.v2h2,:root.v2 .v2h1{font-family:Teko,"DM Sans",sans-serif; font-weight:600; letter-spacing:.01em !important; text-transform:uppercase !important}
+:root.v2 :focus-visible{outline:3px solid var(--focus) !important; outline-offset:2px}
+:root.v2 button,:root.v2 .btn,:root.v2 input,:root.v2 select,:root.v2 textarea{min-height:44px}
+:root.v2[data-theme="dark"] .btn.primary{color:#fff}
+@media (prefers-reduced-motion:reduce){ :root.v2 *{transition:none !important; animation:none !important; scroll-behavior:auto !important} }
+
+.v2{max-width:1080px; margin:0 auto; padding:8px 0 120px}
+.v2sr{position:absolute !important; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+.v2eyebrow{margin:0; font-size:13px; font-weight:700; letter-spacing:.14em !important; text-transform:uppercase !important; color:var(--v2redtxt)}
+.v2hello{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin:12px 0 16px}
+.v2h1{font-size:40px; line-height:.95; margin:4px 0 0; color:var(--ink)}
+.v2h2{font-size:26px; line-height:1; margin:0; color:var(--ink)}
+.v2muted{color:var(--steel); font-size:14px}
+.v2empty{color:var(--steel); font-size:15px; margin:8px 0}
+.v2empty.sm{font-size:14px; padding:8px 4px}
+.v2warn{color:var(--v2redtxt); font-weight:700}
+.v2link{background:none; border:0; color:var(--ink); font:700 15px "DM Sans",sans-serif; text-decoration:underline; text-underline-offset:3px; cursor:pointer; padding:0 4px}
+
+/* buttons */
+.v2btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:52px; padding:0 22px; border-radius:999px; border:2px solid transparent;
+  font:700 16px "DM Sans",sans-serif; cursor:pointer; text-transform:none; letter-spacing:0; transition:transform .06s, background .15s}
+.v2btn:active{transform:translateY(1px)}
+.v2btn-primary{background:var(--v2red); color:#fff; box-shadow:0 10px 26px -12px rgba(163,13,38,.8)}
+.v2btn-primary:hover{background:#8A0A20}
+.v2btn-ghost{background:var(--surface); color:var(--ink); border-color:var(--rule)}
+.v2btn-sm{min-height:44px; padding:0 16px; font-size:15px}
+.v2btn-xl{min-height:64px; font-size:18px; width:100%}
+.v2icon{width:48px; height:48px; border-radius:50%; border:2px solid var(--rule); background:var(--surface); color:var(--ink); font:700 22px/1 "DM Sans",sans-serif; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto}
+.v2stack{display:flex; flex-direction:column; gap:10px; margin-top:14px}
+.v2stack .v2btn{width:100%}
+
+/* hero: the motoreez.com look in both modes */
+.v2hero{position:relative; overflow:hidden; border-radius:var(--r-lg); padding:22px 20px 20px; color:var(--v2herotxt);
+  background:radial-gradient(120% 90% at 100% 0%, rgba(232,25,56,.42), transparent 55%), radial-gradient(80% 80% at 0% 120%, rgba(0,122,204,.22), transparent 60%), var(--v2hero)}
+.v2hero::before{content:""; position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(115deg, transparent 0 40px, rgba(255,255,255,.03) 40px 41px)}
+.v2hero > *{position:relative}
+.v2hero-eb{color:#FF8A99}
+.v2hero-n{font:600 84px/0.85 Teko,sans-serif; margin:10px 0 2px; color:#fff}
+.v2hero-sub{margin:0 0 18px; color:var(--v2herosub); font-size:16px}
+.v2hero-btns{display:flex; gap:10px; flex-wrap:wrap}
+.v2hero-btns .v2btn{flex:1 1 150px}
+.v2hero .v2btn-ghost{background:rgba(255,255,255,.08); color:#fff; border-color:rgba(255,255,255,.45)}
+
+.v2sec{margin-top:28px}
+.v2sec-h{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px}
+
+/* pipeline: 8 stages */
+.v2pipe{list-style:none; margin:0; padding:2px 2px 6px; display:grid; grid-auto-flow:column; grid-auto-columns:minmax(104px,1fr); gap:8px; overflow-x:auto; scroll-snap-type:x mandatory}
+.v2pipe li{scroll-snap-align:start}
+.v2pipe-i{width:100%; min-height:88px; text-align:left; padding:12px; border-radius:var(--r); background:var(--surface); border:2px solid var(--rule); color:var(--ink); cursor:pointer; display:flex; flex-direction:column; justify-content:space-between}
+.v2pipe-i.zero .v2pipe-n{color:var(--steel)}
+.v2pipe-n{font:600 38px/0.9 Teko,sans-serif}
+.v2pipe-l{font-size:14px; font-weight:700; color:var(--ink2)}
+
+/* stage pills: text carries the meaning, colour only helps */
+.v2pill{display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:13px; font-weight:700; background:var(--surface-2); color:var(--ink); white-space:nowrap}
+.v2pill::before{content:""; width:8px; height:8px; border-radius:50%; background:var(--steel)}
+.v2s-draft::before{background:#71717A} .v2s-inspected::before{background:#2563EB} .v2s-estimate::before{background:#D97706}
+.v2s-approved::before{background:#7C3AED} .v2s-service::before{background:#0EA5E9} .v2s-washing::before{background:#06B6D4}
+.v2s-ready::before{background:#16A34A} .v2s-invoiced::before{background:#E81938}
+
+/* job cards */
+.v2grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px}
+.v2card{display:flex; flex-direction:column; gap:6px; width:100%; text-align:left; padding:14px; border-radius:var(--r); background:var(--surface); border:2px solid var(--rule);
+  color:var(--ink); cursor:pointer; font:inherit; min-height:44px; margin:0 0 8px}
+.v2grid .v2card{margin:0}
+.v2card:hover{border-color:var(--ink2)}
+.v2card-top{display:flex; justify-content:space-between; align-items:center; gap:8px}
+.v2plate{font:700 15px var(--mono,monospace); letter-spacing:.06em; padding:3px 8px; border-radius:6px; background:#FFC933; color:#0A0A0B; border:1px solid #0A0A0B}
+.v2card-bike{font-weight:700; font-size:17px}
+.v2card-meta{font-size:14px; color:var(--ink2)}
+.v2card-foot{display:flex; justify-content:space-between; gap:8px; font-size:14px; color:var(--ink2); border-top:1px dashed var(--rule); padding-top:8px; margin-top:2px}
+
+/* technicians strip */
+.v2techs{display:grid; grid-auto-flow:column; grid-auto-columns:minmax(150px,1fr); gap:8px; overflow-x:auto; padding-bottom:6px}
+.v2tech{display:grid; grid-template-columns:40px 1fr; grid-template-rows:auto auto; column-gap:10px; align-items:center; text-align:left; padding:12px; border-radius:var(--r);
+  background:var(--surface); border:2px solid var(--rule); color:var(--ink); cursor:pointer; font:inherit}
+.v2tech-av{grid-row:1/3; width:40px; height:40px; border-radius:50%; background:var(--ink); color:var(--canvas); display:flex; align-items:center; justify-content:center; font:600 22px Teko,sans-serif}
+.v2tech-n{font-weight:700} .v2tech-c{font-size:13px; color:var(--ink2)}
+
+/* segmented control, chips, search */
+.v2seg{display:inline-flex; background:var(--surface-2); border-radius:999px; padding:4px; gap:4px}
+.v2seg button{min-height:40px; padding:0 14px; border:0; border-radius:999px; background:transparent; color:var(--ink); font:700 14px "DM Sans",sans-serif; cursor:pointer}
+.v2seg button[aria-pressed="true"]{background:var(--ink); color:var(--canvas)}
+.v2seg-full{display:flex; width:100%} .v2seg-full button{flex:1; min-height:48px; font-size:16px}
+.v2chip{display:inline-flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:2px; min-height:48px; padding:8px 16px; border-radius:14px; border:2px solid var(--rule);
+  background:var(--surface); color:var(--ink); font:700 15px "DM Sans",sans-serif; cursor:pointer; text-align:left}
+.v2chip small{font-weight:500; font-size:13px; color:var(--ink2)}
+.v2chip.on,.v2chip[aria-pressed="true"]{border-color:var(--ink); background:var(--ink); color:var(--canvas)}
+.v2chip.on small,.v2chip[aria-pressed="true"] small{color:var(--canvas)}
+.v2bar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:12px 0}
+.v2search{display:block}
+.v2search input{width:100%; box-sizing:border-box; min-height:52px; border-radius:999px; border:2px solid var(--rule); background:var(--surface); color:var(--ink); padding:0 20px; font:16px "DM Sans",sans-serif}
+
+/* calendar */
+.v2cal{background:var(--surface); border:2px solid var(--rule); border-radius:var(--r-lg); padding:12px}
+.v2cal-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px}
+.v2cal-t{font-weight:700; font-size:16px}
+.v2cal-g{display:grid; grid-template-columns:repeat(7,1fr); gap:4px}
+.v2cal-wd{text-align:center; font-size:13px; font-weight:700; color:var(--steel); padding:2px 0}
+.v2cal-d{position:relative; min-height:52px; border-radius:12px; border:2px solid transparent; background:var(--surface-2); color:var(--ink); font:700 16px "DM Sans",sans-serif; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:0}
+.v2cal-g.m .v2cal-d{min-height:44px; font-size:15px}
+.v2cal-d.off{background:transparent; color:var(--steel); text-decoration:line-through}
+.v2cal-d.today{border-color:var(--ink)}
+.v2cal-d.sel{background:var(--ink); color:var(--canvas)}
+.v2cal-dot{min-width:20px; padding:0 5px; border-radius:999px; background:var(--v2red); color:#fff; font-size:12px; line-height:18px}
+.v2cal-list{margin-top:12px; border-top:1px solid var(--rule); padding-top:10px}
+.v2cal-lt{margin:0 0 8px; font-weight:700; color:var(--ink2)}
+
+/* board by technician / stage */
+.v2kan{display:grid; align-items:start; grid-auto-flow:column; grid-auto-columns:minmax(272px,86vw); gap:12px; overflow-x:auto; padding-bottom:12px; scroll-snap-type:x mandatory}
+@media (min-width:900px){ .v2kan{grid-auto-columns:minmax(272px,1fr)} }
+.v2col{scroll-snap-align:start; background:var(--surface-2); border-radius:var(--r-lg); padding:10px}
+.v2col-h{display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:4px 4px 10px}
+.v2col-h b{font-size:17px}
+.v2count{min-width:28px; height:28px; border-radius:999px; background:var(--ink); color:var(--canvas); display:inline-flex; align-items:center; justify-content:center; font-weight:700; font-size:14px}
+.v2col-s{grid-column:1/3; font-size:13px; color:var(--ink2)}
+
+/* money hub */
+.v2tiles{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px}
+.v2tile{display:flex; flex-direction:column; gap:4px; text-align:left; padding:18px; min-height:96px; border-radius:var(--r); background:var(--surface); border:2px solid var(--rule); color:var(--ink); cursor:pointer; font:inherit}
+.v2tile b{font:600 24px/1 Teko,sans-serif; text-transform:uppercase; letter-spacing:.01em} .v2tile span{color:var(--ink2); font-size:14px}
+
+/* the stepped job card journey */
+.w2{max-width:620px}
+.w2prog{display:flex; gap:6px; margin:0 0 14px}
+.w2dot{flex:1; height:6px; border-radius:999px; background:var(--rule)}
+.w2dot.done{background:var(--ink)} .w2dot.cur{background:var(--v2red)}
+.w2sum{margin:0 0 14px; padding:10px 14px; background:var(--surface); border:2px solid var(--rule); border-radius:var(--r)}
+.w2row{display:grid; grid-template-columns:auto 1fr auto; align-items:baseline; gap:10px; padding:6px 0; border-bottom:1px dashed var(--rule)}
+.w2row:last-child{border-bottom:0}
+.w2row dt{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--steel); white-space:nowrap}
+.w2row dd{margin:0; text-align:right; font-weight:700; font-size:15px; overflow:hidden; text-overflow:ellipsis}
+.w2edit{min-height:36px !important; padding:0 10px; border-radius:999px; border:1px solid var(--rule); background:transparent; color:var(--ink); font:700 13px "DM Sans",sans-serif; cursor:pointer}
+.w2stage{min-height:52vh; background:var(--surface); border:2px solid var(--rule); border-radius:var(--r-lg); padding:20px 18px; display:flex; flex-direction:column; gap:14px}
+.w2q{font:600 34px/0.95 Teko,sans-serif; text-transform:uppercase; margin:0; color:var(--ink)}
+.w2sub{margin:-6px 0 0; color:var(--ink2); font-size:15px; line-height:1.5}
+.w2hint{margin:-6px 0 0; color:var(--ink2); font-size:14px}
+.w2f{display:flex; flex-direction:column; gap:8px; border:0; padding:0; margin:0}
+.w2l{font-size:13px; font-weight:700; letter-spacing:.12em; text-transform:uppercase !important; color:var(--ink2); padding:0}
+.w2f input,.w2f select,.w2f textarea{width:100%; box-sizing:border-box; min-height:56px; border-radius:14px; border:2px solid var(--rule); background:var(--canvas); color:var(--ink);
+  padding:0 16px; font:500 18px "DM Sans",sans-serif; text-transform:none !important}
+.w2f textarea{padding:14px 16px; min-height:96px; resize:vertical}
+.w2f input:focus,.w2f select:focus,.w2f textarea:focus{border-color:var(--ink)}
+.w2plate{font:700 26px var(--mono,monospace) !important; letter-spacing:.12em; text-transform:uppercase !important; background:#FFC933 !important; color:#0A0A0B !important; border-color:#0A0A0B !important; text-align:center}
+.w2big{font:600 40px Teko,sans-serif !important; letter-spacing:.04em}
+.w2date{flex:1 1 150px; min-height:48px; border-radius:14px; border:2px solid var(--rule); background:var(--canvas); color:var(--ink); padding:0 12px; font:600 15px "DM Sans",sans-serif}
+.w2chips{display:flex; flex-wrap:wrap; gap:8px}
+.w2known{display:flex; flex-direction:column; gap:2px; padding:12px 14px; border-radius:14px; background:var(--brand-lt); border:2px solid var(--brand-rim); color:var(--ink)}
+.w2foot{position:sticky; bottom:calc(env(safe-area-inset-bottom,0px) + 76px); display:flex; gap:10px; margin-top:14px; padding:10px 0; background:linear-gradient(transparent,var(--canvas) 30%)}
+.w2foot .w2next{flex:1}
+.i2shots{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+.i2shot{position:relative; aspect-ratio:4/3; border-radius:12px; border:2px dashed var(--rule); background:var(--canvas); overflow:hidden; display:flex; align-items:flex-end}
+.i2shot.got{border-style:solid; border-color:var(--ink)}
+.i2shot img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.i2shot-i{position:absolute; top:8px; right:8px; width:26px; height:26px; border-radius:50%; background:var(--ink); color:var(--canvas); display:flex; align-items:center; justify-content:center; font-weight:700}
+.i2shot:not(.got) .i2shot-i{background:transparent}
+.i2shot-l{position:relative; width:100%; padding:4px 6px; font-size:12px; font-weight:700; background:var(--surface); color:var(--ink)}
+.v2modal .v2h1{font-size:34px}
+
+:root.v2 .navfab{display:none !important}
+:root.v2 .w2q,:root.v2 .v2tile b,:root.v2 .v2h2,:root.v2 .v2h1{text-transform:uppercase !important; letter-spacing:.01em !important}
+:root.v2 .w2l,:root.v2 .w2row dt,:root.v2 .v2eyebrow{text-transform:uppercase !important}
+.v2hero-btns .v2btn{flex:1 1 auto; white-space:nowrap; padding:0 18px}
+/* the job card's place in 8 stages */
+.v2steps{margin:14px 0 6px; background:var(--surface); border:2px solid var(--rule); border-radius:var(--r-lg); padding:12px}
+.v2steps ol{list-style:none; margin:0 0 4px; padding:0; display:grid; grid-auto-flow:column; grid-auto-columns:minmax(74px,1fr); gap:4px; overflow-x:auto}
+.v2steps li{display:flex; flex-direction:column; align-items:center; gap:4px; text-align:center; position:relative; padding:4px 0}
+.v2steps-d{width:30px; height:30px; border-radius:50%; border:2px solid var(--rule); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; background:var(--surface); color:var(--steel)}
+.v2steps li.done .v2steps-d{background:var(--ink); color:var(--canvas); border-color:var(--ink)}
+.v2steps li.cur .v2steps-d{background:var(--v2red); color:#fff; border-color:var(--v2red)}
+.v2steps-l{font-size:12px; font-weight:700; color:var(--ink2); line-height:1.2}
+.v2steps li.cur .v2steps-l{color:var(--ink)}
+.v2steps .v2btn{width:100%; margin-top:8px}
+
 /* ---- sign-in screens only, in the motoreez.com look (black, Teko + DM Sans, red #E81938) ---- */
 .mzl{position:fixed; inset:0; overflow-y:auto; z-index:0; color:#fff; font-family:"DM Sans",system-ui,sans-serif;
   background:radial-gradient(120% 70% at 85% -10%, rgba(232,25,56,.28), transparent 55%),
@@ -2709,14 +2908,15 @@ function viewAllowed(n){ var p=VIEW_PERM[n]; return !p||can(p); }
 
 function render(){
   var app=document.getElementById('app');
+  document.documentElement.classList.toggle('v2', !!(S.user&&v2On()));
   if(MODE==='cloud'&&!Cloud.session){ app.innerHTML=viewCloudSignIn(); return; }
   if(S.bootErr){ app.innerHTML=viewBootError(); return; }
   if(!S.core){ app.innerHTML='<div class="login"><h1>Motoreez</h1><p class="muted">Starting up…</p></div>'; return; }
   if(!S.user){ app.innerHTML=viewLogin(); return; }
   if(!viewAllowed(S.view.name)){ S.view={name:'board'}; S.job=null; }
   chatLeaving();
-  var body='';
-  switch(S.view.name){
+  var body='', v2b=v2On()?v2Route(S.view.name):null;
+  if(v2b!==null) body=v2b; else switch(S.view.name){
     case 'board':    body=viewBoard(); break;
     case 'floor':    body=viewFloor(); break;
     case 'workshop': body=viewWorkshop(); break;
@@ -2767,6 +2967,7 @@ function render(){
    Preview pill to see the app as everyone else does (kept on that phone). */
 var PREVIEWS={
   /* 'name': 'what it changes', one line per change on trial */
+  v2:'new look, dashboard, job card journey and navigation'
 };
 function isDev(){ return !!(S.user&&(S.user.id==='u_dev'||(S.user.roles||[]).indexOf('developer')>=0)); }
 function previewOff(){ try{ return localStorage.getItem('mtrz_dev_preview_off')==='1'; }catch(e){ return false; } }
@@ -2782,6 +2983,530 @@ function devPreviewToggle(){
   var n=Object.keys(PREVIEWS);
   rerender(); toast(previewOff()?'Now seeing the app as everyone else does':'Preview on'+(n.length?': '+n.map(function(k){ return PREVIEWS[k]; }).join(', '):' — nothing on trial yet'));
 }
+/* =====================================================================
+   PREVIEW V2 (developer login only, behind preview('v2'))
+   A calmer app: motoreez.com branding (dark + light), a dashboard with the
+   month's pipeline, a delivery calendar and a board by technician, and a
+   job card journey that asks for two to four things at a time. Answered
+   steps fold up into a compact, invoice-like summary so the screen stays
+   free for the next question. Nothing here runs for anyone else.
+   ===================================================================== */
+var V2_STAGES=[
+  {k:'draft',     n:'Draft',          d:'Created, inspection not done'},
+  {k:'inspected', n:'Inspected',      d:'Walk-round and reading in'},
+  {k:'estimate',  n:'Estimate sent',  d:'Waiting for the customer'},
+  {k:'approved',  n:'Approved',       d:'Customer said yes'},
+  {k:'service',   n:'In service',     d:'Technician working'},
+  {k:'washing',   n:'Washing',        d:'In the wash bay'},
+  {k:'ready',     n:'Ready',          d:'Ready for delivery'},
+  {k:'invoiced',  n:'Invoiced',       d:'Bill made'}
+];
+function v2On(){ return preview('v2'); }
+function v2StageOf(e){
+  var s=e.stage;
+  if(s==='billed'||s==='closed') return 'invoiced';
+  if(s==='work_done'){ var w=(e.fin||[]).filter(function(t){ return t.k==='wash'&&!t.done; }).length; return w?'washing':'ready'; }
+  if(s==='in_progress') return 'service';
+  if(s==='customer_ok') return 'approved';
+  if(s==='owner_ok') return 'estimate';
+  return (e.media&&(e.odo||e.meterBad))?'inspected':'draft';
+}
+function v2StageName(k){ var s=V2_STAGES.filter(function(x){ return x.k===k; })[0]; return s?s.n:k; }
+function v2Jobs(){ return (S.index||[]).filter(function(e){ return !e.direct&&!e.imported; }); }
+function v2Open(){ return v2Jobs().filter(function(e){ return e.stage!=='billed'&&e.stage!=='closed'; }); }
+function v2Month(){ var d=new Date(), m0=new Date(d.getFullYear(),d.getMonth(),1).getTime(); return v2Jobs().filter(function(e){ return (e.createdAt||0)>=m0; }); }
+function v2Pill(k){ return '<span class="v2pill v2s-'+k+'">'+esc(v2StageName(k))+'</span>'; }
+function v2Greet(){ var h=new Date().getHours(); return h<12?'Good morning':h<17?'Good afternoon':'Good evening'; }
+function v2Due(e){
+  if(!e.expected) return '';
+  var t=isoDate(Date.now()), tm=isoDate(Date.now()+86400000);
+  if(e.expected===t) return 'Due today'; if(e.expected===tm) return 'Due tomorrow';
+  if(e.expected<t) return 'Overdue';
+  return 'Due '+new Date(e.expected+'T10:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+}
+function v2Card(e,opts){
+  opts=opts||{};
+  var tech=e.mechanicId?coreUser(e.mechanicId).name:'Not assigned', due=v2Due(e);
+  return '<button type="button" class="v2card" data-act="openJob" data-id="'+esc(e.id)+'">'+
+    '<span class="v2card-top"><span class="v2plate">'+esc(regShow(e.reg))+'</span>'+(opts.noStage?'':v2Pill(v2StageOf(e)))+'</span>'+
+    '<span class="v2card-bike">'+esc(bikeName(e.make,e.model,e.gen))+'</span>'+
+    '<span class="v2card-meta">'+esc(e.no||'')+' · '+esc(e.name||'')+'</span>'+
+    '<span class="v2card-foot"><span>'+esc(opts.noTech?(e.jobType?titleCase(e.jobType):''):tech)+'</span>'+
+      (due?'<span class="'+(due==='Overdue'?'v2warn':'')+'">'+esc(due)+'</span>':'')+'</span>'+
+  '</button>';
+}
+
+/* ---------- HOME ---------- */
+function v2Home(){
+  var open=v2Open(), month=v2Month(), cnt={};
+  V2_STAGES.forEach(function(s){ cnt[s.k]=0; });
+  month.forEach(function(e){ cnt[v2StageOf(e)]++; });
+  var toBill=open.reduce(function(a,e){ return a+(+e.approved||0); },0);
+  var first=String(S.user.name||'').split(' ')[0];
+  var h='<section class="v2">'+
+    '<header class="v2hello"><div><p class="v2eyebrow">'+esc(new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}))+'</p>'+
+    '<h1 class="v2h1">'+esc(v2Greet())+', '+esc(first)+'</h1></div></header>'+
+    '<div class="v2hero">'+
+      '<p class="v2eyebrow v2hero-eb">Open job cards</p>'+
+      '<p class="v2hero-n">'+open.length+'</p>'+
+      '<p class="v2hero-sub">'+(toBill?money(toBill)+' approved, not yet invoiced':'Nothing approved waiting for a bill')+'</p>'+
+      '<div class="v2hero-btns">'+
+        '<button type="button" class="v2btn v2btn-primary" data-act="newJob">+ New job card</button>'+
+        '<button type="button" class="v2btn v2btn-ghost" data-act="w2" data-op="jobs">All job cards</button>'+
+      '</div></div>';
+  /* the month's pipeline */
+  h+='<section class="v2sec" aria-labelledby="v2pipe"><div class="v2sec-h"><h2 id="v2pipe" class="v2h2">This month</h2>'+
+     '<span class="v2muted">'+month.length+' job card'+(month.length===1?'':'s')+'</span></div>'+
+     '<ol class="v2pipe">'+V2_STAGES.map(function(s,i){
+       return '<li><button type="button" class="v2pipe-i'+(cnt[s.k]?'':' zero')+'" data-act="w2" data-op="stage" data-k="'+s.k+'" aria-label="'+esc(s.n+': '+cnt[s.k])+'">'+
+         '<span class="v2pipe-n">'+cnt[s.k]+'</span><span class="v2pipe-l">'+esc(s.n)+'</span></button></li>'; }).join('')+'</ol></section>';
+  h+=v2Calendar();
+  /* open, not invoiced */
+  var list=open.slice().sort(function(a,b){ return (a.expected||'9')<(b.expected||'9')?-1:(a.expected||'9')>(b.expected||'9')?1:(b.createdAt-a.createdAt); });
+  h+='<section class="v2sec" aria-labelledby="v2openh"><div class="v2sec-h"><h2 id="v2openh" class="v2h2">Open, not invoiced</h2>'+
+     (list.length>6?'<button type="button" class="v2link" data-act="w2" data-op="jobs">See all '+list.length+'</button>':'')+'</div>'+
+     (list.length?'<div class="v2grid">'+list.slice(0,6).map(function(e){ return v2Card(e); }).join('')+'</div>'
+       :'<p class="v2empty">No open job cards. Tap New job card when a bike comes in.</p>')+'</section>';
+  h+='<section class="v2sec"><div class="v2sec-h"><h2 class="v2h2">By technician</h2>'+
+     '<button type="button" class="v2link" data-act="w2" data-op="jobs" data-k="tech">Open the board</button></div>'+
+     v2TechStrip(open)+'</section>';
+  return h+'</section>';
+}
+function v2TechStrip(open){
+  var cols=mechanics().map(function(m){ return {id:m.id,n:m.name,c:open.filter(function(e){ return e.mechanicId===m.id; }).length}; });
+  var un=open.filter(function(e){ return !e.mechanicId; }).length;
+  return '<div class="v2techs">'+cols.map(function(c){
+    return '<button type="button" class="v2tech" data-act="w2" data-op="jobs" data-k="tech">'+
+      '<span class="v2tech-av" aria-hidden="true">'+esc(c.n.charAt(0))+'</span><span class="v2tech-n">'+esc(c.n.split(' ')[0])+'</span>'+
+      '<span class="v2tech-c">'+c.c+' open · '+esc(busyText(c.id))+'</span></button>'; }).join('')+
+    (un?'<button type="button" class="v2tech v2tech-un" data-act="w2" data-op="jobs" data-k="tech"><span class="v2tech-av" aria-hidden="true">?</span>'+
+      '<span class="v2tech-n">Not assigned</span><span class="v2tech-c">'+un+' waiting</span></button>':'')+'</div>';
+}
+/* ---------- calendar of deliveries ---------- */
+function v2Calendar(){
+  var C=S.v2cal=S.v2cal||{mode:'week',day:isoDate(Date.now())};
+  var open=v2Open(), by={};
+  open.forEach(function(e){ if(e.expected){ (by[e.expected]=by[e.expected]||[]).push(e); } });
+  var today=isoDate(Date.now()), sel=new Date(C.day+'T10:00:00');
+  var days=[];
+  if(C.mode==='week'){
+    var st=new Date(sel); st.setDate(st.getDate()-((st.getDay()+6)%7));
+    for(var i=0;i<7;i++){ var d=new Date(st); d.setDate(st.getDate()+i); days.push(d); }
+  }else{
+    var f=new Date(sel.getFullYear(),sel.getMonth(),1), lead=(f.getDay()+6)%7, n=new Date(sel.getFullYear(),sel.getMonth()+1,0).getDate();
+    for(var p=0;p<lead;p++) days.push(null);
+    for(var q=1;q<=n;q++) days.push(new Date(sel.getFullYear(),sel.getMonth(),q,10));
+  }
+  var head=C.mode==='week'?'Week of '+days[0].toLocaleDateString('en-IN',{day:'numeric',month:'short'}):sel.toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+  var h='<section class="v2sec" aria-labelledby="v2calh"><div class="v2sec-h"><h2 id="v2calh" class="v2h2">Deliveries</h2>'+
+    '<div class="v2seg" role="group" aria-label="Calendar view">'+
+      '<button type="button" data-act="w2" data-op="calmode" data-k="week" aria-pressed="'+(C.mode==='week')+'">Week</button>'+
+      '<button type="button" data-act="w2" data-op="calmode" data-k="month" aria-pressed="'+(C.mode==='month')+'">Month</button></div></div>'+
+    '<div class="v2cal"><div class="v2cal-nav"><button type="button" class="v2icon" data-act="w2" data-op="calmove" data-k="-1" aria-label="Previous">‹</button>'+
+    '<span class="v2cal-t">'+esc(head)+'</span><button type="button" class="v2icon" data-act="w2" data-op="calmove" data-k="1" aria-label="Next">›</button></div>'+
+    '<div class="v2cal-g'+(C.mode==='month'?' m':'')+'">'+['M','T','W','T','F','S','S'].map(function(x,i){ return '<span class="v2cal-wd" aria-hidden="true">'+x+'</span>'; }).join('')+
+    days.map(function(d){
+      if(!d) return '<span></span>';
+      var k=isoDate(d.getTime()), n=(by[k]||[]).length, off=isOffDay(k);
+      return '<button type="button" class="v2cal-d'+(k===today?' today':'')+(k===C.day?' sel':'')+(off?' off':'')+'" data-act="w2" data-op="calday" data-k="'+k+'" aria-pressed="'+(k===C.day)+'" '+
+        'aria-label="'+esc(d.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})+(off?', workshop closed':'')+', '+n+' due')+'">'+
+        '<span class="v2cal-dn">'+d.getDate()+'</span>'+(n?'<span class="v2cal-dot">'+n+'</span>':'')+'</button>'; }).join('')+'</div>';
+  var due=by[C.day]||[];
+  h+='<div class="v2cal-list"><p class="v2cal-lt">'+esc(new Date(C.day+'T10:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'}))+
+     (isOffDay(C.day)?' · '+esc(offDayName(C.day)||'Closed'):'')+'</p>'+
+     (due.length?due.map(function(e){ return v2Card(e); }).join(''):'<p class="v2empty">No deliveries due.</p>')+'</div></div></section>';
+  return h;
+}
+
+/* ---------- JOBS: board by technician or by stage ---------- */
+function v2JobsView(){
+  var J=S.v2jobs=S.v2jobs||{by:'tech',q:'',stage:''};
+  var open=v2Open(), q=J.q;
+  var list=(J.stage==='invoiced'?v2Month().filter(function(e){ return v2StageOf(e)==='invoiced'; }):open).filter(function(e){
+    return !q||smatch(q,[e.reg,e.name,e.phone,e.no,e.make,e.model].join(' ')); });
+  if(J.stage) list=list.filter(function(e){ return v2StageOf(e)===J.stage; });
+  var h='<section class="v2"><header class="v2hello"><div><p class="v2eyebrow">Workshop</p><h1 class="v2h1">Job cards</h1></div>'+
+    '<button type="button" class="v2btn v2btn-primary v2btn-sm" data-act="newJob">+ New</button></header>'+
+    '<label class="v2search"><span class="v2sr">Search job cards</span><input type="search" id="v2q" data-nocaps value="'+esc(q)+'" placeholder="Plate, name, phone or JC number" autocomplete="off"></label>'+
+    '<div class="v2bar"><div class="v2seg" role="group" aria-label="Group by">'+
+      '<button type="button" data-act="w2" data-op="jobsby" data-k="tech" aria-pressed="'+(J.by==='tech')+'">By technician</button>'+
+      '<button type="button" data-act="w2" data-op="jobsby" data-k="stage" aria-pressed="'+(J.by==='stage')+'">By stage</button></div>'+
+      (J.stage?'<button type="button" class="v2chip on" data-act="w2" data-op="stage" data-k="">'+esc(v2StageName(J.stage))+' ✕</button>':'')+
+      '<button type="button" class="v2link" data-act="navGo" data-k="floor">Floor rounds</button></div>';
+  var cols;
+  if(J.by==='tech'){
+    cols=mechanics().map(function(m){ return {t:m.name, s:busyText(m.id), items:list.filter(function(e){ return e.mechanicId===m.id; })}; });
+    cols.unshift({t:'Not assigned', s:'needs a technician', items:list.filter(function(e){ return !e.mechanicId; })});
+    /* busy columns first, so the work is what you see without scrolling */
+    cols=cols.map(function(c,i){ c.o=i; return c; }).sort(function(a,b){ return (b.items.length?1:0)-(a.items.length?1:0)||a.o-b.o; });
+  }else{
+    cols=V2_STAGES.filter(function(s){ return s.k!=='invoiced'||J.stage==='invoiced'; }).map(function(s){
+      return {t:s.n, s:s.d, items:list.filter(function(e){ return v2StageOf(e)===s.k; })}; });
+  }
+  h+='<div class="v2kan" role="list">'+cols.map(function(c){
+    return '<section class="v2col" role="listitem" aria-label="'+esc(c.t+', '+c.items.length)+'"><header class="v2col-h"><b>'+esc(c.t)+'</b><span class="v2count">'+c.items.length+'</span>'+
+      '<span class="v2col-s">'+esc(c.s)+'</span></header>'+
+      (c.items.length?c.items.map(function(e){ return v2Card(e,{noTech:J.by==='tech',noStage:J.by==='stage'}); }).join(''):'<p class="v2empty sm">None</p>')+'</section>'; }).join('')+'</div>';
+  return h+'</section>';
+}
+
+/* ---------- MONEY hub ---------- */
+function v2MoneyView(){
+  var items=[
+    ['dash','Overview','Takings, profit and GST at a glance','reports'],
+    ['sales','Sales invoices','Invoices and money received','reports'],
+    ['purch','Purchase bills','Supplier bills and payments','parts'],
+    ['parties','Customers & suppliers','Ledgers and balances','ledgers'],
+    ['spend','Expenses','Day-to-day spending','spend.own'],
+    ['reports','Reports','Every report, and files for your CA','reports']
+  ].filter(function(x){ return can(x[3]); });
+  return '<section class="v2"><header class="v2hello"><div><p class="v2eyebrow">Accounts</p><h1 class="v2h1">Money</h1></div></header>'+
+    '<div class="v2tiles">'+items.map(function(x){
+      return '<button type="button" class="v2tile" data-act="navGo" data-k="'+x[0]+'"><b>'+esc(x[1])+'</b><span>'+esc(x[2])+'</span></button>'; }).join('')+'</div></section>';
+}
+
+/* ---------- NEW JOB CARD: two to four answers at a time ---------- */
+function w2Fresh(){ return {step:0, d:{}, known:null}; }
+function w2Steps(){
+  var W=S.w2, d=W.d;
+  return [
+    {k:'bike', t:'Which bike?', sub:'Type the number plate. A bike we have seen before fills in by itself.',
+      done:function(){ return regKey(d.reg).length>=4; },
+      sum:function(){ return [['Number plate', regShow(d.reg)]]; }},
+    {k:'model', t:'Make and model', sub:'',
+      done:function(){ return !!(d.make&&d.model&&(gensFor(d.make,d.model).length<2||d.gen)); },
+      sum:function(){ return [['Bike', bikeName(d.make,d.model,d.gen)]]; }},
+    {k:'cust', t:'Who is the customer?', sub:'Mobile first: a customer we know fills in by itself.',
+      done:function(){ var p=w2Phone(); return !!(p.ok&&String(d.cname||'').trim()); },
+      sum:function(){ return [['Customer', titleCase(d.cname||'')], ['Mobile', fmtPhone(w2Phone().e164||'')]]; }}
+  ];
+}
+function w2Phone(){ var i=document.createElement('input'); i.value=S.w2.d.cphone||''; return readPhoneEl(i)||{}; }
+function v2Intake(){
+  var W=S.w2=S.w2||w2Fresh(), steps=w2Steps(), cur=Math.min(W.step,steps.length-1);
+  var h='<section class="v2 w2"><header class="v2hello"><div><p class="v2eyebrow">New job card</p><h1 class="v2h1">Bike in</h1></div>'+
+    '<button type="button" class="v2icon" data-act="w2" data-op="cancel" aria-label="Cancel and go home">✕</button></header>'+
+    w2Progress(steps.length,cur,'Step');
+  h+=w2Folded(steps.slice(0,cur).map(function(s,i){ return {i:i,rows:s.sum()}; }));
+  var s=steps[cur];
+  h+='<div class="w2stage" aria-live="polite"><h2 class="w2q">'+esc(s.t)+'</h2>'+(s.sub?'<p class="w2sub">'+esc(s.sub)+'</p>':'')+w2Body(s.k)+'</div>';
+  var last=cur===steps.length-1;
+  h+='<div class="w2foot">'+(cur?'<button type="button" class="v2btn v2btn-ghost" data-act="w2" data-op="back">Back</button>':'')+
+    '<button type="button" class="v2btn v2btn-primary w2next" data-act="w2" data-op="'+(last?'create':'next')+'">'+(last?'Create job card':'Next')+'</button></div>';
+  return h+'</section>';
+}
+function w2Progress(n,cur,word){
+  var p='';
+  for(var i=0;i<n;i++) p+='<span class="w2dot'+(i<cur?' done':i===cur?' cur':'')+'"></span>';
+  return '<div class="w2prog" role="progressbar" aria-valuemin="1" aria-valuemax="'+n+'" aria-valuenow="'+(cur+1)+'" aria-label="'+word+' '+(cur+1)+' of '+n+'">'+p+'</div>';
+}
+function w2Folded(groups){
+  if(!groups.length) return '';
+  return '<dl class="w2sum">'+groups.map(function(g){
+    return g.rows.map(function(r,ri){
+      return '<div class="w2row"><dt>'+esc(r[0])+'</dt><dd>'+esc(r[1]||'—')+'</dd>'+
+        (ri===0?'<button type="button" class="w2edit" data-act="w2" data-op="edit" data-k="'+g.i+'" aria-label="Change '+esc(r[0])+'">Edit</button>':'<span></span>')+'</div>'; }).join(''); }).join('')+'</dl>';
+}
+function w2Body(k){
+  var d=S.w2.d;
+  if(k==='bike'){
+    var kn=S.w2.known;
+    return '<label class="w2f"><span class="w2l">Number plate</span>'+
+      '<input class="w2plate" data-w2="reg" data-nocaps autocapitalize="characters" autocomplete="off" spellcheck="false" value="'+esc(d.reg||'')+'" placeholder="HR 26 AB 1234"></label>'+
+      '<div id="w2known">'+w2KnownCard(kn)+'</div>';
+  }
+  if(k==='model'){
+    var makes=allMakes(), models=d.make?modelsFor(d.make):[], gens=(d.make&&d.model)?gensFor(d.make,d.model):[];
+    return '<label class="w2f"><span class="w2l">Make</span><select data-w2="make" data-w2re="1"><option value="">Choose the make</option>'+
+      makes.map(function(m){ return '<option'+(m===d.make?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select></label>'+
+      (d.make?'<label class="w2f"><span class="w2l">Model</span><select data-w2="model" data-w2re="1"><option value="">Choose the model</option>'+
+        models.map(function(m){ return '<option'+(m.n===d.model?' selected':'')+'>'+esc(m.n)+'</option>'; }).join('')+'</select></label>':'')+
+      (gens.length>1?'<fieldset class="w2f"><legend class="w2l">Which version</legend><div class="w2chips">'+gens.map(function(g){
+        return '<button type="button" class="v2chip'+(g.label===d.gen?' on':'')+'" aria-pressed="'+(g.label===d.gen)+'" data-act="w2" data-op="set" data-f="gen" data-v="'+esc(g.label)+'">'+
+          esc(g.label)+'<small>'+esc([g.years,g.fuel].filter(Boolean).join(' · '))+'</small></button>'; }).join('')+'</div></fieldset>':'');
+  }
+  if(k==='cust'){
+    return '<label class="w2f"><span class="w2l">Mobile number</span><input type="tel" inputmode="tel" data-w2="cphone" data-nocaps autocomplete="off" value="'+esc(d.cphone||'')+'" placeholder="98110 55667"></label>'+
+      '<label class="w2f"><span class="w2l">Customer name</span><input data-w2="cname" data-nocaps autocapitalize="words" autocomplete="off" value="'+esc(d.cname||'')+'" placeholder="Full name"></label>';
+  }
+  return '';
+}
+function w2KnownCard(kn){
+  if(!kn) return '';
+  return '<div class="w2known" role="status"><b>Seen before</b><span>'+esc(bikeName(kn.make,kn.model,kn.gen))+' · '+esc(kn.name||'')+
+    (kn.lastVisit?' · last visit '+esc(dOnly(kn.lastVisit)):'')+'</span></div>';
+}
+function w2OnInput(t){
+  var W=S.w2; if(!W) return;
+  var f=t.dataset.w2; W.d[f]=t.value;
+  if(f==='reg'){
+    var kn=S.core.bikes[regKey(t.value)]||null; W.known=kn;
+    if(kn){ W.d.make=kn.make||W.d.make; W.d.model=kn.model||W.d.model; W.d.gen=kn.gen||W.d.gen||'';
+      if(kn.phone&&!W.d.cphone) W.d.cphone=String(kn.phone).replace(/^\+91/,''); if(kn.name&&!W.d.cname) W.d.cname=kn.name; }
+    var box=document.getElementById('w2known'); if(box) box.innerHTML=w2KnownCard(kn);
+  }
+  if(f==='make'){ W.d.model=''; W.d.gen=''; }
+  if(f==='model'){ W.d.gen=''; }
+  if(f==='cphone'){
+    var p=w2Phone();
+    if(p.ok&&!String(W.d.cname||'').trim()){
+      var pt=(PARTIES||[]).filter(function(x){ return x.phone&&phoneKey(x.phone)===phoneKey(p.e164); })[0];
+      if(pt){ W.d.cname=pt.name; var nm=document.querySelector('[data-w2="cname"]'); if(nm) nm.value=pt.name; }
+    }
+  }
+  if(t.dataset.w2re) rerender();
+}
+async function w2Create(){
+  var W=S.w2, d=W.d, steps=w2Steps();
+  for(var i=0;i<steps.length;i++) if(!steps[i].done()){ W.step=i; rerender(); toast('Still needed: '+steps[i].t.replace('?',''),'bad'); return; }
+  var reg=regKey(d.reg), p=w2Phone(), j=blankJob();
+  try{ j.no=await allocNumber('job'); }catch(e){ toast(e.message||'Could not create the job card. Try again.','bad'); return; }
+  var mm=modelsFor(d.make).filter(function(x){ return x.n===d.model; })[0]||{};
+  j.reg=reg; j.make=d.make; j.model=d.model; j.gen=d.gen||''; j.cc=mm.cc||'';
+  j.v2=1; j.v2draft=1; j.plateType='in';
+  j.cust={name:titleCase(d.cname), phone:p.e164, gstin:'', address:''};
+  var party=findOrMakeCustomer(j.cust.name, j.cust.phone, {}); j.partyId=party.id;
+  await savePartyData();
+  logIt(j,'Job card created','Draft: bike and customer in; inspection to follow');
+  var prev=S.core.bikes[reg]||{};
+  S.core.bikes[reg]=Object.assign(prev,{reg:reg,make:j.make,model:j.model,gen:j.gen,cc:j.cc,name:j.cust.name,phone:j.cust.phone,lastVisit:Date.now(),plateType:'in'});
+  await saveCore();
+  if(!await saveJob(j)) return;
+  S.w2=null; S.job=j;
+  openModal('<div class="v2modal"><p class="v2eyebrow">Draft saved</p><h2 class="v2h1" style="margin:4px 0 6px">'+esc(j.no)+' created</h2>'+
+    '<p class="w2sub">'+esc(regShow(j.reg))+' · '+esc(bikeName(j.make,j.model,j.gen))+' · '+esc(j.cust.name)+'</p>'+
+    '<div class="v2stack"><button type="button" class="v2btn v2btn-primary" data-act="w2" data-op="insp" data-id="'+esc(j.id)+'">Continue to inspection</button>'+
+    '<button type="button" class="v2btn v2btn-ghost" data-act="w2" data-op="another">Create another job card</button>'+
+    '<button type="button" class="v2btn v2btn-ghost" data-act="w2" data-op="home">Back to home</button></div></div>');
+}
+
+/* ---------- INSPECTION: walk-round, reading, reason, plan ---------- */
+function i2Steps(j){
+  var m=j.media||{}, sides=(m.sides||[]).length;
+  return [
+    {k:'walk', t:'Walk-round photos', sub:'Six photos, one tap each: front, right, rear, left, cluster, top. Dents are optional.',
+      done:function(){ return sides>=MEDIA_SIDES.length; },
+      sum:function(){ return [['Walk-round', sides+' photos'+(m.extras?' + '+m.extras+' close-up'+(m.extras>1?'s':''):'')]]; }},
+    {k:'odo', t:'Odometer and fuel', sub:'',
+      done:function(){ return !!(j.odo||j.meterBad); },
+      sum:function(){ return [['Odometer', j.meterBad?'Cluster not working':(j.odo+' km')], ['Fuel', j.fuel||'—']]; }},
+    {k:'why', t:'Why has it come in?', sub:'Pick one or more reasons, and note what the customer says.',
+      done:function(){ return !!(String(j.complaint||'').trim()&&jobTypesOf(j).length); },
+      sum:function(){ return [['Reason', titleCase(jobTypesOf(j).join(', '))], ['Customer says', j.complaint]]; }},
+    {k:'plan', t:'Plan the work', sub:'',
+      done:function(){ return !!(j.mechanicId&&j.estMins&&j.expected&&j.testRideIn); },
+      sum:function(){ return [['Technician', j.mechanicId?coreUser(j.mechanicId).name:''], ['Time', fmtMins(j.estMins||0)],
+        ['Delivery', j.expected?dOnly(new Date(j.expected+'T10:00:00').getTime()):''], ['Test ride', j.testRideIn?'Done':'']]; }}
+  ];
+}
+function v2Insp(){
+  var j=S.job; if(!j) return v2Home();
+  var I=S.i2=S.i2||{id:j.id,step:-1};
+  if(I.id!==j.id){ I=S.i2={id:j.id,step:-1}; }
+  var steps=i2Steps(j);
+  if(I.step<0){ I.step=0; while(I.step<steps.length-1&&steps[I.step].done()) I.step++; }
+  var cur=I.step, s=steps[cur];
+  var h='<section class="v2 w2"><header class="v2hello"><div><p class="v2eyebrow">'+esc(j.no)+' · '+esc(regShow(j.reg))+'</p>'+
+    '<h1 class="v2h1">Inspection</h1></div><button type="button" class="v2icon" data-act="w2" data-op="home" aria-label="Save and go home">✕</button></header>'+
+    w2Progress(steps.length,cur,'Step');
+  h+=w2Folded(steps.slice(0,cur).map(function(x,i){ return {i:i,rows:x.sum()}; }).concat([]));
+  h+='<div class="w2stage" aria-live="polite"><h2 class="w2q">'+esc(s.t)+'</h2>'+(s.sub?'<p class="w2sub">'+esc(s.sub)+'</p>':'')+i2Body(s.k,j)+'</div>';
+  var last=cur===steps.length-1;
+  h+='<div class="w2foot">'+(cur?'<button type="button" class="v2btn v2btn-ghost" data-act="w2" data-op="iback">Back</button>':'')+
+    '<button type="button" class="v2btn v2btn-primary w2next" data-act="w2" data-op="inext">'+(last?'Finish inspection':'Save and continue')+'</button></div>';
+  return h+'</section>';
+}
+function i2Body(k,j){
+  if(k==='walk'){
+    var have=Object.keys(MEDIA_DRAFT||{}), saved=(j.media&&j.media.sides)||[];
+    var ex=have.filter(function(x){ return x.indexOf('extra')===0; }).length;
+    return '<div id="i2shots">'+i2Shots(j)+'</div>'+
+      '<div class="v2stack"><button type="button" class="v2btn v2btn-primary v2btn-xl" data-act="w2" data-op="cam">'+
+        '📷 '+(saved.length>=MEDIA_SIDES.length?'Retake walk-round':(have.filter(function(x){ return x.indexOf('extra')!==0&&x!=='video'; }).length?'Carry on walk-round':'Start walk-round'))+'</button>'+
+      '<button type="button" class="v2btn v2btn-ghost" data-act="w2" data-op="dents">+ Dents and scratches (optional)'+(ex?' · '+ex+' taken':'')+'</button></div>';
+  }
+  if(k==='odo'){
+    var f=j.fuel||'1/2';
+    return '<label class="w2f"><span class="w2l">Odometer reading (km)</span><input type="text" inputmode="numeric" pattern="[0-9]*" id="i2odo" class="w2big" value="'+esc(j.odo||'')+'" placeholder="e.g. 12450"'+(j.meterBad?' disabled':'')+'></label>'+
+      (j.v2last?'<p class="w2hint">Last time: '+esc(j.v2last)+' km</p>':'')+
+      '<button type="button" class="v2chip'+(j.meterBad?' on':'')+'" aria-pressed="'+(!!j.meterBad)+'" data-act="w2" data-op="meterbad">Instrument cluster not working</button>'+
+      '<fieldset class="w2f"><legend class="w2l">Fuel level</legend><div class="v2seg v2seg-full" role="group">'+['E','1/4','1/2','3/4','F'].map(function(x){
+        return '<button type="button" data-act="w2" data-op="fuel" data-k="'+x+'" aria-pressed="'+(x===f)+'">'+x+'</button>'; }).join('')+'</div></fieldset>';
+  }
+  if(k==='why'){
+    var on=jobTypesOf(j);
+    return '<fieldset class="w2f"><legend class="w2l">Reason for visit</legend><div class="w2chips">'+JOBTYPES.filter(function(t){ return jobFitsFuel?true:true; }).map(function(t){
+        var p=on.indexOf(t)>=0;
+        return '<button type="button" class="v2chip'+(p?' on':'')+'" aria-pressed="'+p+'" data-act="w2" data-op="type" data-v="'+esc(t)+'">'+esc(titleCase(t))+'</button>'; }).join('')+'</div></fieldset>'+
+      '<label class="w2f"><span class="w2l">What the customer says</span><textarea id="i2comp" rows="3" placeholder="e.g. Front brake squeals when wet">'+esc(j.complaint||'')+'</textarea></label>';
+  }
+  if(k==='plan'){
+    var est=j.estMins||0, quick=[[60,'1 h'],[120,'2 h'],[240,'4 h'],[WORK_MINS,'1 day'],[WORK_MINS*2,'2 days']];
+    var t0=isoDate(Date.now()), t1=isoDate(Date.now()+86400000), t2=isoDate(Date.now()+2*86400000);
+    return '<label class="w2f"><span class="w2l">Technician</span><select id="i2tech">'+techOptions(j.mechanicId||'',est,j.expected,true)+'</select></label>'+
+      '<fieldset class="w2f"><legend class="w2l">Estimated time</legend><div class="w2chips">'+quick.map(function(q){
+        return '<button type="button" class="v2chip'+(est===q[0]?' on':'')+'" aria-pressed="'+(est===q[0])+'" data-act="w2" data-op="est" data-k="'+q[0]+'">'+q[1]+'</button>'; }).join('')+'</div></fieldset>'+
+      '<fieldset class="w2f"><legend class="w2l">Expected delivery</legend><div class="w2chips">'+
+        [[t0,'Today'],[t1,'Tomorrow'],[t2,new Date(t2+'T10:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric'})]].map(function(x){
+          return '<button type="button" class="v2chip'+(j.expected===x[0]?' on':'')+'" aria-pressed="'+(j.expected===x[0])+'" data-act="w2" data-op="exp" data-k="'+x[0]+'">'+esc(x[1])+'</button>'; }).join('')+
+        '<input type="date" id="i2exp" class="w2date" aria-label="Pick another date" value="'+esc(j.expected||'')+'"></div></fieldset>'+
+      '<button type="button" class="v2chip'+(j.testRideIn?' on':'')+'" aria-pressed="'+(!!j.testRideIn)+'" data-act="w2" data-op="ride">Test ride done</button>';
+  }
+  return '';
+}
+function i2Shots(j){
+  var saved=(j.media&&j.media.sides)||[], dr=MEDIA_DRAFT||{};
+  return '<ol class="i2shots" aria-label="Walk-round photos">'+MEDIA_SIDES.map(function(s){
+    var got=dr[s[0]]||saved.indexOf(s[0])>=0;
+    return '<li class="i2shot'+(got?' got':'')+'">'+(dr[s[0]]&&dr[s[0]].url?'<img alt="" src="'+esc(dr[s[0]].url)+'">':'<span class="i2shot-i" aria-hidden="true">'+(got?'✓':'')+'</span>')+
+      '<span class="i2shot-l">'+esc(s[1])+(got?'<span class="v2sr"> taken</span>':'<span class="v2sr"> not taken</span>')+'</span></li>'; }).join('')+'</ol>';
+}
+function v2PaintShots(){ var b=document.getElementById('i2shots'); if(b&&S.job) b.innerHTML=i2Shots(S.job); if(S.view.name==='v2insp') rerender(); }
+async function i2Dents(){
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.multiple=true; inp.setAttribute('capture','environment');
+  inp.onchange=async function(){
+    var fs=[].slice.call(inp.files||[]), n=Object.keys(MEDIA_DRAFT||{}).filter(function(x){ return x.indexOf('extra')===0; }).length;
+    for(var i=0;i<fs.length;i++){ try{ await keepDraftPhoto('extra'+(n+i+1),await stampFile(fs[i],'Close-up')); }catch(e){} }
+    toast(fs.length+' close-up'+(fs.length===1?'':'s')+' kept','good'); rerender();
+  };
+  inp.click();
+}
+async function i2Save(){
+  var j=S.job, I=S.i2, steps=i2Steps(j), s=steps[I.step];
+  if(s.k==='walk'){
+    var dr=Object.keys(MEDIA_DRAFT||{});
+    if(dr.length){
+      var before=j.media;
+      if(!await commitIntakeMedia(j)) return;
+      if(before&&before.files){ /* keep earlier photos that were not retaken */
+        var now=j.media, have={}; (now.files||[]).forEach(function(f){ have[f.slot]=1; });
+        now.files=(now.files||[]).concat(before.files.filter(function(f){ return !have[f.slot]; }));
+        (before.sides||[]).forEach(function(x){ if(now.sides.indexOf(x)<0) now.sides.push(x); });
+        now.extras=(now.extras||0)+((before.extras||0));
+      }
+      MEDIA_DRAFT={};
+    }
+    if(!i2Steps(j)[0].done()){ toast('Take all six walk-round photos first','bad'); rerender(); return; }
+  }
+  if(s.k==='odo'){
+    var v=String((document.getElementById('i2odo')||{}).value||'').replace(/\D/g,'');
+    if(!j.meterBad){
+      if(!v||/^0+$/.test(v)){ toast('Type the odometer reading, or tap Instrument cluster not working','bad'); return; }
+      var kb=S.core.bikes[regKey(j.reg)]||{};
+      if(kb.lastOdo&&+v<+kb.lastOdo&&!j.meterReplaced){ toast('That is lower than last time ('+kb.lastOdo+' km). Check it.','bad'); return; }
+      j.odo=v; j.odoAt=Date.now(); var off=+(kb.odoOffset||0)||0; j.odoOffset=off; j.odoTotal=off+(+v);
+      kb.lastOdo=v; S.core.bikes[regKey(j.reg)]=kb; await saveCore();
+    }else{ j.odo=''; j.odoTotal=0; }
+    logIt(j,'Reading taken',(j.meterBad?'Instrument cluster not working':j.odo+' km')+', fuel '+(j.fuel||'1/2'));
+  }
+  if(s.k==='why'){
+    j.complaint=sentenceCase(String((document.getElementById('i2comp')||{}).value||'').trim());
+    if(!j.complaint||!jobTypesOf(j).length){ toast('Pick a reason and note what the customer says','bad'); return; }
+    j.jobType=(j.jobTypes||[]).join(' + ');
+    j.intakePending=j.intakePending||{picks:[],skip:[],at:Date.now()};
+  }
+  if(s.k==='plan'){
+    var tv=(document.getElementById('i2tech')||{}).value||'';
+    var had=j.mechanicId; j.mechanicId=(tv&&tv!=='TBA')?tv:'';
+    var ev=(document.getElementById('i2exp')||{}).value; if(ev) j.expected=ev;
+    if(!s.done()){ toast('Still needed: '+['technician','estimated time','expected delivery','test ride'].filter(function(x,i){
+      return [!j.mechanicId,!j.estMins,!j.expected,!j.testRideIn][i]; }).join(', '),'bad'); await saveJob(j); rerender(); return; }
+    if(j.mechanicId&&j.mechanicId!==had) notify([j.mechanicId],j,'assigned','gave you this job: '+titleCase(j.jobType||'')+(j.complaint?' — '+j.complaint.slice(0,90):''));
+  }
+  if(!await saveJob(j)) return;
+  if(I.step<steps.length-1){ I.step++; rerender(); return; }
+  /* all in: the card leaves draft, its estimate lines go on, work can start */
+  delete j.v2draft;
+  if(!intakeGaps(j).length){ await applyIntakePending(j); await ensureReasonLines(j); }
+  await saveJob(j);
+  S.i2=null; S.view={name:'job',id:j.id}; render();
+  toast(j.no+' is ready for work','good');
+}
+
+/* ---------- the job card's place in the 8 stages ---------- */
+function v2JobStepper(j){
+  var e=indexEntry(j), k=v2StageOf(e), at=V2_STAGES.map(function(s){ return s.k; }).indexOf(k);
+  var draft=(k==='draft');
+  return '<nav class="v2steps" aria-label="Job card stage"><ol>'+V2_STAGES.map(function(s,i){
+    return '<li class="'+(i<at?'done':i===at?'cur':'')+'"'+(i===at?' aria-current="step"':'')+'><span class="v2steps-d" aria-hidden="true">'+(i<at?'✓':(i+1))+'</span>'+
+      '<span class="v2steps-l">'+esc(s.n)+'</span></li>'; }).join('')+'</ol>'+
+    (draft?'<button type="button" class="v2btn v2btn-primary" data-act="w2" data-op="insp" data-id="'+esc(j.id)+'">Continue inspection</button>':'')+'</nav>';
+}
+
+/* ---------- actions ---------- */
+async function w2Act(d,t){
+  var op=d.op, W=S.w2, j=S.job;
+  switch(op){
+    case 'jobs': S.v2jobs=S.v2jobs||{by:'tech',q:'',stage:''}; if(d.k) S.v2jobs.by=d.k; S.view={name:'v2jobs'}; S.job=null; render(); return;
+    case 'stage': S.v2jobs=S.v2jobs||{by:'stage',q:'',stage:''}; S.v2jobs.stage=d.k||''; if(d.k) S.v2jobs.by='stage'; S.view={name:'v2jobs'}; render(); return;
+    case 'jobsby': S.v2jobs.by=d.k; rerender(); return;
+    case 'calmode': S.v2cal.mode=d.k; rerender(); return;
+    case 'calday': S.v2cal.day=d.k; rerender(); return;
+    case 'calmove': { var c=new Date(S.v2cal.day+'T10:00:00'); if(S.v2cal.mode==='week') c.setDate(c.getDate()+7*(+d.k)); else c.setMonth(c.getMonth()+(+d.k)); S.v2cal.day=isoDate(c.getTime()); rerender(); return; }
+    case 'next': { var st=w2Steps()[W.step]; if(!st.done()){ toast('Fill this in first','bad'); return; } W.step++;
+      while(W.step<w2Steps().length-1&&W.known&&w2Steps()[W.step].done()) W.step++; rerender(); return; }
+    case 'back': W.step=Math.max(0,W.step-1); rerender(); return;
+    case 'edit': if(S.view.name==='v2insp'){ S.i2.step=+d.k; } else W.step=+d.k; rerender(); return;
+    case 'set': W.d[d.f]=d.v; rerender(); return;
+    case 'create': return w2Create();
+    case 'cancel': S.w2=null; S.view={name:'board'}; render(); return;
+    case 'home': closeModal(); S.w2=null; S.i2=null; S.job=null; S.view={name:'board'}; render(); return;
+    case 'another': closeModal(); S.w2=w2Fresh(); S.job=null; S.view={name:'intake'}; render(); return;
+    case 'insp': { closeModal(); if(!S.job||S.job.id!==d.id){ await openJob(d.id); }
+      /* a fresh walk-round: leftovers from another bike never ride along */
+      try{ var ks=await MEDIA.keys('draft:'); for(var i=0;i<ks.length;i++) await MEDIA.del(ks[i]); }catch(e){} MEDIA_DRAFT={};
+      var kb=S.core.bikes[regKey(S.job.reg)]||{}; S.job.v2last=kb.lastOdo||'';
+      S.i2=null; S.view={name:'v2insp',id:d.id}; render(); return; }
+    case 'cam': return camFlow();
+    case 'dents': return i2Dents();
+    case 'inext': return i2Save();
+    case 'iback': S.i2.step=Math.max(0,S.i2.step-1); rerender(); return;
+    case 'meterbad': j.meterBad=!j.meterBad; rerender(); return;
+    case 'fuel': j.fuel=d.k; rerender(); return;
+    case 'type': { var comp=document.getElementById('i2comp'); if(comp) j.complaint=comp.value;
+      var on=jobTypesOf(j), i2=on.indexOf(d.v); if(i2>=0) on.splice(i2,1); else on.push(d.v); j.jobTypes=on; rerender(); return; }
+    case 'est': j.estMins=+d.k; rerender(); return;
+    case 'exp': j.expected=d.k; rerender(); return;
+    case 'ride': j.testRideIn=j.testRideIn?null:{at:Date.now(), by:S.user.id, byName:S.user.name}; rerender(); return;
+  }
+}
+document.addEventListener('input',function(e){
+  var t=e.target; if(!t||!v2On()) return;
+  if(t.dataset&&t.dataset.w2) w2OnInput(t);
+  if(t.id==='v2q'){ S.v2jobs.q=t.value; var pos=t.selectionStart; rerender(); var n=document.getElementById('v2q'); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch(x){} } }
+});
+document.addEventListener('change',function(e){
+  var t=e.target; if(!t||!v2On()) return;
+  if(t.dataset&&t.dataset.w2&&t.tagName==='SELECT') w2OnInput(t);
+  if(t.id==='i2tech'&&S.job){ S.job.mechanicId=(t.value&&t.value!=='TBA')?t.value:''; }
+  if(t.id==='i2exp'&&S.job&&t.value){ S.job.expected=t.value; rerender(); }
+});
+/* where the preview sends each screen */
+function v2Route(name){
+  if(name==='board'&&!washerOnly()&&can('see.all')) return v2Home();
+  if(name==='intake'){ S.w2=S.w2||w2Fresh(); return v2Intake(); }
+  if(name==='v2insp') return v2Insp();
+  if(name==='v2jobs') return v2JobsView();
+  if(name==='v2money') return v2MoneyView();
+  if(name==='job'&&S.job&&!S.job.direct&&can('see.all')) return v2JobStepper(S.job)+viewJob();
+  return null;
+}
+function v2NavItems(){
+  var out=[{k:'board', ico:'⌂', lbl:'Home'}, {k:'v2jobs', ico:'▤', lbl:'Jobs'}];
+  if(can('parts')) out.push({k:'desk', ico:'⚙', lbl:'Store'});
+  if(can('reports')||can('ledgers')||can('spend.own')) out.push({k:'v2money', ico:'₹', lbl:'Money'});
+  out.push({k:'staff', ico:'●', lbl:'Me'});
+  return out;
+}
+function v2NavCurrent(v){
+  if(['board'].indexOf(v)>=0) return 'board';
+  if(['v2jobs','job','intake','v2insp','floor','workshop','bikehist','bill','invoice'].indexOf(v)>=0) return 'v2jobs';
+  if(['desk','part','purchase','purch'].indexOf(v)>=0) return 'desk';
+  if(['v2money','dash','sales','parties','party','spend','reports','books','rep','exports','unverified'].indexOf(v)>=0) return 'v2money';
+  if(['staff','settings'].indexOf(v)>=0) return 'staff';
+  return '';
+}
+
 /* ---------- bottom navigation ----------
    Shown on the screens people return to, not inside a job. A job card, a
    bill or an intake form is a flow with one correct next action, and that
@@ -2796,6 +3521,7 @@ var NAV_HUBS=['board','desk','dash','parties','spend','staff','books','unverifie
 /* Five is what a thumb can reach. Anything past that goes behind More,
    rather than shrinking the bar until nothing is readable. */
 function allNavItems(){
+  if(v2On()) return v2NavItems();
   var out=[{k:'board', ico:'\u25A4', lbl:tr(washerOnly()?'Washing':'Jobs')}];
   if(can('floor.run')) out.push({k:'floor', ico:'\u21C4', lbl:tr('Floor')});
   if(can('floor.run')) out.push({k:'workshop', ico:'\u25A6', lbl:tr('Workshop')});
@@ -2853,6 +3579,7 @@ function moreSheet(){
 /* which tab lights up for the screen you are on */
 function navCurrent(){
   var v=S.view.name;
+  if(v2On()){ var c2=v2NavCurrent(v); if(c2) return c2; }
   if(v==='floor') return 'floor';
   if(v==='workshop') return 'workshop';
   if(v==='purch') return 'purch';
@@ -2975,6 +3702,8 @@ function goNav(k){
   if(k==='parties'){ S.view={name:'parties'}; S.pquery=''; }
   if(k==='spend')   S.view={name:'spend',tab:'mine'};
   if(k==='staff')   S.view={name:'staff'};
+  if(k==='v2jobs')  S.view={name:'v2jobs'};
+  if(k==='v2money') S.view={name:'v2money'};
   window.scrollTo(0,0); render();
 }
 /* A consistent heading on every screen: where you are, what it is, and any
@@ -4383,7 +5112,7 @@ function mediaGrid(){
      (miss.length?'Still needed: '+esc(miss.join(', ')):'All six photos are in.')+'</div>';
   return h;
 }
-function paintMedia(){ var g=document.getElementById('mediagrid'); if(g) g.innerHTML=mediaGrid(); }
+function paintMedia(){ var g=document.getElementById('mediagrid'); if(g) g.innerHTML=mediaGrid(); if(S.view&&S.view.name==='v2insp'&&typeof v2PaintShots==='function') v2PaintShots(); }
 function dataUrlToBlob(u){
   var p=u.split(','), mime=(p[0].match(/:(.*?);/)||[])[1]||'image/jpeg';
   var bin=atob(p[1]), n=bin.length, arr=new Uint8Array(n);
@@ -17976,6 +18705,7 @@ async function dispatch(a,arg,d,t){
     case 'pinClear': S.pin=''; render(); break;
     case 'loginInfo': loginInfo(); break;
     case 'devPreview': devPreviewToggle(); break;
+    case 'w2': return w2Act(d,t);
     case 'loginSubmit': return loginSubmit();
     case 'logout': if(CHATREC.on) chatRecStop(false); S.user=null; S.pin=''; S.job=null; S.chat=null; NOTIFIED=null; S.q=''; S.pquery=''; S.pq=''; S.chatDraft=''; CHATSEEN={}; document.getElementById('toast').innerHTML=''; render(); break;
     case 'goBoard': if(VOICE.on) voiceStop(); S.view={name:'board'}; S.job=null; window.scrollTo(0,0); render(); break;
