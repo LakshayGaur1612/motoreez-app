@@ -3555,8 +3555,15 @@ function v2Route(name){
   if(name==='v2insp') return v2Insp();
   if(name==='v2jobs') return v2JobsView();
   if(name==='v2money') return v2MoneyView();
+  if((name==='desk'||name==='catalogue')&&can('parts')) return v2StoreTabs(name)+(name==='desk'?viewDesk():viewCatalogue());
   if(name==='job'&&S.job&&!S.job.direct&&can('see.all')) return v2JobStepper(S.job)+viewJob();
   return null;
+}
+/* Store tab: stock and the parts catalogue side by side */
+function v2StoreTabs(cur){
+  return '<div class="v2bar" style="margin-top:12px"><div class="v2seg" role="group" aria-label="Store">'+
+    '<button type="button" data-act="nav" data-k="desk" aria-pressed="'+(cur==='desk')+'">Stock</button>'+
+    '<button type="button" data-act="nav" data-k="catalogue" aria-pressed="'+(cur==='catalogue')+'">Catalogue</button></div></div>';
 }
 function v2NavItems(){
   var out=[{k:'board', ico:'⌂', lbl:'Home'}, {k:'v2jobs', ico:'▤', lbl:'Jobs'}];
@@ -3568,7 +3575,7 @@ function v2NavItems(){
 function v2NavCurrent(v){
   if(['board'].indexOf(v)>=0) return 'board';
   if(['v2jobs','job','intake','v2insp','floor','workshop','bikehist','bill','invoice'].indexOf(v)>=0) return 'v2jobs';
-  if(['desk','part','purchase','purch'].indexOf(v)>=0) return 'desk';
+  if(['desk','part','purchase','purch','catalogue'].indexOf(v)>=0) return 'desk';
   if(['v2money','dash','sales','parties','party','spend','reports','books','rep','exports','unverified'].indexOf(v)>=0) return 'v2money';
   if(['staff','settings'].indexOf(v)>=0) return 'staff';
   return '';
@@ -19182,7 +19189,7 @@ function refApply(k,data){
 }
 /* rows from the database -> the compact shape the catalogue screens use */
 function refPackCatalogue(meta,bikes,parts){
-  var brands=[], cats=[], ci={}, bi={};
+  var brands=Object.keys((meta&&meta.brandFull)||{}).sort(function(a,b){ return a==='RE'?-1:b==='RE'?1:0; }), cats=[], ci={}, bi={};
   bikes.sort(function(a,b){ return a.id-b.id; });
   var B=bikes.map(function(b,i){ bi[b.id]=i; return [b.make,b.model,b.version||'',b.engine||'',b.source_name||'',b.matched?1:0]; });
   var P=parts.map(function(r){
@@ -19370,7 +19377,7 @@ function catModelsShort(i){
 }
 function viewCatalogue(){
   var F=catF(), res=catSearch(F.q,F), shown=res.slice(0,F.n);
-  var nRE=0, nBJ=0; CATALOG.p.forEach(function(r){ if(r[0]===0) nRE++; else nBJ++; });
+  var nRE=0, nBJ=0; CATALOG.p.forEach(function(r){ if(CATALOG.brands[r[0]]==='RE') nRE++; else nBJ++; });
   var h=pageHead('Store','Parts catalogue',
     catN().toLocaleString('en-IN')+' genuine parts \u00B7 RE '+nRE.toLocaleString('en-IN')+' \u00B7 Bajaj '+nBJ.toLocaleString('en-IN')+
     ' \u00B7 '+CATALOG.bikes.length+' bikes. Not stock \u2014 a part joins the Store when you add it or buy it.');
