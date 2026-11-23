@@ -1,6 +1,26 @@
 <!DOCTYPE html>
 <!--
-  ===================================================================  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 21 NOV 2026 (with the workshop team's updates no. 10, 11 and 12)
+  ==========================================================================
+  Motoreez Workshop System
+  Version: 23 Nov 2026 - v6
+  (c) 2026 Jatin Suri. All rights reserved.
+
+  Conceived, designed and owned by Jatin Suri, Gurugram, India.
+  Jatin led the project as the bridge between operations and technology.
+
+  Contributors:
+    Kunal Bhatia   - operations
+    Himanshu Naik  - technology
+    Lakshay Gaur   - technology
+
+  First created: November 2026.
+  Owner fingerprint (SHA-256): 6e51f0fa7f2a91a1c876fd6219899255460417af7661eba484105052486689fa
+  Use, copying or modification without the owner's written permission is
+  not allowed.
+  ==========================================================================
+-->
+<!--
+  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 23 NOV 2026 (with the workshop team's updates no. 10 to 13)
   This file IS the live app at motoreez.netlify.app. It is now the source of truth:
   make new changes on THIS file, not on an older copy.
 
@@ -111,6 +131,21 @@
      Jobs board by technician or stage, Money hub, nav Home/Jobs/Store/Money/Me, and a
      stepped job card journey: draft (plate, bike, customer) -> inspection (6 photos +
      dents, reading, reason, plan). Styles live under html.v2 only.
+  8. Added by the workshop team on 23 Nov (update no. 13), now live:
+     - Parts catalogue (Royal Enfield and Bajaj genuine parts) with search, fitment, MRP,
+       NLS; add to Store; offered on the new job card for jobs that replace a part.
+     - Labour heads per job at the owner's rates; per-count labour from the bike's engine
+       counts (editable on the job card); estimate waits for missing counts.
+     - Plate format check and "Registration numbers to correct"; labels on close-ups;
+       GST type tag and one-table Purchases / Sales lists.
+     - One-time: owner's labour rates set (old rates kept in S.core.labourBak5).
+  9. REFERENCE DATA LIVES IN THE DATABASE, NOT IN THIS FILE (please keep):
+     The catalogue (catalogue_parts, catalogue_bikes) and the fluid and engine tables
+     (ref_data rows 'bike_fluids', 'bike_engine') are Supabase tables; see catalogue.sql.
+     BIKE_FLUIDS, BIKE_ENGINE and CATALOG start empty here and are filled by refLoad(),
+     which keeps a copy on the phone and refreshes when ref_data.ver changes. Do not paste
+     the data back into this file: send new or changed data as a file (Excel / JSON) and
+     it goes into the tables. A copy of this file opened on its own has no catalogue.
 -->
 <html lang="en">
 <head>
@@ -1175,6 +1210,33 @@ input:focus,select:focus,textarea:focus{border-color:var(--brand); box-shadow:0 
   .wrap{overflow-x:hidden}
 }
 
+/* v5: a bill list row on a phone \u2014 date and number on top, the vendor
+   under it, the amount and its button on the right */
+@media (max-width:640px){
+  table.lines.billtbl tr{display:grid !important; grid-template-columns:1fr auto; gap:2px 12px; align-items:start}
+  table.lines.billtbl td{margin:0 !important}
+  table.lines.billtbl td::before{display:none !important; content:none !important}
+  table.lines.billtbl td.bt-date{grid-column:1; grid-row:1; display:inline !important}
+  table.lines.billtbl td.bt-no{grid-column:1; grid-row:2; font-weight:700}
+  table.lines.billtbl td.bt-who{grid-column:1; grid-row:3}
+  table.lines.billtbl td.bt-gst{grid-column:1; grid-row:4}
+  table.lines.billtbl td.bt-due{grid-column:1; grid-row:5}
+  table.lines.billtbl td.bt-amt{grid-column:2; grid-row:1 / span 3; text-align:right !important}
+  table.lines.billtbl td.bt-act{grid-column:2; grid-row:4 / span 2; text-align:right !important; align-self:end}
+  table.lines.billtbl td.bt-due:has(.muted:only-child){display:none}
+  .docpaper.estfit{padding:8px; overflow-x:hidden}
+  .docpaper.estfit .doc{min-width:0 !important; font-size:10px}
+  .docpaper.estfit .doc h1{font-size:15px}
+  .docpaper.estfit .doc .head{flex-direction:column; gap:6px}
+  .docpaper.estfit .doc table{table-layout:auto; margin-top:6px}
+  .docpaper.estfit .doc th,.docpaper.estfit .doc td{padding:3px 2px; font-size:8.5px; letter-spacing:0}
+  .docpaper.estfit .doc td{overflow-wrap:anywhere}
+  .docpaper.estfit .doc td.num,.docpaper.estfit .doc th.num{white-space:nowrap; overflow-wrap:normal; font-size:8px}
+  .docpaper.estfit .doc .hsn{display:none}
+  .docpaper.estfit .doc .sign{gap:10px}
+}
+.mclose{display:flex; flex-direction:column; gap:6px}
+.mclose select,.mclose input{min-height:36px; font-size:13px; padding:6px 8px}
 /* ---------- totals ---------- */
 .totrow{display:flex; justify-content:space-between; gap:16px; padding:7px 0; font-size:15px; color:var(--ink2)}
 .totrow.grand{border-top:1px solid var(--rule); margin-top:10px; padding-top:13px; font-size:20px;
@@ -1232,6 +1294,9 @@ button.stat:active{transform:translateY(1px)}
 .stat.warn .v,.stat.warn .k{color:var(--red)}
 .stat.good{background:var(--green-bg); border-color:var(--green-rim)}
 .stat.good .v,.stat.good .k{color:var(--green)}
+.catfil{display:flex;flex-wrap:wrap;gap:8px}
+.catfil select{min-height:44px;font-size:14px;flex:1 1 170px;max-width:260px}
+@media (max-width:640px){ .catfil select{max-width:none;flex:1 1 46%} }
 </style>
 </head>
 <body>
@@ -1242,7 +1307,7 @@ button.stat:active{transform:translateY(1px)}
 <script>
 /* JS-MTRZ-2026 */
 /* VERSION: each delivered copy carries its date; the change list for it is kept in the project */
-var APP_VERSION={date:'2026-11-21', label:'21 Nov 2026 \u00B7 v4'};
+var APP_VERSION={date:'2026-11-23', label:'23 Nov 2026 \u00B7 v6'};
 var ORIGIN_FP=['6e51f0fa7f2a91a1','c876fd6219899255','460417af7661eba4','84105052486689fa'].join('');
 var ORIGIN_TEXT="Motoreez Workshop System. (c) 2026 Jatin Suri. All rights reserved. Conceived, designed and owned by Jatin Suri, Gurugram, India. Jatin led the project as the bridge between operations and technology. Contributors: Kunal Bhatia (operations), Himanshu Naik (technology), Lakshay Gaur (technology). First created: November 2026. Use, copying or modification without the owner's written permission is not allowed.";
 
@@ -1594,7 +1659,7 @@ var WRITES=['saveIntake','saveJobEdit','sendPricing','sendEstDo','ownerOkDo','cu
   'bookNew','bookArrive','bookDrop','remindMark','voidReturnDo','salesReturnDo','purchReturnDo',
   'dviDone','dviSet','readyDo','advDo','advDelDo','labNewDo','labDelDo','updDo','plateRenewDo','newSale','saleShip','saleDiscardDo','saleParty','saleNoParty','saleBike','finAddDo','finDone','sendInvDo','invPdf','fitAdd','kitAdd','kitAll','kitsSave','loadReal','loadDemo','loadParts','backupAll',
   'toggleReq','toggleLine','billOpt','attTap','toggleUser','clearParts','clearStore','importRun','pinSave','idSave',
-  'chatSend','chatDel','techSave','kitsReset','soldYes','soldUndo'];
+  'chatSend','chatDel','techSave','kitsReset','soldYes','soldUndo','catAddStore','catPickLine'];
 "use strict";
 
 /* ---------- money ---------- */
@@ -2035,6 +2100,7 @@ async function saveIndexes(){
   return a&&b;
 }
 async function syncFromServer(){
+  if(MODE==='cloud'&&Date.now()-REF.at>30*60*1000) refLoad();
   if(MODE!=='cloud'||!Cloud.session) return false;
   var keys=Object.keys(SYNC_KEYS);
   var jobKey=S.job?'mz:job:'+S.job.id:'';
@@ -2888,7 +2954,7 @@ async function allocNumber(series){
    restored session should not be able to put the P&L in front of a
    technician. This is a courtesy, not a wall: the real check has to
    happen on a server once there is one. */
-var VIEW_PERM={ invoice:'see.money', sale:'sale.new', sales:'reports', purch:'parts', exports:'export', rep:'reports', desk:'parts', purchase:'parts', part:'parts',
+var VIEW_PERM={ invoice:'see.money', sale:'sale.new', sales:'reports', purch:'parts', exports:'export', rep:'reports', desk:'parts', purchase:'parts', part:'parts', catalogue:'parts',
   dash:'reports', books:'reports', unverified:'reports',
   parties:'ledgers', party:'ledgers', spend:'spend.own',
   settings:'settings', import:'settings', intake:'job.new', bill:'bill.make',
@@ -2928,6 +2994,7 @@ function render(){
     case 'invoice':  body=viewInvoice(); break;
     case 'settings': body=viewSettings(); break;
     case 'desk':     body=viewDesk(); break;
+    case 'catalogue': body=viewCatalogue(); break;
     case 'purchase': body=viewPurchase(); break;
     case 'part':     body=viewPart(); break;
     case 'parties':  body=viewParties(); break;
@@ -3517,7 +3584,7 @@ function v2NavCurrent(v){
    gets two destinations and the owner gets four — nobody is shown a tab
    that will refuse them. Order never changes, so the position of a tab is
    learnable even as roles differ. */
-var NAV_HUBS=['board','desk','dash','parties','spend','staff','books','unverified','book','remind','reports'];
+var NAV_HUBS=['board','desk','catalogue','dash','parties','spend','staff','books','unverified','book','remind','reports'];
 /* Five is what a thumb can reach. Anything past that goes behind More,
    rather than shrinking the bar until nothing is readable. */
 function allNavItems(){
@@ -3530,6 +3597,7 @@ function allNavItems(){
   if(can('parts'))     out.push({k:'purch',  ico:'\u2199', lbl:tr('Purchases')});
   if(can('ledgers'))   out.push({k:'parties',ico:'\u25CB', lbl:tr('Parties')});
   if(can('parts'))     out.push({k:'desk',   ico:'\u2699', lbl:tr('Store')});
+  if(can('parts'))     out.push({k:'catalogue', ico:'\u2637', lbl:tr('Catalogue')});
   if(can('spend.own')) out.push({k:'spend',  ico:'\u25CE', lbl:tr('Spends')});
   if(can('reports'))   out.push({k:'reports',ico:'\u2261', lbl:tr('Reports')});
   out.push({k:'staff', ico:'\u25CF', lbl:tr('Me')});
@@ -3564,7 +3632,7 @@ function moreSheet(){
   var what={parties:'Customers and suppliers, with their ledgers',
     desk:'Stock, parts and purchase bills', dash:'Dashboard, P&L and GST',
     spend:'What you spent in the market', reports:'Every report, and the files for your CA',
-    staff:'Attendance and pay', sales:'Invoices and receipts', purch:'Purchase bills and payments',
+    staff:'Attendance and pay', catalogue:'Genuine RE and Bajaj part numbers, fitment and MRP', sales:'Invoices and receipts', purch:'Purchase bills and payments',
     board:'Job cards'};
   openModal('<h2>Go to</h2><div style="margin-top:10px">'+
     items.map(function(i){
@@ -3586,6 +3654,7 @@ function navCurrent(){
   if(v==='sales') return 'sales';
   if(v==='reports'||v==='rep'||v==='exports') return 'reports';
   if(v==='desk'||v==='purchase'||v==='part') return 'desk';
+  if(v==='catalogue') return 'catalogue';
   if(v==='invoice') return 'sales';
   if(v==='book'||v==='remind') return 'board';
   if(v==='dash'||v==='books'||v==='unverified'||v==='reports') return can('reports')?'dash':'board';
@@ -3697,6 +3766,7 @@ function goNav(k){
   if(k==='sales')   S.view={name:'sales'};
   if(k==='purch')   S.view={name:'purch'};
   if(k==='desk')    S.view={name:'desk',tab:'parts'};
+  if(k==='catalogue') S.view={name:'catalogue'};
   if(k==='dash')    S.view={name:'dash'};
   if(k==='reports') S.view={name:'reports'};
   if(k==='parties'){ S.view={name:'parties'}; S.pquery=''; }
@@ -3931,7 +4001,7 @@ function jobRow(e){
   var late=e.expected && e.stage!=='closed' && new Date(e.expected+'T23:59:59').getTime()<Date.now();
   var h='<button class="jobrow" data-act="openJob" data-id="'+e.id+'">';
   if(e.hold) h+='<div class="hazard" style="margin:-12px -12px 10px;border-radius:3px 3px 0 0"></div>';
-  h+='<div class="l1"><span class="plate sm">'+esc(regShow(e.reg))+'</span>'+
+  h+='<div class="l1"><span class="plate sm">'+esc(regShow(e.reg))+'</span>'+regBadTag(e)+
      '<span class="tag '+(e.hold?'t-red':'t-grey')+'">'+(e.hold?'Work stopped':esc((function(){ var ts=splitTypes(e.jobType); return ts.length?titleCase(ts[0])+(ts.length>1?' +'+(ts.length-1):''):'Job'; })()))+'</span>'+
      dwellBadge(e)+chatBadge(e.id)+
      '<span style="margin-left:auto" class="jid">'+esc(e.no||'')+'</span></div>';
@@ -4023,7 +4093,8 @@ function modelsFor(make){
   (customBikes()[make]||[]).forEach(function(m){ if(!out.some(function(x){ return pkey(x.n)===pkey(m.n); })) out.push({n:m.n,cc:m.cc||'',fuel:m.fuel||''}); });
   return out.sort(function(a,b){ return a.n.localeCompare(b.n,undefined,{numeric:true}); });
 }
-/*FLUIDS_START*/var BIKE_FLUIDS={"BAJAJ|PLATINA100CARBPREBS6":{"eg":"10W-30","ed":1.1,"er":1.0,"ec":"h","bb":"drum","fc":"l"},"BAJAJ|PLATINA100BS6ELECTRONICINJECTION":{"eg":"10W-30","ed":1.1,"er":1.0,"ec":"h","bb":"drum","fc":"l"},"BAJAJ|PLATINA110CARBECARB":{"eg":"10W-30","ed":1.1,"er":1.0,"ec":"h","bb":"drum","fc":"l"},"BAJAJ|PLATINA110FI":{"eg":"10W-30","ed":1.1,"er":1.0,"ec":"m","bb":"drum","fc":"l"},"BAJAJ|CT110X":{"eg":"10W-30","ed":1.1,"er":1.0,"ec":"h","bf":"drum","bb":"drum","fc":"l"},"BAJAJ|CT125X":{"eg":"20W-50","ed":1.1,"er":1.0,"ec":"h","bb":"drum","fc":"l"},"BAJAJ|PULSAR125CARB":{"eg":"10W-30","ed":1.1,"er":1.0,"ec":"h","bf":"DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"m"},"BAJAJ|PULSAR125FI":{"eg":"10W-30","ed":1.1,"er":1.0,"ec":"h","bf":"DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"m"},"BAJAJ|PULSARN125":{"eg":"10W-40","ed":1.1,"er":1.0,"ec":"h","bf":"DOT 4","bb":"drum","fc":"m"},"BAJAJ|PULSAR150CARB":{"eg":"20W-50","ed":1.1,"er":1.0,"ec":"h","bf":"DOT 4 (BS6); DOT 3 or DOT 4 (pre-BS6)","bb":"drum (single disc); DOT 4 (twin disc)","fc":"h"},"BAJAJ|PULSAR150FI":{"eg":"20W-50","ed":1.1,"er":1.0,"ec":"h","bf":"DOT 4","bb":"drum (single disc); DOT 4 (twin disc)","fc":"m"},"BAJAJ|PULSARN150":{"bf":"DOT 4","bb":"drum","fc":"m"},"BAJAJ|PULSARNS125CARB":{"eg":"20W-50","ed":1.1,"er":1.0,"ec":"m","bf":"DOT 4","bb":"drum","fc":"m"},"BAJAJ|PULSARNS125FI":{"eg":"20W-50","ed":1.1,"er":1.0,"ec":"m","bf":"DOT 4","bb":"drum","fc":"m"},"BAJAJ|PULSARNS160CARB":{"eg":"20W-50","ed":1.55,"er":1.35,"ec":"h","bf":"DOT 4","bb":"DOT 4","fc":"m"},"BAJAJ|PULSARNS160FI":{"eg":"20W-50","ed":1.55,"er":1.35,"ec":"m","bf":"DOT 4","bb":"DOT 4","fc":"m"},"BAJAJ|PULSARNS200CARB":{"eg":"20W-50 (alt 10W-50 synthetic)","ed":1.4,"er":1.2,"ec":"m","bf":"DOT 4","bb":"DOT 4","fc":"l"},"BAJAJ|PULSARNS200FI":{"eg":"20W-50 (alt 10W-50 synthetic)","ed":1.4,"er":1.2,"ec":"m","bf":"DOT 4","bb":"DOT 4","fc":"h"},"BAJAJ|PULSARNS400Z":{"eg":"10W-50 synthetic","ed":1.95,"er":1.7,"ec":"h","bf":"DOT 4","bb":"DOT 4","fc":"m"},"BAJAJ|PULSARN160":{"eg":"20W-50","ed":1.45,"er":1.25,"ec":"h","bf":"DOT 4","bb":"DOT 4 (twin-disc variant)","fc":"h"},"BAJAJ|PULSARN250":{"eg":"20W-50","ed":1.7,"er":1.3,"ec":"h","bf":"DOT 4","bb":"DOT 4","fc":"m"},"BAJAJ|PULSARRS200":{"eg":"20W-50 (alt 10W-50 synthetic)","ed":1.4,"er":1.2,"ec":"h","bf":"DOT 4","bb":"DOT 4","fc":"h"},"BAJAJ|PULSAR220DTSFIFI":{"eg":"20W-50","ed":1.3,"er":1.15,"ec":"h","bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"BAJAJ|PULSAR220FCARB":{"eg":"20W-50","ed":1.3,"er":1.15,"ec":"h","bf":"DOT 4","bb":"DOT 4","fc":"m"},"BAJAJ|PULSAR220FFI":{"eg":"20W-50 (alt 10W-50 synthetic)","ed":1.3,"er":1.15,"ec":"h","bf":"DOT 4","bb":"DOT 4","fc":"h"},"BAJAJ|PULSAR180":{"eg":"20W-50","ed":1.1,"er":1.0,"ec":"h","bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"h"},"BAJAJ|AVENGERSTREET160CARB":{"eg":"20W-50","ed":1.1,"er":1.0,"ec":"h","bf":"DOT 4","bb":"drum","fc":"m"},"BAJAJ|AVENGERSTREET160FI":{"eg":"20W-50","ed":1.1,"er":1.0,"ec":"h","bf":"DOT 4","bb":"drum","fc":"m"},"BAJAJ|AVENGERCRUISE220CARB":{"eg":"20W-50 (alt 10W-50 synthetic)","ed":1.3,"er":1.15,"ec":"h","bf":"DOT 4","bb":"drum","fc":"m"},"BAJAJ|AVENGERCRUISE220FI":{"eg":"20W-50 (alt 10W-50 synthetic)","ed":1.3,"er":1.15,"ec":"h","bf":"DOT 4","bb":"drum","fc":"m"},"BAJAJ|DOMINAR250":{"bf":"DOT 4","bb":"DOT 4","fc":"m"},"BAJAJ|DOMINAR400":{"eg":"10W-50 synthetic","ed":1.95,"er":1.7,"ec":"h","bf":"DOT 4","bb":"DOT 4","fc":"m"},"BAJAJ|FREEDOM125CNGPETROL":{"eg":"10W-40","ed":1.1,"er":1.0,"ec":"h","bf":"DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"BAJAJ|DISCOVER125":{"eg":"20W-50 (125) / 10W-30 (110)","ed":1.1,"er":1.0,"ec":"m","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"BAJAJ|DISCOVER110":{"eg":"20W-50 (125) / 10W-30 (110)","ed":1.1,"er":1.0,"ec":"m","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"BAJAJ|BOXER150":{"bf":"drum","bb":"drum","fc":"l"},"HEROMOTOCORP|SPLENDORPLUSCARB":{"eg":"10W-30","ed":0.95,"er":0.75,"ec":"m","bf":"drum","bb":"drum","fc":"m"},"HEROMOTOCORP|SPLENDORPLUSFI":{"eg":"10W-30","ed":1.0,"er":0.85,"ec":"h","bf":"drum","bb":"drum","fc":"m"},"HEROMOTOCORP|SPLENDORPLUSXTEC":{"eg":"10W-30","ed":1.0,"er":0.85,"ec":"h","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"h"},"HEROMOTOCORP|SPLENDORISMARTCARB":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"HEROMOTOCORP|SPLENDORISMARTFI":{"eg":"10W-30","ed":0.95,"er":0.75,"ec":"h","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"HEROMOTOCORP|HFDELUXECARB":{"eg":"10W-30","ed":1.0,"er":0.85,"ec":"l","bf":"drum","bb":"drum","fc":"m"},"HEROMOTOCORP|HFDELUXEFI":{"eg":"10W-30","ed":1.0,"er":0.85,"ec":"h","bf":"drum","bb":"drum","fc":"m"},"HEROMOTOCORP|HF100":{"eg":"10W-30","ed":1.0,"er":0.85,"ec":"h","bf":"drum","bb":"drum","fc":"m"},"HEROMOTOCORP|PASSIONPLUSCARB":{"eg":"10W-30","ed":1.0,"er":0.85,"ec":"m","bf":"drum","bb":"drum","fc":"l"},"HEROMOTOCORP|PASSIONPLUSFI":{"eg":"10W-30","ed":1.0,"er":0.85,"ec":"l","bf":"drum","bb":"drum","fc":"l"},"HEROMOTOCORP|PASSIONXTEC":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"m"},"HEROMOTOCORP|SUPERSPLENDORCARB":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"m"},"HEROMOTOCORP|SUPERSPLENDORFI":{"eg":"10W-30","ed":0.95,"er":0.75,"ec":"h","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"m"},"HEROMOTOCORP|SUPERSPLENDORXTEC":{"eg":"10W-30","ed":1.2,"er":1.0,"ec":"h","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"m"},"HEROMOTOCORP|GLAMOURCARB":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"HEROMOTOCORP|GLAMOURFIPGMFIPREBS6":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"HEROMOTOCORP|GLAMOURFIBS6":{"eg":"10W-30","ed":0.95,"er":0.75,"ec":"h","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"h"},"HEROMOTOCORP|GLAMOURX":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"m"},"HEROMOTOCORP|XTREME125R":{"eg":"10W-30","ed":1.2,"er":1.0,"ec":"h","bf":"DOT 3 or DOT 4","bb":"drum","fc":"m"},"HEROMOTOCORP|XTREME160R":{"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4 (rear disc variant); drum on drum variant","fc":"m"},"HEROMOTOCORP|XTREME160R4V":{"eg":"10W-30","ed":1.35,"er":1.15,"ec":"h","bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4 (rear disc variant); drum on drum variant","fc":"m"},"HEROMOTOCORP|XTREME250R":{"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"HEROMOTOCORP|XPULSE2004V":{"eg":"10W-30 (Xotic+ synthetic)","ed":1.4,"er":1.2,"ec":"h","bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"h"},"HEROMOTOCORP|XPULSE210":{"eg":"10W-30 (Xotic+ synthetic)","ed":1.65,"er":1.35,"ec":"h","bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"HEROMOTOCORP|KARIZMAXMR":{"eg":"10W-30 (Xotic+ synthetic)","ed":1.65,"er":1.35,"ec":"m","bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"HEROMOTOCORP|MAVRICK440":{"eg":"15W-50 synthetic","ed":2.6,"er":2.25,"ec":"h","bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"HEROMOTOCORP|DESTINI125CARB":{"eg":"10W-30 (JASO MB)","ed":0.8,"er":0.7,"ec":"m","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"Not stated in manual excerpt","m","Transmission (final drive) oil: replace every 10,000 km or 1 year; needs mechanical skill"]]},"HEROMOTOCORP|DESTINI125FI":{"eg":"10W-30 (JASO MB)","ed":0.8,"er":0.7,"ec":"h","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"Not stated in manual excerpt","h","Transmission (final drive) oil: replace every 10,000 km or 1 year; needs mechanical skill"]]},"HEROMOTOCORP|MAESTROEDGE110CARB":{"eg":"10W-30 (JASO MB)","ed":0.8,"er":0.7,"ec":"l","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"Not stated in manual excerpt","m","Transmission (final drive) oil: replace every 10,000 km or 1 year; needs mechanical skill"]]},"HEROMOTOCORP|MAESTROEDGE110FI":{"eg":"10W-30 (JASO MB)","ed":0.8,"er":0.7,"ec":"l","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"Not stated in manual excerpt","m","Transmission (final drive) oil: replace every 10,000 km or 1 year; needs mechanical skill"]]},"HEROMOTOCORP|MAESTROEDGE125CARB":{"eg":"10W-30 (JASO MB)","ed":0.8,"er":0.7,"ec":"l","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"Not stated in manual excerpt","m","Transmission (final drive) oil: replace every 10,000 km or 1 year; needs mechanical skill"]]},"HEROMOTOCORP|MAESTROEDGE125FI":{"eg":"10W-30 (JASO MB)","ed":0.8,"er":0.7,"ec":"l","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"Not stated in manual excerpt","m","Transmission (final drive) oil: replace every 10,000 km or 1 year; needs mechanical skill"]]},"HEROMOTOCORP|PLEASUREPLUSCARB":{"eg":"10W-30 (JASO MB)","ed":0.8,"er":0.7,"ec":"h","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"Not stated in manual excerpt","m","Transmission (final drive) oil: replace every 10,000 km or 1 year; needs mechanical skill"]]},"HEROMOTOCORP|PLEASUREPLUSFI":{"eg":"10W-30 (JASO MB)","ed":0.8,"er":0.7,"ec":"h","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"Not stated in manual excerpt","h","Transmission (final drive) oil: replace every 10,000 km or 1 year; needs mechanical skill"]]},"HEROMOTOCORP|XOOM110":{"eg":"10W-30 (JASO MB)","ed":0.8,"er":0.7,"ec":"h","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"Not stated in manual excerpt","m","Transmission (final drive) oil: replace every 10,000 km or 1 year; needs mechanical skill"]]},"HEROMOTOCORP|XOOM125":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter final gear oil point; figure not found"]]},"HEROMOTOCORP|XOOM160":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter final gear oil point; figure not found"]]},"HEROMOTOCORP|CBZXTREME":{"fg":"20W (forum)","fl":150.0,"fr":150.0,"fv":"165","bf":"DOT 3 or DOT 4","bb":"drum","fc":"l"},"HEROMOTOCORP|HUNK":{"eg":"10W-30","ed":1.2,"er":1.0,"ec":"h","fg":"20W (forum)","fl":150.0,"fr":150.0,"fv":"165","bf":"DOT 3 or DOT 4","bb":"drum","fc":"l"},"HEROMOTOCORP|ACHIEVER":{"eg":"10W-30","ed":1.2,"er":1.0,"ec":"h","bf":"DOT 3 or DOT 4","bb":"drum","fc":"l"},"HEROMOTOCORP|CDDAWN":{"bf":"drum","bb":"drum","fc":"l"},"HEROMOTOCORP|SPLENDORNXG":{"bf":"drum","bb":"drum","fc":"l"},"HONDA|SHINE100":{"bf":"drum","bb":"drum","fc":"m"},"HONDA|SHINE100DX":{"bf":"drum","bb":"drum","fc":"m"},"HONDA|SHINE125CARB":{"eg":"API MA (SAE grade per temperature chart, not extracted)","ed":1.0,"er":0.9,"ec":"h","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"HONDA|SHINE125FI":{"eg":"10W-30","ed":1.0,"er":0.9,"ec":"l","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"HONDA|SP125":{"eg":"10W-30","ed":1.0,"er":0.9,"ec":"l","bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"HONDA|SP160":{"eg":"API MA (SAE per temperature chart)","ed":1.2,"er":1.0,"ec":"l","bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4 (rear disc variant); drum on drum variant","fc":"l"},"HONDA|LIVOCARB":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"HONDA|LIVOFI":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"HONDA|UNICORN150160CARB":{"eg":"API MA (SAE per temperature chart)","ed":1.2,"er":1.0,"ec":"l","fg":"20W (forum)","fl":150.0,"fr":150.0,"fv":"165","bf":"DOT 3 or DOT 4","bb":"drum","fc":"l"},"HONDA|UNICORNFIBS6163CC":{"eg":"API MA (SAE per temperature chart)","ed":1.2,"er":1.0,"ec":"l","bf":"DOT 3 or DOT 4","bb":"drum","fc":"l"},"HONDA|HORNET20":{"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"HONDA|NX200":{"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"HONDA|CB200X":{"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"HONDA|CB300F":{"fc":"l"},"HONDA|CB300R":{"eg":"10W-30 (API SG+, JASO MA)","ed":1.8,"er":1.5,"ec":"h","bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"h"},"HONDA|CB350":{"eg":"5W-30 or 10W-30 (JASO MA)","ed":2.5,"er":2.0,"ec":"h","bf":"DOT 4","bb":"DOT 4 (rear disc); drum on drum variant","fc":"m"},"HONDA|CB350HNESS":{"eg":"5W-30 or 10W-30 (JASO MA)","ed":2.5,"er":2.0,"ec":"h","bf":"DOT 4","bb":"DOT 4 (rear disc); drum on drum variant","fc":"m"},"HONDA|CB350RS":{"eg":"5W-30 or 10W-30 (JASO MA)","ed":2.5,"er":2.0,"ec":"h","bf":"DOT 4","bb":"DOT 4","fc":"h"},"HONDA|CB350C":{"eg":"5W-30 or 10W-30 (JASO MA)","ed":2.5,"er":2.0,"ec":"h","bf":"DOT 4","bb":"DOT 4 (rear disc); drum on drum variant","fc":"m"},"HONDA|CB650R":{"eg":"10W-30 (API SJ+, JASO MA)","ed":3.0,"er":2.6,"ec":"h","fc":"l"},"HONDA|CBR650R":{"eg":"10W-30 (API SJ+, JASO MA)","ed":3.0,"er":2.6,"ec":"h","fc":"l"},"HONDA|CB750HORNET":{"eg":"10W-30","ed":3.9,"er":3.6,"ec":"m","fc":"l"},"HONDA|CB1000HORNET":{"fc":"l"},"HONDA|REBEL500":{"eg":"10W-30","ed":3.2,"er":2.7,"ec":"l","fc":"l"},"HONDA|TRANSALPXL750":{"eg":"10W-30 (API SJ+, JASO MA)","ed":3.9,"er":3.6,"ec":"h","fc":"l"},"HONDA|GOLDWING":{"fc":"l","ed":5.6,"er":4.6,"eg":"10W-30 (API SG+, JASO MA)","ec":"m","op":[["Final drive",null,null,"Hypoid gear oil SAE 80 (e.g. Pro Honda Shaft Drive Oil 80W-90)","m","Shaft drive final gear case; replace every 3 years; quantity not found"]]},"HONDA|ACTIVA110CARBUPTO5G":{"eg":"10W-30 (JASO MB)","ed":0.75,"er":0.55,"ec":"l","bf":"drum","bb":"drum","fc":"m","op":[["Final gear (scooter)",0.1,0.09,"Not stated in manual excerpt","l","Figures from SCV110 VII-IX ID manual (shown as PGM-FI); carb-era figure not confirmed"]]},"HONDA|ACTIVA110FI6GONWARDS":{"eg":"5W-30 or 10W-30 (JASO MB)","ed":0.75,"er":0.55,"ec":"m","bf":"drum","bb":"drum","fc":"h","op":[["Final gear (scooter)",0.1,0.09,"Not stated in manual excerpt","h","Final drive oil: drain bolt + filler bolt on final gear case; replace every 2 years (needs mechanical skill)"]]},"HONDA|ACTIVA125CARB":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter with separate final drive (transmission) oil; India manual not retrieved. Activa 110 = 0.09/0.10 L for reference only"]]},"HONDA|ACTIVA125FI":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter with separate final drive (transmission) oil; India manual not retrieved. Activa 110 = 0.09/0.10 L for reference only"]]},"HONDA|ACTIVA6G":{"eg":"5W-30 or 10W-30 (JASO MB)","ed":0.75,"er":0.55,"ec":"m","bf":"drum","bb":"drum","fc":"h","op":[["Final gear (scooter)",0.1,0.09,"Not stated in manual excerpt","h","Final drive oil: replace every 2 years"]]},"HONDA|DIO110CARB":{"bf":"drum","bb":"drum","fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter with separate final drive (transmission) oil; India manual not retrieved. Activa 110 = 0.09/0.10 L for reference only"]]},"HONDA|DIO110FI":{"bf":"drum","bb":"drum","fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter with separate final drive (transmission) oil; India manual not retrieved. Activa 110 = 0.09/0.10 L for reference only"]]},"HONDA|DIO125":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter with separate final drive (transmission) oil; India manual not retrieved. Activa 110 = 0.09/0.10 L for reference only"]]},"HONDA|GRAZIA125CARB":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter with separate final drive (transmission) oil; India manual not retrieved. Activa 110 = 0.09/0.10 L for reference only"]]},"HONDA|GRAZIA125FI":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter with separate final drive (transmission) oil; India manual not retrieved. Activa 110 = 0.09/0.10 L for reference only"]]},"HONDA|CD110DREAMCARB":{"bf":"drum","bb":"drum","fc":"m"},"HONDA|CD110DREAMFI":{"bf":"drum","bb":"drum","fc":"m"},"HONDA|AVIATOR":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter with separate final drive (transmission) oil; India manual not retrieved. Activa 110 = 0.09/0.10 L for reference only"]]},"HONDA|TWISTER":{"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"HONDA|CBFSTUNNERCARB":{"bf":"DOT 3 or DOT 4","bb":"drum","fc":"l"},"HONDA|CBFSTUNNERPGMFI":{"bf":"DOT 3 or DOT 4","bb":"drum","fc":"l"},"ROYALENFIELD|CLASSIC350UCECARB":{"eg":"15W-50 (API SL, JASO MA)","ed":2.75,"ec":"h","fg":"Royal Enfield Front Fork Oil (or 1F Grade Endurance)","fl":195.0,"fr":195.0,"bf":"DOT 3 or DOT 4","bb":"drum","fc":"h"},"ROYALENFIELD|CLASSIC350UCEFIBS6":{"eg":"15W-50 (API SL, JASO MA2)","ed":2.75,"ec":"m","fg":"Royal Enfield Front Fork Oil (or 1F Grade Endurance)","fl":195.0,"fr":195.0,"bf":"DOT 3 or DOT 4","bb":"drum (std); DOT 4 if rear disc/ABS","fc":"m"},"ROYALENFIELD|CLASSIC350JSERIES":{"eg":"15W-50 semi-synthetic (API SL, JASO MA2)","ed":2.2,"er":1.7,"ec":"h","fg":"Royal Enfield Fork Oil","bf":"DOT 4","bb":"DOT 4 (dual-channel, rear disc); drum on single-channel","fc":"m"},"ROYALENFIELD|CLASSIC650":{"eg":"10W-50 fully synthetic (API SL, JASO MA2)","ed":3.9,"er":3.1,"ec":"h","fg":"SS-8","fl":469.0,"fr":469.0,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"ROYALENFIELD|BULLET350CARB":{"eg":"15W-50 (API SL, JASO MA2)","ed":2.75,"ec":"m","fg":"Royal Enfield Front Fork Oil","fl":195.0,"fr":195.0,"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l","op":[["Primary chaincase",0.42,null,"SAE 20W-40 (spec table) / SAE 20 (primary chain section)","l","ONLY pre-2009 cast-iron/AVL builds (UCE 2009+ is single common oil). Fill to level plug in outer chaincase; drain by removing cover nut. Manual text gives 430-4"],["Transmission/Gearbox",null,null,"SAE 20W-50 (spec table) / SAE 50 (routine section)","l","ONLY pre-2009 cast-iron/AVL builds (UCE 2009+ is single common oil). 4-speed: fill on level ground until oil flows from rear level plug; check every 800-1600 km"]]},"ROYALENFIELD|BULLET350UCEFIBS6":{"eg":"15W-50 (API SL, JASO MA2)","ed":2.75,"ec":"m","fg":"Royal Enfield Front Fork Oil","fl":195.0,"fr":195.0,"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"l"},"ROYALENFIELD|BULLET350JSERIES":{"eg":"15W-50 semi-synthetic (API SL, JASO MA2)","ed":2.2,"er":1.7,"ec":"m","fg":"Royal Enfield fork oil","fl":380.0,"fr":380.0,"bf":"DOT 4","bb":"DOT 4 (dual-channel); drum on single-channel base","fc":"m"},"ROYALENFIELD|HUNTER350":{"eg":"15W-50 semi-synthetic (API SL, JASO MA2)","ed":2.2,"er":1.7,"ec":"h","fg":"SS8","fl":452.0,"fr":452.0,"bf":"DOT 4","bb":"DOT 4 (dual-channel); drum on Retro variant","fc":"h"},"ROYALENFIELD|METEOR350":{"eg":"15W-50 semi-synthetic (API SL, JASO MA2)","ed":2.2,"er":1.7,"ec":"m","fg":"Royal Enfield Fork Oil","fl":453.0,"fr":453.0,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"ROYALENFIELD|GOANCLASSIC350":{"eg":"15W-50 semi-synthetic (API SL, JASO MA2)","ed":2.2,"er":1.7,"ec":"m","fg":"Royal Enfield Fork Oil","bf":"DOT 4","bb":"DOT 4","fc":"l"},"ROYALENFIELD|HIMALAYAN450":{"eg":"10W-40 semi-synthetic (API SN, JASO MA2)","ed":2.4,"er":2.1,"ec":"h","fg":"SS-47G","fl":507.0,"fr":589.0,"fd":true,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"ROYALENFIELD|GUERRILLA450":{"eg":"10W-40 semi-synthetic (API SN, JASO MA2)","ed":2.4,"er":2.1,"ec":"h","fl":540.0,"fr":540.0,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"ROYALENFIELD|SCRAM440":{"eg":"15W-50 (API SL)","ed":2.3,"ec":"h","fg":"Semi-synthetic 10W fork oil (viscosity range 35)","fl":455.0,"fr":455.0,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"ROYALENFIELD|SCRAM411":{"eg":"15W-50 semi-synthetic (API SL, JASO MA2)","ed":2.3,"ec":"m","fg":"10W fork oil (viscosity range 35)","fl":455.0,"fr":455.0,"bf":"DOT 4","bb":"DOT 4","fc":"m"},"ROYALENFIELD|HIMALAYAN411CARB":{"eg":"15W-50 semi-synthetic (API SL, JASO MA2)","ed":2.3,"ec":"m","fg":"10W fork oil (viscosity range 35)","fl":455.0,"fr":455.0,"bf":"DOT 4","bb":"DOT 4","fc":"m"},"ROYALENFIELD|HIMALAYAN411FI":{"eg":"15W-50 semi-synthetic (API SL, JASO MA2)","ed":2.3,"ec":"h","fg":"10W fork oil (viscosity range 35)","fl":455.0,"fr":455.0,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"ROYALENFIELD|INTERCEPTOR650":{"eg":"10W-50 fully synthetic (API SL, JASO MA2)","ed":3.9,"er":3.1,"ec":"m","fg":"2W 25 (HPCL)","fl":473.0,"fr":473.0,"bf":"DOT 4","bb":"DOT 4","fc":"m"},"ROYALENFIELD|CONTINENTALGT650":{"eg":"10W-50 fully synthetic (API SL, JASO MA2)","ed":3.9,"er":3.1,"ec":"h","fg":"2W 25 (HPCL)","fl":473.0,"fr":473.0,"bf":"DOT 4","bb":"DOT 4","fc":"m"},"ROYALENFIELD|SUPERMETEOR650":{"eg":"10W-50 fully synthetic (API SL, JASO MA2)","ed":3.9,"er":3.1,"ec":"l","bf":"DOT 4","bb":"DOT 4","fc":"l"},"ROYALENFIELD|SHOTGUN650":{"eg":"10W-50 fully synthetic (API SL, JASO MA2)","ed":3.9,"er":3.1,"ec":"h","fg":"SS-47G","fl":555.0,"fr":544.0,"fd":true,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"ROYALENFIELD|BEAR650":{"eg":"10W-50 fully synthetic (API SL, JASO MA2)","ed":3.9,"er":3.1,"ec":"h","fg":"SS-47G","fl":549.0,"fr":546.0,"fd":true,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"ROYALENFIELD|THUNDERBIRD350AVLCARB":{"fc":"l","op":[["Primary chaincase",null,null,"SAE 20W-40 (cast-iron spec table; not confirmed for AVL)","l","Drain by loosening chaincase front-half nut; refill to correct level (manual gives no volume for 5-speed/AVL). Cast-iron figure ~420 ml"],["Transmission/Gearbox",0.45,null,"EP90 gear oil","m","5-speed gearbox: drain and refill at first service (800 km) then every 12,000 km"]]},"ROYALENFIELD|THUNDERBIRD350UCECARB":{"eg":"15W-50 (API SL, JASO MA)","ed":2.75,"ec":"h","fg":"Royal Enfield Front Fork Oil (or Gabriel Fork Oil 2W 35)","fl":430.0,"fr":430.0,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"h"},"ROYALENFIELD|THUNDERBIRD350X":{"eg":"15W-50 (API SL, JASO MA2)","ed":2.75,"ec":"h","fg":"Royal Enfield Front Fork Oil (or Gabriel Fork Oil 2W 35)","fl":430.0,"fr":430.0,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"m"},"ROYALENFIELD|THUNDERBIRD500":{"eg":"15W-50 (API SL, JASO MA2)","ed":2.75,"ec":"m","fg":"Royal Enfield Front Fork Oil (or Gabriel Fork Oil 2W 35)","fl":430.0,"fr":430.0,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"h"},"ROYALENFIELD|CLASSIC500":{"eg":"15W-50 semi-synthetic (API SL, JASO MA2)","ed":2.75,"ec":"h","fg":"Royal Enfield Front Fork Oil (or 1F Grade Endurance)","fl":195.0,"fr":195.0,"bf":"DOT 3 or DOT 4 (DOT 4 on ABS models)","bb":"drum (non-ABS); DOT 4 (ABS rear disc)","fc":"l"},"ROYALENFIELD|ELECTRA350":{"eg":"15W-50 (API SL, JASO MA)","ed":2.75,"ec":"m","fc":"l","op":[["Primary chaincase",null,null,"SAE 20W-40 (cast-iron spec table; not confirmed for AVL)","l","ONLY pre-2009 AVL/cast-iron Electra; UCE Electra (Twinspark) uses common oil 2.75 L. Drain by loosening chaincase front-half nut; refill to correct level (manua"],["Transmission/Gearbox",0.45,null,"EP90 gear oil","l","ONLY pre-2009 AVL/cast-iron Electra; UCE Electra (Twinspark) uses common oil 2.75 L. 5-speed gearbox: drain and refill at first service (800 km) then every 12,0"]]},"ROYALENFIELD|STANDARD350CASTIRON":{"fc":"l","ed":2.25,"eg":"SAE 20W-50 (spec table; lubrication text says SAE 50)","ec":"m","op":[["Primary chaincase",0.42,null,"SAE 20W-40 (spec table) / SAE 20 (primary chain section)","m","Fill to level plug in outer chaincase; drain by removing cover nut. Manual text gives 430-450 ml - conflicting"],["Transmission/Gearbox",null,null,"SAE 20W-50 (spec table) / SAE 50 (routine section)","l","4-speed: fill on level ground until oil flows from rear level plug; check every 800-1600 km warm. Manual initial fill = ~700 g Veedol 00 grease mixed with SAE 5"]]},"ROYALENFIELD|BULLET500CARB":{"eg":"15W-50 (API SL, JASO MA2)","ed":2.75,"ec":"m","fg":"Royal Enfield Front Fork Oil (or 1F Grade Endurance)","fl":195.0,"fr":195.0,"bf":"DOT 4","bb":"DOT 4","fc":"m","op":[["Primary chaincase",0.42,null,"SAE 20W-40 (spec table) / SAE 20 (primary chain section)","l","ONLY pre-2009 cast-iron/AVL builds (UCE 500 is single common oil). Fill to level plug in outer chaincase; drain by removing cover nut. Manual text gives 430-450"],["Transmission/Gearbox",null,null,"SAE 20W-50 (spec table) / SAE 50 (routine section)","l","ONLY pre-2009 cast-iron/AVL builds (UCE 500 is single common oil). 4-speed: fill on level ground until oil flows from rear level plug; check every 800-1600 km w"]]},"ROYALENFIELD|BULLET500FI":{"eg":"15W-50 semi-synthetic (API SL, JASO MA2)","ed":2.75,"ec":"h","fg":"Royal Enfield Front Fork Oil (or 1F Grade Endurance)","fl":195.0,"fr":195.0,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"ROYALENFIELD|MACHISMO350":{"fc":"l","op":[["Primary chaincase",null,null,"SAE 20W-40 (cast-iron spec table; not confirmed for AVL)","l","Drain by loosening chaincase front-half nut; refill to correct level (manual gives no volume for 5-speed/AVL). Cast-iron figure ~420 ml"],["Transmission/Gearbox",0.45,null,"EP90 gear oil","m","5-speed gearbox: drain and refill at first service (800 km) then every 12,000 km"]]},"SUZUKI|GIXXER150CARB":{"eg":"10W-40 (API SG-SN, JASO MA)","er":0.95,"ec":"m","bf":"DOT 4","bb":"drum (single disc); DOT 4 (rear disc variant)","fc":"m"},"SUZUKI|GIXXER150FI":{"eg":"10W-40 (API SG-SN, JASO MA)","er":0.95,"ec":"h","bf":"DOT 4","bb":"drum (single disc); DOT 4 (rear disc variant)","fc":"m"},"SUZUKI|GIXXERSF150CARB":{"eg":"10W-40 (API SG-SN, JASO MA)","er":0.95,"ec":"m","bf":"DOT 4","bb":"DOT 4 (rear disc); drum on drum variant","fc":"m"},"SUZUKI|GIXXERSF150FI":{"eg":"10W-40 (API SG-SN, JASO MA)","er":0.95,"ec":"m","bf":"DOT 4","bb":"DOT 4 (rear disc); drum on drum variant","fc":"m"},"SUZUKI|GIXXER250":{"bf":"DOT 3 or DOT 4","bb":"DOT 4","fc":"m"},"SUZUKI|GIXXERSF250":{"bf":"DOT 3 or DOT 4","bb":"DOT 4","fc":"m"},"SUZUKI|VSTROMSX250":{"fc":"l"},"SUZUKI|INTRUDER150CARB":{"eg":"10W-40","er":0.95,"ec":"l","fc":"l"},"SUZUKI|INTRUDER150FI":{"eg":"10W-40","er":0.95,"ec":"l","fc":"l"},"SUZUKI|ACCESS125CARB":{"eg":"10W-40 (JASO MB)","er":0.65,"ec":"l","fc":"l","op":[["Final gear (scooter)",null,0.05,"Not stated in manual excerpt","l","Final gear oil via level hole (refill) and drain plug; Philippines-market manual (India-built model); interval possibly every 12,000 km (chart layout ambiguous)"]]},"SUZUKI|ACCESS125FI":{"eg":"10W-40 (JASO MB)","er":0.65,"ec":"l","fc":"l","op":[["Final gear (scooter)",null,0.05,"Not stated in manual excerpt","l","Final gear oil via level hole (refill) and drain plug; Philippines-market manual (India-built model); interval possibly every 12,000 km (chart layout ambiguous)"]]},"SUZUKI|AVENIS125":{"eg":"10W-40 (JASO MB)","er":0.65,"ec":"h","fc":"l","op":[["Final gear (scooter)",null,0.05,"Not stated in manual excerpt","m","Final gear oil via level hole (refill) and drain plug; Philippines-market manual (India-built model); interval possibly every 12,000 km (chart layout ambiguous)"]]},"SUZUKI|BURGMANSTREET125CARB":{"eg":"10W-40 (JASO MB)","er":0.65,"ec":"l","fc":"l","op":[["Final gear (scooter)",null,0.05,"Not stated in manual excerpt","l","Final gear oil via level hole (refill) and drain plug; Philippines-market manual (India-built model); interval possibly every 12,000 km (chart layout ambiguous)"]]},"SUZUKI|BURGMANSTREET125FI":{"eg":"10W-40 (JASO MB)","er":0.65,"ec":"h","fc":"l","op":[["Final gear (scooter)",null,0.05,"Not stated in manual excerpt","m","Final gear oil via level hole (refill) and drain plug; Philippines-market manual (India-built model); interval possibly every 12,000 km (chart layout ambiguous)"]]},"SUZUKI|BURGMANSTREETEX":{"eg":"10W-40 (JASO MB)","er":0.65,"ec":"h","fc":"l","op":[["Final gear (scooter)",null,0.05,"Not stated in manual excerpt","m","Final gear oil via level hole (refill) and drain plug; Philippines-market manual (India-built model); interval possibly every 12,000 km (chart layout ambiguous)"]]},"SUZUKI|HAYABUSA":{"fc":"l"},"SUZUKI|GSX8R":{"fc":"l"},"SUZUKI|GSXS750":{"fc":"l"},"SUZUKI|VSTROM800DE":{"fc":"l"},"SUZUKI|KATANA":{"fc":"l"},"SUZUKI|GS150R":{"fc":"l"},"SUZUKI|HAYATE":{"fc":"l"},"SUZUKI|SLINGSHOT":{"fc":"l"},"TVS|SPORTCARB":{"eg":"10W-30 (API SL, JASO MA2)","ed":1.0,"ec":"m","fg":"IOC/Castrol Teleshockab oil","fl":155.0,"fr":155.0,"bf":"drum","bb":"drum","fc":"m"},"TVS|SPORTFI":{"eg":"10W-30 (API SL, JASO MA2)","ed":1.0,"ec":"m","fg":"IOC/Castrol Teleshockab oil","fl":155.0,"fr":155.0,"bf":"drum","bb":"drum","fc":"h"},"TVS|RADEONCARB":{"eg":"10W-30 (API SL, JASO MA2)","ed":1.0,"ec":"m","fg":"IOC/Castrol Teleshockab oil","fl":160.0,"fr":160.0,"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"m"},"TVS|RADEONFI":{"eg":"10W-30 (API SL, JASO MA2)","ed":1.0,"ec":"m","fg":"IOC/Castrol Teleshockab oil","fl":160.0,"fr":160.0,"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"h"},"TVS|STARCITYPLUSCARB":{"eg":"10W-30 (API SL, JASO MA2)","ed":1.0,"ec":"m","fg":"IOC/Castrol Teleshockab oil","fl":155.0,"fr":155.0,"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"m"},"TVS|STARCITYPLUSFI":{"eg":"10W-30 (API SL, JASO MA2)","ed":1.0,"ec":"m","fg":"IOC/Castrol Teleshockab oil","fl":155.0,"fr":155.0,"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"h"},"TVS|RAIDER125":{"eg":"10W-30 (API SL, JASO MA2)","ed":1.0,"ec":"l","fg":"Castrol/IOC Teleshockab oil","fl":162.0,"fr":162.0,"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"h"},"TVS|APACHERTR160CARB":{"eg":"10W-30","ed":1.1,"er":1.0,"ec":"m","fg":"IOC/Castrol Teleshockab oil","fl":140.0,"fr":140.0,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4 (rear disc); drum on drum variant","fc":"m"},"TVS|APACHERTR160FI":{"eg":"10W-30 fully synthetic (API SL, JASO MA2)","ed":1.1,"er":1.0,"ec":"h","fg":"IOC/Castrol Teleshockab oil","fl":140.0,"fr":140.0,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4 (rear disc); drum on drum variant","fc":"h"},"TVS|APACHERTR1604VCARB":{"eg":"10W-30 fully synthetic (API SL, JASO MA2)","ed":1.4,"er":1.2,"ec":"m","fg":"IOC/HPCL front fork fluid","fl":242.0,"fr":242.0,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4 (rear disc); drum on drum variant","fc":"m"},"TVS|APACHERTR1604VFI":{"eg":"10W-30 fully synthetic (API SL, JASO MA2)","ed":1.4,"er":1.2,"ec":"h","fg":"IOC/HPCL front fork fluid","fl":242.0,"fr":242.0,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4 (rear disc); drum on drum variant","fc":"h"},"TVS|APACHERTR165RP":{"eg":"10W-30 fully synthetic (API SL, JASO MA2)","ed":1.4,"er":1.2,"ec":"m","fg":"IOC/HPCL front fork fluid","fl":242.0,"fr":242.0,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"TVS|APACHERTR180CARB":{"eg":"4T oil (grade per service manual)","ed":1.1,"er":1.0,"ec":"h","fg":"IOC/Castrol Teleshockab oil","fl":140.0,"fr":140.0,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4 (rear disc); drum on drum variant","fc":"l"},"TVS|APACHERTR180FI":{"eg":"10W-30 fully synthetic (API SL, JASO MA2)","ed":1.1,"er":1.0,"ec":"h","fg":"IOC/Castrol Teleshockab oil","fl":140.0,"fr":140.0,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4 (rear disc); drum on drum variant","fc":"l"},"TVS|APACHERTR2004VCARB":{"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"TVS|APACHERTR2004VFI":{"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"TVS|APACHERTR310":{"eg":"15W-50 (API SL, JASO MA2)","ed":1.7,"er":1.7,"ec":"l","fg":"KHL 15-10 (Oil No 00MO1)","fl":493.0,"fr":539.0,"fd":true,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"TVS|APACHERR310":{"eg":"15W-50 (API SL, JASO MA2)","ed":1.7,"er":1.7,"ec":"m","fg":"KHL 15-10 (Oil No 00MO1)","fl":480.0,"fr":484.0,"fd":true,"bf":"DOT 4","bb":"DOT 4","fc":"h"},"TVS|RONIN":{"eg":"10W-30 fully synthetic (API SL, JASO MA2)","ed":1.5,"er":1.3,"ec":"h","fg":"SHOWA SS-47G","fl":525.0,"fr":500.0,"fd":true,"bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"h"},"TVS|JUPITER110CARB":{"eg":"10W-30 (API SL, JASO MB)","ed":0.8,"ec":"h","fg":"Gabriel Premium front fork oil","fl":84.0,"fr":84.0,"bf":"drum (drum variant); DOT 3 or DOT 4 if disc","bb":"drum","fc":"m","op":[["Final gear (scooter)",0.12,0.1,"TVS TRU4 Premium 4T (same oil as engine)","h","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|JUPITER110FI":{"eg":"10W-30 (API SL, JASO MB)","ed":0.8,"ec":"h","fg":"Gabriel Premium front fork oil","fl":84.0,"fr":84.0,"bf":"drum (drum variant); DOT 3 or DOT 4 if disc","bb":"drum","fc":"h","op":[["Final gear (scooter)",0.12,0.1,"TVS TRU4 Premium 4T (same oil as engine)","m","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|JUPITER125":{"eg":"10W-30 (API SL, JASO MB)","ed":0.7,"ec":"m","fg":"Gabriel Premium front fork oil","fl":92.0,"fr":92.0,"bf":"DOT 3 or DOT 4 (disc variant); drum on drum variant","bb":"drum","fc":"h","op":[["Final gear (scooter)",0.12,null,"TVS TRU4 SKUUTA SAE 10W-30 (API SL, JASO MB)","h","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|NTORQ125CARB":{"eg":"10W-30 (API SL, JASO MB)","ed":0.93,"er":0.88,"ec":"l","fg":"Gabriel Premium front fork oil","fl":91.0,"fr":91.0,"bf":"drum (drum variant); DOT 3 or DOT 4 if disc","bb":"drum","fc":"m","op":[["Final gear (scooter)",0.13,0.12,"TVS TRU4 SKUUTA SAE 10W-30 (API SL, JASO MB)","m","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|NTORQ125FI":{"eg":"10W-30 (API SL, JASO MB)","ed":0.93,"er":0.88,"ec":"m","fg":"Gabriel Premium front fork oil","fl":91.0,"fr":91.0,"bf":"drum (drum variant); DOT 3 or DOT 4 if disc","bb":"drum","fc":"h","op":[["Final gear (scooter)",0.13,0.12,"TVS TRU4 SKUUTA SAE 10W-30 (API SL, JASO MB)","h","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|ZEST110CARB":{"eg":"10W-30 (API SL, JASO MB)","ed":0.8,"ec":"h","fg":"Gabriel Premium front fork oil","fl":53.0,"fr":53.0,"bf":"drum","bb":"drum","fc":"m","op":[["Final gear (scooter)",0.12,0.1,"TVS TRU4 SKUUTA SAE 10W-30 (API SL, JASO MB)","h","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|ZEST110FI":{"eg":"10W-30 (API SL, JASO MB)","ed":0.8,"ec":"h","fg":"Gabriel Premium front fork oil","fl":53.0,"fr":53.0,"bf":"drum","bb":"drum","fc":"h","op":[["Final gear (scooter)",0.12,0.1,"TVS TRU4 SKUUTA SAE 10W-30 (API SL, JASO MB)","h","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|SCOOTYPEPPLUSCARB":{"eg":"10W-30 (API SL, JASO MB)","ed":0.8,"ec":"h","fg":"Gabriel Premium front fork oil","fl":53.0,"fr":53.0,"bf":"drum","bb":"drum","fc":"m","op":[["Final gear (scooter)",0.12,0.1,"TVS TRU4 SKUUTA SAE 10W-30 (API SL, JASO MB)","h","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|SCOOTYPEPPLUSFI":{"eg":"10W-30 (API SL, JASO MB)","ed":0.8,"ec":"h","fg":"Gabriel Premium front fork oil","fl":53.0,"fr":53.0,"bf":"drum","bb":"drum","fc":"h","op":[["Final gear (scooter)",0.12,0.1,"TVS TRU4 SKUUTA SAE 10W-30 (API SL, JASO MB)","h","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|VICTOR":{"bb":"drum","fc":"l"},"TVS|WEGOCARB":{"eg":"20W-50 (JASO MA/MA2, API SL)","ed":0.8,"er":0.75,"ec":"h","bf":"drum","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"TVS TRU4 Premium 4T 10W-30","h","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|WEGOFI":{"eg":"10W-30","ed":0.8,"er":0.75,"ec":"l","bf":"drum","bb":"drum","fc":"l","op":[["Final gear (scooter)",0.12,0.1,"TVS TRU4 Premium 4T 10W-30","m","Transmission oil level/drain bolts on final gear case; same oil as engine"]]},"TVS|STARSPORT":{"fc":"l"},"YAMAHA|FZSFIV4":{"fc":"l"},"YAMAHA|FZSFIV3":{"fc":"l"},"YAMAHA|FZX":{"fc":"l"},"YAMAHA|FZ16CARB":{"fc":"l"},"YAMAHA|FZFI":{"fc":"l"},"YAMAHA|FZ25":{"fc":"l"},"YAMAHA|FZS25":{"fc":"l"},"YAMAHA|MT15V2":{"eg":"10W-40 (API SG+, JASO MA)","er":0.95,"ec":"m","bf":"DOT 4","bb":"DOT 4","fc":"m"},"YAMAHA|R15V4":{"eg":"10W-40 (API SG+, JASO MA)","er":0.95,"ec":"m","bf":"DOT 4","bb":"DOT 4","fc":"h"},"YAMAHA|R15M":{"eg":"10W-40 (API SG+, JASO MA)","er":0.95,"ec":"m","bf":"DOT 4","bb":"DOT 4","fc":"h"},"YAMAHA|R15V3":{"eg":"10W-40 (API SG+, JASO MA)","er":0.95,"ec":"m","fg":"Yamaha G10 suspension oil","fl":460.0,"fr":460.0,"fv":"84","bf":"DOT 3 or DOT 4","bb":"DOT 3 or DOT 4","fc":"l"},"YAMAHA|R3":{"bf":"DOT 4","bb":"DOT 4","fc":"h"},"YAMAHA|MT03":{"bf":"DOT 4","bb":"DOT 4","fc":"m"},"YAMAHA|AEROX155":{"fc":"l","op":[["Final gear (scooter)",0.1,null,"Not stated in excerpt (manual refers to spec page)","l","Final transmission oil drain bolt + filler bolt"]]},"YAMAHA|FASCINO125":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter final transmission oil point; figure not found"]]},"YAMAHA|RAYZR125":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter final transmission oil point; figure not found"]]},"YAMAHA|SALUTO125":{"fc":"l"},"YAMAHA|SZRR":{"fc":"l"},"YAMAHA|RX100":{"eg":"2T oil (JASO FC/FD) for engine; gearbox oil grade not found","fc":"l","op":[["2T oil tank",null,null,"2T oil (JASO FC/FD)","l","Separate 2T oil tank feeding Autolube pump; top up, no drain (replaces engine sump)"],["Transmission/Gearbox",null,null,"20W-40 engine/gearbox oil (per forum, said to be company recommendation; unverified)","l","Gearbox/clutch oil with own drain plug and filler; quantity not found"]]},"YAMAHA|RX135":{"eg":"2T oil (JASO FC/FD) for engine; gearbox oil grade not found","fc":"l","op":[["2T oil tank",null,null,"2T oil (JASO FC/FD)","l","Separate 2T oil tank feeding Autolube pump; top up, no drain (replaces engine sump)"],["Transmission/Gearbox",null,null,"20W-40 engine/gearbox oil (per forum, said to be company recommendation; unverified)","l","Gearbox/clutch oil with own drain plug and filler; quantity not found"]]},"YAMAHA|RD350":{"eg":"2T oil (JASO FC/FD) for engine; gearbox oil grade not found","fc":"l","op":[["2T oil tank",null,null,"2T oil (JASO FC/FD)","l","Separate 2T oil tank feeding Autolube pump; top up, no drain (replaces engine sump)"],["Transmission/Gearbox",null,null,"20W-40 engine/gearbox oil (per forum, said to be company recommendation; unverified)","l","Gearbox/clutch oil with own drain plug and filler; quantity not found"]]},"YAMAHA|CRUX":{"fc":"l"},"YAMAHA|LIBERO":{"fc":"l"},"YAMAHA|ALBA":{"fc":"l"},"APRILIA|SR125CARB":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","Piaggio India 125/160 CVT scooter: separate rear hub (final gear) oil; figure not found (Vespa LX 3V Europe = 0.20 L, reference only)"]]},"APRILIA|SR125FI":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","Piaggio India 125/160 CVT scooter: separate rear hub (final gear) oil; figure not found (Vespa LX 3V Europe = 0.20 L, reference only)"]]},"APRILIA|SR160":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","Piaggio India 125/160 CVT scooter: separate rear hub (final gear) oil; figure not found (Vespa LX 3V Europe = 0.20 L, reference only)"]]},"APRILIA|SXR125":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","Piaggio India 125/160 CVT scooter: separate rear hub (final gear) oil; figure not found (Vespa LX 3V Europe = 0.20 L, reference only)"]]},"APRILIA|SXR160":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","Piaggio India 125/160 CVT scooter: separate rear hub (final gear) oil; figure not found (Vespa LX 3V Europe = 0.20 L, reference only)"]]},"APRILIA|STORM125":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","Piaggio India 125/160 CVT scooter: separate rear hub (final gear) oil; figure not found (Vespa LX 3V Europe = 0.20 L, reference only)"]]},"APRILIA|RS457":{"fc":"l"},"APRILIA|TUONO457":{"fc":"l"},"APRILIA|RS660":{"fc":"l"},"APRILIA|TUONO660":{"fc":"l"},"APRILIA|TUAREG660":{"fc":"l"},"APRILIA|RSV4":{"fc":"l"},"APRILIA|TUONOV4":{"fc":"l"},"BENELLI|IMPERIALE400":{"fc":"l"},"BENELLI|TRK502":{"fc":"l"},"BENELLI|TRK502X":{"fc":"l"},"BENELLI|TRK702":{"fc":"l"},"BENELLI|TRK702X":{"fc":"l"},"BENELLI|LEONCINO500":{"fc":"l"},"BENELLI|502C":{"fc":"l"},"BENELLI|302S":{"fc":"l"},"BENELLI|TNT300":{"fc":"l"},"BMWMOTORRAD|G310R":{"eg":"5W-40 (API SJ, JASO MA2)","er":1.65,"ec":"m","bf":"DOT 4","bb":"DOT 4","fc":"h"},"BMWMOTORRAD|G310RR":{"eg":"5W-40 (API SJ, JASO MA2)","er":1.65,"ec":"m","bf":"DOT 4","bb":"DOT 4","fc":"m"},"BMWMOTORRAD|G310GS":{"eg":"5W-40 (API SJ, JASO MA2)","er":1.65,"ec":"h","bf":"DOT 4","bb":"DOT 4","fc":"m"},"BMWMOTORRAD|F450GS":{"fc":"l"},"BMWMOTORRAD|F900R":{"fc":"l"},"BMWMOTORRAD|F900XR":{"fc":"l"},"BMWMOTORRAD|F850GS":{"fc":"l"},"BMWMOTORRAD|R1300GS":{"fc":"l","ed":5.0,"eg":"5W-40 (API SL / JASO MA2)","ec":"h","op":[["Final drive",null,null,"SAE 70W-80 rear axle differential (hypoid) oil","m","Shaft drive bevel box (Paralever); BMW rider's manual gives spec only, no quantity. Forums (ukgser) report ~180 ml, fill to bottom of filler hole (unverified)"]]},"BMWMOTORRAD|R1300GSADVENTURE":{"fc":"l","ed":5.0,"eg":"5W-40 (API SL / JASO MA2)","ec":"h","op":[["Final drive",null,null,"SAE 70W-80 rear axle differential (hypoid) oil","m","Shaft drive bevel box (Paralever); BMW rider's manual gives spec only, no quantity. Forums (ukgser) report ~180 ml, fill to bottom of filler hole (unverified)"]]},"BMWMOTORRAD|R1250GSADVENTURE":{"fc":"l","ed":4.0,"eg":"5W-40 (API SL / JASO MA2), BMW ADVANTEC Ultimate","ec":"h","op":[["Final drive",null,null,"SAE 70W-80 rear axle differential (hypoid) oil - BMW Hypoid Axle G3 per R 1250 GS manual","m","Shaft drive bevel box (Paralever); BMW rider's manual gives spec only, no quantity. Forums (ukgser) report ~180 ml, fill to bottom of filler hole (unverified)"]]},"BMWMOTORRAD|S1000RR":{"fc":"l"},"BMWMOTORRAD|S1000R":{"fc":"l"},"BMWMOTORRAD|S1000XR":{"fc":"l"},"BMWMOTORRAD|M1000RR":{"fc":"l"},"BMWMOTORRAD|R18":{"fc":"l","ed":4.0,"eg":"15W-50 (API SJ / JASO MA2), BMW ADVANTEC Pro","ec":"h","op":[["Transmission/Gearbox",null,null,"SAE 70W-80 hypoid (per parts retailer; rider's manual excerpt gave no gearbox oil spec)","l","Separate 6-speed gearbox housing (dry clutch) - own drain/fill; quantity not found"],["Final drive",null,null,"FUCHS Titan EG 4218 SAE 70W-80","m","Shaft drive bevel box; quantity not stated in rider's manual"]]},"BMWMOTORRAD|R12NINET":{"fc":"l","ed":3.95,"eg":"15W-50 (API SJ / JASO MA2), BMW ADVANTEC Pro","ec":"h","op":[["Transmission/Gearbox",null,null,"","l","Separate 6-speed gearbox housing (dry clutch) - own oil; spec and quantity not found in manual excerpt"],["Final drive",null,null,"FUCHS Titan EG 4218 SAE 70W-80","m","Shaft drive bevel box; quantity not stated"]]},"BSA|GOLDSTAR650":{"fc":"l"},"BSA|SCRAMBLER650":{"fc":"l"},"BSA|BANTAM350":{"fc":"l"},"CFMOTO|300NK":{"fc":"l"},"CFMOTO|650NK":{"fc":"l"},"CFMOTO|650MT":{"fc":"l"},"DUCATI|MONSTER":{"fc":"l"},"DUCATI|SCRAMBLERICON":{"fc":"l"},"DUCATI|SCRAMBLERNIGHTSHIFT":{"fc":"l"},"DUCATI|SCRAMBLERFULLTHROTTLE":{"fc":"l"},"DUCATI|PANIGALEV2":{"fc":"l"},"DUCATI|PANIGALEV4":{"fc":"l"},"DUCATI|STREETFIGHTERV2":{"fc":"l"},"DUCATI|STREETFIGHTERV4":{"fc":"l"},"DUCATI|MULTISTRADAV2":{"fc":"l"},"DUCATI|MULTISTRADAV4":{"fc":"l"},"DUCATI|DESERTX":{"fc":"l"},"DUCATI|DIAVELV4":{"fc":"l"},"DUCATI|XDIAVEL":{"fc":"l"},"DUCATI|HYPERMOTARD698MONO":{"fc":"l"},"HARLEYDAVIDSON|X440":{"eg":"15W-50 synthetic (per Hunk 440 manual, same engine)","ed":2.6,"er":2.25,"ec":"m","bf":"DOT 4","bb":"DOT 4","fc":"h"},"HARLEYDAVIDSON|NIGHTSTER":{"fc":"l"},"HARLEYDAVIDSON|SPORTSTERS":{"fc":"l"},"HARLEYDAVIDSON|FATBOB114":{"fc":"l","ed":4.73,"er":3.78,"eg":"H-D 360 20W50 (preferred) or Screamin' Eagle SYN3 20W50","ec":"h","op":[["Primary chaincase",1.18,1.06,"H-D Formula+ Transmission and Primary Chaincase Lubricant","h","Drain plug (new O-ring, 19-28.5 N.m, clean magnet); fill upright to bottom of clutch pressure plate OD; do not overfill. capacity=dry fill, refill=wet fill (dra"],["Transmission/Gearbox",0.95,0.83,"H-D Formula+ Transmission and Primary Chaincase Lubricant or Screamin' Eagle SYN3 20W50 (do not mix mineral with SYN3)","h","Check on dipstick between A and F; drain plug new O-ring 19-28.5 N.m; refill 0.83 L (28 oz) then adjust"]]},"HARLEYDAVIDSON|STREETBOB114":{"fc":"l","ed":4.73,"er":3.78,"eg":"H-D 360 20W50 (preferred) or Screamin' Eagle SYN3 20W50","ec":"h","op":[["Primary chaincase",1.18,1.06,"H-D Formula+ Transmission and Primary Chaincase Lubricant","h","Drain plug (new O-ring, 19-28.5 N.m, clean magnet); fill upright to bottom of clutch pressure plate OD; do not overfill. capacity=dry fill, refill=wet fill (dra"],["Transmission/Gearbox",0.95,0.83,"H-D Formula+ Transmission and Primary Chaincase Lubricant or Screamin' Eagle SYN3 20W50 (do not mix mineral with SYN3)","h","Check on dipstick between A and F; drain plug new O-ring 19-28.5 N.m; refill 0.83 L (28 oz) then adjust"]]},"HARLEYDAVIDSON|FATBOY114":{"fc":"l","ed":4.73,"er":3.78,"eg":"H-D 360 20W50 (preferred) or Screamin' Eagle SYN3 20W50","ec":"h","op":[["Primary chaincase",1.35,null,"H-D Formula+ Transmission and Primary Chaincase Lubricant","m","Drain plug (new O-ring, 19-28.5 N.m, clean magnet); fill upright to bottom of clutch pressure plate OD; do not overfill. capacity=dry fill, refill=wet fill (dra"],["Transmission/Gearbox",0.95,0.83,"H-D Formula+ Transmission and Primary Chaincase Lubricant or Screamin' Eagle SYN3 20W50 (do not mix mineral with SYN3)","h","Check on dipstick between A and F; drain plug new O-ring 19-28.5 N.m; refill 0.83 L (28 oz) then adjust"]]},"HARLEYDAVIDSON|HERITAGECLASSIC":{"fc":"l","ed":4.73,"er":3.78,"eg":"H-D 360 20W50 (preferred) or Screamin' Eagle SYN3 20W50","ec":"h","op":[["Primary chaincase",1.18,1.06,"H-D Formula+ Transmission and Primary Chaincase Lubricant","h","Drain plug (new O-ring, 19-28.5 N.m, clean magnet); fill upright to bottom of clutch pressure plate OD; do not overfill. capacity=dry fill, refill=wet fill (dra"],["Transmission/Gearbox",0.95,0.83,"H-D Formula+ Transmission and Primary Chaincase Lubricant or Screamin' Eagle SYN3 20W50 (do not mix mineral with SYN3)","h","Check on dipstick between A and F; drain plug new O-ring 19-28.5 N.m; refill 0.83 L (28 oz) then adjust"]]},"HARLEYDAVIDSON|ROADKINGSPECIAL":{"fc":"l","er":4.5,"eg":"H-D 360 20W50 or Screamin' Eagle SYN3 20W50","ec":"m","op":[["Primary chaincase",1.0,null,"H-D Formula+ Transmission and Primary Chaincase Lubricant","m","Fill upright to bottom of clutch pressure plate OD; only dry-fill figure given"],["Transmission/Gearbox",0.95,0.83,"H-D Formula+ or Screamin' Eagle SYN3 20W50","m","Initial refill 0.83 L (28 oz) then adjust to dipstick"]]},"HARLEYDAVIDSON|ROADGLIDE":{"fc":"l","er":4.5,"eg":"H-D 360 20W50 or Screamin' Eagle SYN3 20W50","ec":"m","op":[["Primary chaincase",1.0,null,"H-D Formula+ Transmission and Primary Chaincase Lubricant","m","Fill upright to bottom of clutch pressure plate OD; only dry-fill figure given"],["Transmission/Gearbox",0.95,0.83,"H-D Formula+ or Screamin' Eagle SYN3 20W50","m","Initial refill 0.83 L (28 oz) then adjust to dipstick"]]},"HARLEYDAVIDSON|STREETGLIDE":{"fc":"l","er":4.5,"eg":"H-D 360 20W50 or Screamin' Eagle SYN3 20W50","ec":"m","op":[["Primary chaincase",1.0,null,"H-D Formula+ Transmission and Primary Chaincase Lubricant","m","Fill upright to bottom of clutch pressure plate OD; only dry-fill figure given"],["Transmission/Gearbox",0.95,0.83,"H-D Formula+ or Screamin' Eagle SYN3 20W50","m","Initial refill 0.83 L (28 oz) then adjust to dipstick"]]},"HARLEYDAVIDSON|BREAKOUT":{"fc":"l","ed":4.73,"er":3.78,"eg":"H-D 360 20W50 (preferred) or Screamin' Eagle SYN3 20W50","ec":"h","op":[["Primary chaincase",1.35,null,"H-D Formula+ Transmission and Primary Chaincase Lubricant","m","Drain plug (new O-ring, 19-28.5 N.m, clean magnet); fill upright to bottom of clutch pressure plate OD; do not overfill. capacity=dry fill, refill=wet fill (dra"],["Transmission/Gearbox",0.95,0.83,"H-D Formula+ Transmission and Primary Chaincase Lubricant or Screamin' Eagle SYN3 20W50 (do not mix mineral with SYN3)","h","Check on dipstick between A and F; drain plug new O-ring 19-28.5 N.m; refill 0.83 L (28 oz) then adjust"]]},"HARLEYDAVIDSON|LOWRIDERS":{"fc":"l","ed":4.73,"er":3.78,"eg":"H-D 360 20W50 (preferred) or Screamin' Eagle SYN3 20W50","ec":"h","op":[["Primary chaincase",1.18,1.06,"H-D Formula+ Transmission and Primary Chaincase Lubricant","h","Drain plug (new O-ring, 19-28.5 N.m, clean magnet); fill upright to bottom of clutch pressure plate OD; do not overfill. capacity=dry fill, refill=wet fill (dra"],["Transmission/Gearbox",0.95,0.83,"H-D Formula+ Transmission and Primary Chaincase Lubricant or Screamin' Eagle SYN3 20W50 (do not mix mineral with SYN3)","h","Check on dipstick between A and F; drain plug new O-ring 19-28.5 N.m; refill 0.83 L (28 oz) then adjust"]]},"HARLEYDAVIDSON|PANAMERICA1250":{"fc":"l"},"HARLEYDAVIDSON|IRON883":{"fc":"l","ed":2.6,"eg":"H-D 360 20W50 (grade per H-D owner's manual oil table; Sportster manual table not read)","ec":"m","op":[["Transmission/Gearbox",0.95,null,"H-D Formula+ Transmission and Primary Chaincase Lubricant (grade from H-D Softail manual; Sportster manual not read)","h","Single shared primary chaincase + transmission compartment (Evolution Sportster); spec sheet lists primary as N/A"]]},"HARLEYDAVIDSON|FORTYEIGHT":{"fc":"l","ed":2.6,"eg":"H-D 360 20W50 (grade per H-D owner's manual oil table; Sportster manual table not read)","ec":"m","op":[["Transmission/Gearbox",0.95,null,"H-D Formula+ Transmission and Primary Chaincase Lubricant (grade from H-D Softail manual; Sportster manual not read)","h","Single shared primary chaincase + transmission compartment (Evolution Sportster); spec sheet lists primary as N/A"]]},"HARLEYDAVIDSON|STREET750":{"fc":"l"},"HUSQVARNA|SVARTPILEN125":{"eg":"15W-50","er":1.5,"ec":"l","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"l"},"HUSQVARNA|SVARTPILEN250":{"bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"l"},"HUSQVARNA|SVARTPILEN401":{"eg":"15W-50","er":1.7,"ec":"l","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"l"},"HUSQVARNA|VITPILEN250":{"bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"l"},"HUSQVARNA|VITPILEN401":{"eg":"15W-50","er":1.7,"ec":"l","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"l"},"HUSQVARNA|NORDEN901":{"eg":"10W-50","er":2.8,"ec":"l","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"l"},"INDIANMOTORCYCLE|SCOUTBOBBER":{"fc":"l"},"INDIANMOTORCYCLE|SCOUTCLASSIC":{"fc":"l"},"INDIANMOTORCYCLE|SPORTSCOUT":{"fc":"l"},"INDIANMOTORCYCLE|CHIEFDARKHORSE":{"fc":"l"},"INDIANMOTORCYCLE|CHIEFTAIN":{"fc":"l"},"INDIANMOTORCYCLE|ROADMASTER":{"fc":"l"},"INDIANMOTORCYCLE|SPRINGFIELD":{"fc":"l"},"INDIANMOTORCYCLE|FTR":{"fc":"l"},"INDIANMOTORCYCLE|CHALLENGER":{"fc":"l"},"INDIANMOTORCYCLE|PURSUIT":{"fc":"l"},"JAWA|JAWA42":{"fc":"l"},"JAWA|JAWA42BOBBER":{"fc":"l"},"JAWA|JAWA350":{"fc":"l"},"JAWA|JAWA42FJ":{"fc":"l"},"JAWA|PERAK":{"fc":"l"},"JAWA|JAWACLASSIC":{"fc":"l"},"KAWASAKI|NINJA300":{"eg":"10W-40","er":2.2,"ec":"h","fc":"l"},"KAWASAKI|NINJA400":{"fc":"l"},"KAWASAKI|NINJA500":{"fc":"l"},"KAWASAKI|NINJA650":{"eg":"10W-40","ed":2.3,"er":1.8,"ec":"m","bf":"DOT 4","bb":"DOT 4","fc":"h"},"KAWASAKI|NINJA1100SX":{"fc":"l"},"KAWASAKI|NINJAZX4R":{"fc":"l"},"KAWASAKI|NINJAZX6R":{"fc":"l"},"KAWASAKI|NINJAZX10R":{"eg":"10W-40","ed":3.7,"er":3.3,"ec":"l","fc":"l"},"KAWASAKI|NINJAH2":{"fc":"l"},"KAWASAKI|Z650":{"eg":"10W-40","ed":2.3,"er":1.8,"ec":"l","bf":"DOT 4","bb":"DOT 4","fc":"m"},"KAWASAKI|Z650RS":{"eg":"10W-40","ed":2.3,"er":1.8,"ec":"l","bf":"DOT 4","bb":"DOT 4","fc":"m"},"KAWASAKI|Z900":{"fc":"l"},"KAWASAKI|Z900RS":{"fc":"l"},"KAWASAKI|W175":{"fc":"l"},"KAWASAKI|ELIMINATOR450":{"fc":"l"},"KAWASAKI|VERSYS650":{"eg":"10W-40","er":1.8,"ec":"m","fc":"l"},"KAWASAKI|VERSYS1100":{"fc":"l"},"KAWASAKI|VULCANS":{"fc":"l"},"KAWASAKI|KLX230":{"fc":"l"},"KEEWAY|KLIGHT250V":{"fc":"l"},"KEEWAY|SIXTIES300I":{"fc":"l"},"KEEWAY|VIESTE300":{"fc":"l"},"KEEWAY|SR250":{"fc":"l"},"KTM|DUKE125":{"eg":"15W-50 (0-50 C) / 10W-40","er":1.5,"ec":"m","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|DUKE160":{"bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|DUKE200":{"eg":"15W-50 (0-50 C) / 10W-40","er":1.5,"ec":"m","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|DUKE250":{"bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|DUKE390":{"eg":"15W-50 (Motorex Formula 4T)","er":1.7,"ec":"m","fg":"Fork oil SAE 4 (2017-23); SAE 5 (2024+)","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|RC125":{"eg":"15W-50 (0-50 C) / 10W-40","er":1.5,"ec":"m","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|RC200":{"eg":"15W-50 (0-50 C) / 10W-40","er":1.5,"ec":"m","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|RC390":{"eg":"15W-50 (Motorex Formula 4T)","er":1.7,"ec":"m","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|ADVENTURE250":{"bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|ADVENTURE390":{"eg":"15W-50 (Motorex Formula 4T)","er":1.7,"ec":"m","fg":"Fork oil SAE 4 (48601166S1)","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|ADVENTURE390X":{"eg":"15W-50 (Motorex Formula 4T)","er":1.7,"ec":"m","fg":"Fork oil SAE 4 (48601166S1)","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"l"},"KTM|DUKE790":{"eg":"10W-50 (Motorex Power Synt 4T)","er":2.8,"ec":"m","fg":"Fork oil SAE 4 (48601166S1)","fl":470.0,"fr":470.0,"bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"h"},"KTM|890ADVENTURER":{"eg":"10W-50 (Motorex Power Synt 4T)","er":2.8,"ec":"m","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"KTM|1290SUPERDUKER":{"eg":"10W-50","er":3.6,"ec":"m","bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"h"},"KTM|1390SUPERDUKER":{"bf":"DOT 4 / DOT 5.1","bb":"DOT 4 / DOT 5.1","fc":"m"},"MAHINDRA|MOJO300XT300BS6FI":{"fc":"l"},"MAHINDRA|MOJOUT300CARB":{"fc":"l"},"MAHINDRA|CENTURO":{"fc":"l"},"MAHINDRA|GUSTO":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter final gear oil point; figure not found"]]},"MAHINDRA|DURO":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter final gear oil point; figure not found"]]},"MAHINDRA|RODEO":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","CVT scooter final gear oil point; figure not found"]]},"MOTOMORINI|XCAPE650":{"fc":"l"},"MOTOMORINI|SEIEMMEZZOSCR":{"fc":"l"},"MOTOMORINI|SEIEMMEZZOSTR":{"fc":"l"},"MVAGUSTA|BRUTALE800":{"fc":"l"},"MVAGUSTA|DRAGSTER800":{"fc":"l"},"MVAGUSTA|F3800":{"fc":"l"},"MVAGUSTA|TURISMOVELOCE":{"fc":"l"},"MVAGUSTA|BRUTALE1000":{"fc":"l"},"TRIUMPH|SPEED400":{"fc":"l"},"TRIUMPH|SPEEDT4":{"fc":"l"},"TRIUMPH|SCRAMBLER400X":{"fc":"l"},"TRIUMPH|THRUXTON400":{"fc":"l"},"TRIUMPH|TRIDENT660":{"fc":"l"},"TRIUMPH|DAYTONA660":{"fc":"l"},"TRIUMPH|TIGERSPORT660":{"fc":"l"},"TRIUMPH|STREETTRIPLE765RS":{"bf":"DOT 4","bb":"DOT 4","fc":"h"},"TRIUMPH|SPEEDTRIPLE1200RS":{"fc":"l"},"TRIUMPH|SPEEDTWIN900":{"eg":"10W-40 or 10W-50 semi/fully synthetic (API SH+, JASO MA)","ed":3.8,"er":3.4,"ec":"h","fc":"l"},"TRIUMPH|SPEEDTWIN1200":{"eg":"10W-40 or 10W-50 semi/fully synthetic (API SH+, JASO MA)","ed":3.8,"er":3.4,"ec":"h","fc":"l"},"TRIUMPH|BONNEVILLET100":{"eg":"10W-40 or 10W-50 semi/fully synthetic (API SH+, JASO MA)","ed":3.8,"er":3.4,"ec":"h","fc":"l"},"TRIUMPH|BONNEVILLET120":{"eg":"10W-40 or 10W-50 semi/fully synthetic (API SH+, JASO MA)","ed":3.8,"er":3.4,"ec":"h","fc":"l"},"TRIUMPH|SCRAMBLER900":{"eg":"10W-40 or 10W-50 semi/fully synthetic (API SH+, JASO MA)","ed":3.8,"er":3.4,"ec":"h","fc":"l"},"TRIUMPH|SCRAMBLER1200X":{"eg":"10W-40 or 10W-50 semi/fully synthetic","ed":3.8,"er":3.4,"ec":"l","fc":"l"},"TRIUMPH|TIGER900RALLY":{"fc":"l"},"TRIUMPH|TIGER1200GT":{"fc":"l","op":[["Final drive",null,null,"75W-90 fully synthetic hypoid, API GL5 (e.g. Castrol SAF-XO)","m","Shaft drive; change every 2 years per summary (source also says first service only - conflicting); quantity not found"]]},"TRIUMPH|ROCKET3R":{"fc":"l","op":[["Final drive",0.17,null,"75W-90 gear oil","l","Shaft drive bevel box; drain = 8 mm Allen magnetic plug at bottom; fill upright to level of filler hole; plugs 25 N.m, copper washers"]]},"VESPA|SXL125CARB":{"fc":"l","op":[["Final gear (scooter)",0.2,null,"Not stated (Piaggio hub oil; grade not retrieved)","l","Rear hub (final gear) oil; check with dipstick on centre stand between MIN/MAX (Vespa S 125 manual)"]]},"VESPA|SXL125FI":{"fc":"l","op":[["Final gear (scooter)",0.2,null,"Not stated (Piaggio hub oil; grade not retrieved)","l","Rear hub (final gear) oil; check with dipstick on centre stand between MIN/MAX (Vespa S 125 manual)"]]},"VESPA|SXL150CARB":{"fc":"l","op":[["Final gear (scooter)",0.2,null,"Not stated (Piaggio hub oil; grade not retrieved)","l","Rear hub (final gear) oil; check with dipstick on centre stand between MIN/MAX (Vespa S 125 manual)"]]},"VESPA|SXL150FI":{"fc":"l","op":[["Final gear (scooter)",0.2,null,"Not stated (Piaggio hub oil; grade not retrieved)","l","Rear hub (final gear) oil; check with dipstick on centre stand between MIN/MAX (Vespa S 125 manual)"]]},"VESPA|VXL125CARB":{"fc":"l","op":[["Final gear (scooter)",0.2,null,"Not stated (Piaggio hub oil; grade not retrieved)","l","Rear hub (final gear) oil; check with dipstick on centre stand between MIN/MAX (Vespa S 125 manual)"]]},"VESPA|VXL125FI":{"fc":"l","op":[["Final gear (scooter)",0.2,null,"Not stated (Piaggio hub oil; grade not retrieved)","l","Rear hub (final gear) oil; check with dipstick on centre stand between MIN/MAX (Vespa S 125 manual)"]]},"VESPA|VXL150CARB":{"fc":"l","op":[["Final gear (scooter)",0.2,null,"Not stated (Piaggio hub oil; grade not retrieved)","l","Rear hub (final gear) oil; check with dipstick on centre stand between MIN/MAX (Vespa S 125 manual)"]]},"VESPA|VXL150FI":{"fc":"l","op":[["Final gear (scooter)",0.2,null,"Not stated (Piaggio hub oil; grade not retrieved)","l","Rear hub (final gear) oil; check with dipstick on centre stand between MIN/MAX (Vespa S 125 manual)"]]},"VESPA|ZX125CARB":{"fc":"l","op":[["Final gear (scooter)",0.2,null,"Not stated (Piaggio hub oil; grade not retrieved)","l","Rear hub (final gear) oil; check with dipstick on centre stand between MIN/MAX (Vespa S 125 manual)"]]},"VESPA|ZX125FI":{"fc":"l","op":[["Final gear (scooter)",0.2,null,"Not stated (Piaggio hub oil; grade not retrieved)","l","Rear hub (final gear) oil; check with dipstick on centre stand between MIN/MAX (Vespa S 125 manual)"]]},"VESPA|VESPA946":{"fc":"l","op":[["Final gear (scooter)",null,null,"","l","Rear hub oil point; figure not found"]]},"YEZDI|ROADSTER":{"fc":"l"},"YEZDI|SCRAMBLER":{"fc":"l"},"YEZDI|ADVENTURE":{"fc":"l"},"ZONTES|350R":{"fc":"l"},"ZONTES|350T":{"fc":"l"},"ZONTES|350X":{"fc":"l"},"ZONTES|350D":{"fc":"l"},"ZONTES|703F":{"fc":"l"}};/*FLUIDS_END*/
+/* fluid capacities per bike: from the database (ref_data "bike_fluids"), see REFERENCE DATA */
+var BIKE_FLUIDS={};
 /* Carb, FI or EV for a bike; '' when not known (an old record that names
    the model but not which version) */
 function fuelOf(make,model){
@@ -4312,43 +4383,31 @@ async function playVoice(){
 /* Why the bike came in, and the jobs under each reason, as Kunal wrote
    them. A job can sit under more than one reason (washing under both
    periodic maintenance and paint) and is still one job. */
-var TYPE_WORK={
- 'ENGINE SERVICE':['ENGINE FLUSH','ENGINE OIL','OIL FILTER','AIR FILTER','THROTTLE BODY CLEANING','INJECTOR CLEANING',
-   'CARBURETTOR CLEANING','FOAM WASHING AND POLISHING','CHAIN TREATMENT'],
- 'GENERAL CHECKUP':['TORQUE CHECK','BRAKE PAD CHANGE','CONTROL CABLE CHANGE','FOAM WASHING AND POLISHING','CHAIN TREATMENT',
-   'BATTERY CHECK','COOLANT TOP-UP / FLUSH','CHAIN ADJUSTMENT'],
- 'ACCESSORIES INSTALLATION':['CRASH GUARD','AUX LIGHT','SADDLE STAY','TOP RACK','NAVIGATION SCREEN',
-   'PHONE HOLDER / USB CHARGER','KNUCKLE GUARDS / HANDGUARDS','VISOR / WINDSCREEN','HORN UPGRADE','EXHAUST','OTHER ACCESSORIES'],
- 'FORK SERVICE':['FORK OIL','FORK SEAL / DUST SEAL','REAR SHOCK SERVICE'],
- 'BRAKE SERVICE':['BRAKE FLUID','BRAKE PADS','BRAKE SHOE','MASTER CYLINDER FRONT','MASTER CYLINDER REAR',
-   'DISC ROTOR CHANGE','CALIPER SERVICE'],
- 'MINOR REPAIR':['SPARK PLUG CHANGE','CHAIN SET CHANGE','CLUTCH / THROTTLE CABLE CHANGE','SWING ARM BUSH CHANGE',
-   'CLUTCH PLATE CHANGE','INDICATOR / MIRROR / LEVER REPLACEMENT','BATTERY REPLACEMENT'],
- 'TYRES & WHEELS':['TYRES','TUBELESS CONVERSION','PUNCTURE REPAIR','SPOKE WHEEL ALIGNMENT','ALLOY WHEEL BEND REPAIR',
-   'WHEEL BALANCING','WHEEL BEARING CHANGE','CUSH RUBBER CHANGE'],
- 'ACCIDENTAL REPAIR':['CHASSIS REPAIR','FORK REPAIR','HANDLE T REPAIR','FAIRING / PANEL REPLACEMENT',
-   'HEADLIGHT / TAIL LIGHT REPLACEMENT','DENT REPAIR'],
- 'PAINT JOB':['REBADGING','GRAPHENE / CERAMIC COATING','CUSTOM PAINT JOB','SCRATCH TOUCH-UP','PPF / WRAP',
-   'FOAM WASHING AND POLISHING'],
- 'PERFORMANCE UPGRADES':['FUEL X','POWERTRONIC','PERFORMANCE BRAKE PADS','PERFORMANCE AIR FILTER','IRIDIUM SPARK PLUG','EXHAUST'],
- 'ELECTRICAL WORK':['SELF STARTER REPAIR','WIRING REPAIR','HEADLIGHT / HORN FAULT','CHARGING SYSTEM CHECK'],
- 'DIAGNOSIS':['INSPECTION / DIAGNOSIS','ERROR CODE SCAN']
-};
+var TYPE_WORK={"ENGINE SERVICE": ["ENGINE FLUSH","ENGINE OIL","OIL FILTER","AIR FILTER","FUEL FILTER REPLACEMENT","THROTTLE BODY CLEANING","INJECTOR CLEANING","CARBURETTOR CLEANING","FOAM WASHING AND POLISHING","CHAIN TREATMENT","TAPPET / VALVE CLEARANCE SETTING","ENGINE OIL TOP-UP","FUEL TANK CLEANING","PICKUP & DROP"],"GENERAL CHECKUP": ["TORQUE CHECK","BRAKE PAD CHANGE","CONTROL CABLE CHANGE","FOAM WASHING AND POLISHING","CHAIN TREATMENT","BATTERY CHECK","COOLANT TOP-UP / FLUSH","CHAIN ADJUSTMENT","AIR FILTER","RADIATOR CLEANING","CLUTCH ADJUSTMENT","LUBRICATION (LEVERS, STANDS, PIVOTS)","PICKUP & DROP"],"ACCESSORIES INSTALLATION": ["CRASH GUARD","AUX LIGHT","SADDLE STAY","TOP RACK","NAVIGATION SCREEN","PHONE HOLDER / USB CHARGER","KNUCKLE GUARDS / HANDGUARDS","VISOR / WINDSCREEN","HORN UPGRADE","EXHAUST","PICKUP & DROP"],"FORK SERVICE": ["FORK OIL","FORK SEAL / DUST SEAL","FORK PIPE REPLACEMENT","REAR SHOCK REPLACEMENT","PICKUP & DROP"],"BRAKE SERVICE": ["BRAKE FLUID","BRAKE PADS","BRAKE SHOE","MASTER CYLINDER FRONT","MASTER CYLINDER REAR","DISC ROTOR CHANGE","CALIPER SERVICE","BRAKE HOSE REPLACEMENT","PICKUP & DROP"],"MINOR REPAIR": ["SPARK PLUG CHANGE","CHAIN SET CHANGE (WITH LOCK)","CHAIN SET CHANGE (WITHOUT LOCK)","CLUTCH / THROTTLE CABLE CHANGE","SWING ARM BUSH CHANGE","CLUTCH PLATE CHANGE","INDICATOR REPLACEMENT","MIRROR REPLACEMENT","LEVER REPLACEMENT","BATTERY REPLACEMENT","AIR FILTER","STEERING BEARING (CONE SET) CHANGE","SIDE / CENTRE STAND REPAIR","FOOTREST / PEGS REPLACEMENT","IGNITION / LOCK SET REPLACEMENT","SEAT REPAIR / COVER","PICKUP & DROP"],"ENGINE REPAIR": ["DECARBONISING (TOP OVERHAUL)","ENGINE OVERHAUL (FULL)","CAM CHAIN & TENSIONER REPLACEMENT","GEARBOX REPAIR","OIL LEAK REPAIR (GASKET / SEAL)","SILENCER CLEANING / DECARBONISING","PICKUP & DROP"],"TYRES & WHEELS": ["TYRES","TUBELESS CONVERSION","PUNCTURE REPAIR","SPOKE WHEEL ALIGNMENT","ALLOY WHEEL BEND REPAIR","ALLOY WHEEL EXTRA BEND","WHEEL BALANCING","WHEEL BEARING CHANGE","CUSH RUBBER CHANGE","RIM / SPOKE REPLACEMENT","PICKUP & DROP"],"ACCIDENTAL REPAIR": ["CHASSIS REPAIR","FORK REPAIR","HANDLE T REPAIR","FAIRING / PANEL REPLACEMENT","HEADLIGHT / TAIL LIGHT REPLACEMENT","SMALL DENT REPAIR","BIG DENT REPAIR","PICKUP & DROP"],"PAINT JOB": ["CUSTOM PAINT (SINGLE COLOUR)","CUSTOM PAINT (TWO-TONE)","CUSTOM PAINT (THREE-TONE)","TANK PAINT (SINGLE COLOUR)","TANK PAINT (DUAL COLOUR)","TANK PAINT (MULTI COLOUR)","TANK PAINT (HAND PAINTED)","MUDGUARD PAINT (SINGLE COLOUR)","MUDGUARD PAINT (DUAL COLOUR)","MUDGUARD PAINT (MULTI COLOUR)","ALLOY WHEEL PAINT (SINGLE COLOUR)","ALLOY WHEEL PAINT (DUAL COLOUR)","ALLOY WHEEL PAINT (MULTI COLOUR)","BODY PANEL PAINT (SINGLE COLOUR)","BODY PANEL PAINT (DUAL COLOUR)","BODY PANEL PAINT (MULTI COLOUR)","SCRATCH / PAINT TOUCH-UP","REBADGING","GRAPHENE / CERAMIC COATING","ENGINE DETAILING / DEGREASING","FOAM WASHING AND POLISHING","PICKUP & DROP"],"PERFORMANCE UPGRADES": ["FUEL X","POWERTRONIC","PERFORMANCE BRAKE PADS","PERFORMANCE AIR FILTER","IRIDIUM SPARK PLUG","EXHAUST","PICKUP & DROP"],"ELECTRICAL WORK": ["SELF STARTER REPAIR","WIRING REPAIR","HEADLIGHT / HORN FAULT","CHARGING SYSTEM CHECK","BULB REPLACEMENT","FUSE / RELAY REPLACEMENT","SPEEDOMETER / SENSOR REPAIR","ABS / ECU SENSOR FAULT","PICKUP & DROP"],"DIAGNOSIS": ["INSPECTION / DIAGNOSIS","ERROR CODE SCAN","PICKUP & DROP"]};
 /* reasons that are no longer offered, kept so older job cards still read */
 var LEGACY_TYPES={
  'PERIODIC MAINTENANCE':['ENGINE FLUSH + OIL','OIL FILTER','AIR FILTER','THROTTLE BODY + INJECTOR CLEANING',
    'CARBURETTOR CLEANING','COOLANT FLUSH / TOP-UP','BATTERY CHECK / CHARGING','CHAIN ADJUSTMENT',
-   'FOAM WASHING AND POLISHING','CHAIN TREATMENT']
+   'FOAM WASHING AND POLISHING','CHAIN TREATMENT'],
+ /* v5: renamed or taken off the lists */
+ 'BEFORE V5':['OTHER ACCESSORIES','REAR SHOCK SERVICE','CHAIN SET CHANGE','INDICATOR / MIRROR / LEVER REPLACEMENT',
+   'DENT REPAIR','CUSTOM PAINT JOB','SCRATCH TOUCH-UP','PPF / WRAP']
 };
 /* jobs a whole reason ticks for you when it is ticked */
-var AUTO_TICK={'ENGINE SERVICE':'all','FORK SERVICE':['FORK OIL'],'BRAKE SERVICE':['BRAKE FLUID']};
-function autoTickJobs(t,fuel){
+var AUTO_TICK={'ENGINE SERVICE':'es','FORK SERVICE':['FORK OIL'],'BRAKE SERVICE':['BRAKE FLUID']};
+/* with the fuel system not known yet, neither cleaning is ticked; the fuel
+   filter only on a bike that has one */
+function autoTickJobs(t,fuel,bike){
   var a=AUTO_TICK[t]; if(!a) return [];
-  var list=(a==='all')?typeWork(t):a;
-  return list.filter(function(w){ return jobFitsFuel(w,fuel); });
+  var list=(a==='es')?ES_AUTO:(a==='all'?typeWork(t):a);
+  return list.filter(function(w){
+    if(FUEL_ONLY[w]&&!fuel) return false;
+    if(w==='FUEL FILTER REPLACEMENT'&&engineOf(bike||{}).ff!=='Y') return false;
+    return jobFitsFuel(w,fuel)&&jobFitsBike(w,bike);
+  });
 }
 /* the labour line a reason brings with it, priced for the bike */
-var REASON_LABOUR={'ENGINE SERVICE':'Engine Service Labour','FORK SERVICE':'Fork Service Labour','BRAKE SERVICE':'Brake Service Labour'};
+var REASON_LABOUR={'ENGINE SERVICE':'Engine Service Labour','GENERAL CHECKUP':'General Checkup Labour','FORK SERVICE':'Fork Service Labour (Oil Change Only)','BRAKE SERVICE':'Brake Service Labour'};
 var JOBTYPES=Object.keys(TYPE_WORK);
 var JOBREQ=[]; JOBTYPES.forEach(function(t){ TYPE_WORK[t].forEach(function(w){ if(JOBREQ.indexOf(w)<0) JOBREQ.push(w); }); });
 Object.keys(LEGACY_TYPES).forEach(function(t){ LEGACY_TYPES[t].forEach(function(w){ if(JOBREQ.indexOf(w)<0) JOBREQ.push(w); }); });
@@ -4363,6 +4422,204 @@ function jobFitsFuel(w,fuel){
   if(fuel==='EV') return NOT_EV.indexOf(w)<0;
   return !FUEL_ONLY[w]||FUEL_ONLY[w]===fuel;
 }
+/* =====================================================================
+   v5 — LABOUR HEADS AND THE BIKE'S ENGINE COUNTS
+   Every job brings its own labour at the rate in Labour Rates (the Rules
+   page still sets a price per brand or model). Engine Service labour
+   covers the flush, oil, oil filter, air filter and fuel filter; the
+   cleanings, wash and chain go on top. Fork Service is one labour: oil
+   change only, or with seal change when the seals are ticked. Brake
+   Service covers the fluid. Throttle body, injector, carburettor and
+   tappet labour are charged per throttle body, cylinder, carb or valve,
+   from the bike's own counts. A count nobody knows yet leaves the
+   quantity empty, and the estimate cannot go out until it is filled.
+   ===================================================================== */
+/* engine counts per bike: from the database (ref_data "bike_engine"), see REFERENCE DATA */
+var BIKE_ENGINE={};
+var LABOUR_HEADS=[["Engine Service Labour",1000],["General Checkup Labour",500],["Air Filter Replacement Labour",450],["Throttle Body Cleaning Labour",650],["Injector Cleaning Labour",550],["Carburettor Cleaning Labour",450],["Foam Wash & Polish Labour",381],["Chain Cleaning & Lubrication Labour",297],["Torque Check Labour",350],["Brake Pad Replacement Labour",300],["Cable Replacement Labour",200],["Battery Check & Charging Labour",250],["Coolant Flush Labour",500],["Crash Guard Installation Labour",1000],["Aux Light Installation Labour",1000],["Saddle Stay Installation Labour",650],["Top Rack Installation Labour",550],["Navigation Screen Installation Labour",1500],["Phone Holder / USB Charger Installation Labour",200],["Handguard Installation Labour",450],["Visor Installation Labour",450],["Horn Installation Labour",450],["Exhaust Installation Labour",1000],["Fork Service Labour (Oil Change Only)",850],["Fork Service Labour (With Seal Change)",1000],["Brake Service Labour",650],["Brake Shoe Replacement Labour",300],["Master Cylinder Labour (Front)",600],["Master Cylinder Labour (Rear)",600],["Disc Rotor Replacement Labour",1000],["Caliper Service Labour",850],["Spark Plug Replacement Labour",350],["Chain Set Labour (With Lock)",1000],["Chain Set Labour (Without Lock)",1500],["Swing Arm Bush Labour",750],["Clutch Plate Replacement Labour",1000],["Indicator Replacement Labour",500],["Mirror Replacement Labour",500],["Lever Replacement Labour",500],["Battery Replacement Labour",150],["Tyre Fitting Labour",350],["Tubeless Conversion Labour",8389.83],["Puncture Repair Labour",150],["Spoke Wheel Alignment Labour",1000],["Alloy Bend Repair Labour",1500],["Extra Bend Labour (Same Wheel)",800],["Wheel Balancing Labour",650],["Wheel Bearing Labour",450],["Cush Rubber Labour",450],["Chassis Repair Labour",3500],["Fork Repair Labour",1500],["Handle T Repair Labour",1000],["Panel Replacement Labour",1500],["Light Replacement Labour",500],["Small Dent Repair Labour",800],["Big Dent Repair Labour",1500],["Rebadging Labour",1000],["Graphene / Ceramic Coating Labour",4500],["Custom Paint Labour (Single Colour)",18000],["Custom Paint Labour (Two-Tone)",25000],["Custom Paint Labour (Three-Tone)",30000],["Scratch / Paint Touch-Up Labour",1500],["Tank Paint Labour (Single Colour)",6500],["Tank Paint Labour (Dual Colour)",9000],["Tank Paint Labour (Multi Colour)",15000],["Tank Paint Labour (Hand Painted)",25000],["Mudguard Paint Labour (Single Colour)",1500],["Mudguard Paint Labour (Dual Colour)",3000],["Mudguard Paint Labour (Multi Colour)",6000],["Alloy Wheel Paint Labour (Single Colour)",5000],["Alloy Wheel Paint Labour (Dual Colour)",9000],["Alloy Wheel Paint Labour (Multi Colour)",15000],["Body Panel Paint Labour (Single Colour)",1000],["Body Panel Paint Labour (Dual Colour)",3000],["Body Panel Paint Labour (Multi Colour)",6000],["Fuel X Installation Labour",1500],["Powertronic Installation Labour",2500],["Performance Brake Pad Fitting Labour",350],["Air Filter Fitting Labour",550],["Iridium Spark Plug Fitting Labour",500],["Self Starter Repair Labour",2000],["Wiring Repair Labour",1000],["Electrical Fault Repair Labour",1000],["Charging System Check Labour",500],["Inspection & Diagnosis Labour",500],["Error Code Scan Labour",300],["Tappet Setting Labour",400],["Oil Top-Up Labour",200],["Fuel Tank Cleaning Labour",350],["Radiator Cleaning Labour",450],["Clutch Adjustment Labour",250],["Lubrication Labour",200],["Steering Bearing Labour",950],["Rear Shock Replacement Labour",750],["Fork Pipe Replacement Labour",500],["Brake Hose Replacement Labour",700],["Top Overhaul Labour",1500],["Engine Overhaul Labour",2500],["Cam Chain Replacement Labour",500],["Gearbox Repair Labour",2000],["Oil Leak Repair Labour",1000],["Silencer Cleaning Labour",500],["Stand Repair Labour",500],["Footrest / Pegs Fitting Labour",350],["Lock Set Replacement Labour",750],["Seat Repair Labour",1500],["Rim / Spoke Replacement Labour",1000],["Bulb Replacement Labour",300],["Fuse / Relay Replacement Labour",250],["Speedometer Repair Labour",2500],["Sensor Replacement Labour",2000],["Engine Detailing Labour",3500],["Pickup & Drop Charge",1500]];
+var JOB_LABOUR={"THROTTLE BODY CLEANING":[["Throttle Body Cleaning Labour","tb"]],"INJECTOR CLEANING":[["Injector Cleaning Labour","cyl"]],"CARBURETTOR CLEANING":[["Carburettor Cleaning Labour","carbs"]],"FOAM WASHING AND POLISHING":[["Foam Wash & Polish Labour",1]],"CHAIN TREATMENT":[["Chain Cleaning & Lubrication Labour",1]],"TAPPET / VALVE CLEARANCE SETTING":[["Tappet Setting Labour","valves"]],"ENGINE OIL TOP-UP":[["Oil Top-Up Labour",1]],"FUEL TANK CLEANING":[["Fuel Tank Cleaning Labour",1]],"TORQUE CHECK":[["Torque Check Labour",1]],"BRAKE PAD CHANGE":[["Brake Pad Replacement Labour",1]],"CONTROL CABLE CHANGE":[["Cable Replacement Labour",1]],"BATTERY CHECK":[["Battery Check & Charging Labour",1]],"COOLANT TOP-UP / FLUSH":[["Coolant Flush Labour",1]],"RADIATOR CLEANING":[["Radiator Cleaning Labour",1]],"CLUTCH ADJUSTMENT":[["Clutch Adjustment Labour",1]],"LUBRICATION (LEVERS, STANDS, PIVOTS)":[["Lubrication Labour",1]],"CRASH GUARD":[["Crash Guard Installation Labour",1]],"AUX LIGHT":[["Aux Light Installation Labour",1]],"SADDLE STAY":[["Saddle Stay Installation Labour",1]],"TOP RACK":[["Top Rack Installation Labour",1]],"NAVIGATION SCREEN":[["Navigation Screen Installation Labour",1]],"PHONE HOLDER / USB CHARGER":[["Phone Holder / USB Charger Installation Labour",1]],"KNUCKLE GUARDS / HANDGUARDS":[["Handguard Installation Labour",1]],"VISOR / WINDSCREEN":[["Visor Installation Labour",1]],"HORN UPGRADE":[["Horn Installation Labour",1]],"EXHAUST":[["Exhaust Installation Labour",1]],"REAR SHOCK REPLACEMENT":[["Rear Shock Replacement Labour",1]],"FORK PIPE REPLACEMENT":[["Fork Pipe Replacement Labour",1]],"BRAKE PADS":[["Brake Pad Replacement Labour",1]],"BRAKE SHOE":[["Brake Shoe Replacement Labour",1]],"MASTER CYLINDER FRONT":[["Master Cylinder Labour (Front)",1]],"MASTER CYLINDER REAR":[["Master Cylinder Labour (Rear)",1]],"DISC ROTOR CHANGE":[["Disc Rotor Replacement Labour",1]],"CALIPER SERVICE":[["Caliper Service Labour",1]],"BRAKE HOSE REPLACEMENT":[["Brake Hose Replacement Labour",1]],"SPARK PLUG CHANGE":[["Spark Plug Replacement Labour",1]],"CHAIN SET CHANGE (WITH LOCK)":[["Chain Set Labour (With Lock)",1]],"CHAIN SET CHANGE (WITHOUT LOCK)":[["Chain Set Labour (Without Lock)",1]],"CLUTCH / THROTTLE CABLE CHANGE":[["Cable Replacement Labour",1]],"SWING ARM BUSH CHANGE":[["Swing Arm Bush Labour",1]],"CLUTCH PLATE CHANGE":[["Clutch Plate Replacement Labour",1]],"INDICATOR REPLACEMENT":[["Indicator Replacement Labour",1]],"MIRROR REPLACEMENT":[["Mirror Replacement Labour",1]],"LEVER REPLACEMENT":[["Lever Replacement Labour",1]],"BATTERY REPLACEMENT":[["Battery Replacement Labour",1]],"STEERING BEARING (CONE SET) CHANGE":[["Steering Bearing Labour",1]],"SIDE / CENTRE STAND REPAIR":[["Stand Repair Labour",1]],"FOOTREST / PEGS REPLACEMENT":[["Footrest / Pegs Fitting Labour",1]],"IGNITION / LOCK SET REPLACEMENT":[["Lock Set Replacement Labour",1]],"SEAT REPAIR / COVER":[["Seat Repair Labour",1]],"TYRES":[["Tyre Fitting Labour",1]],"TUBELESS CONVERSION":[["Tubeless Conversion Labour",1]],"PUNCTURE REPAIR":[["Puncture Repair Labour",1]],"SPOKE WHEEL ALIGNMENT":[["Spoke Wheel Alignment Labour",1]],"ALLOY WHEEL BEND REPAIR":[["Alloy Bend Repair Labour",1]],"ALLOY WHEEL EXTRA BEND":[["Extra Bend Labour (Same Wheel)","blank"]],"WHEEL BALANCING":[["Wheel Balancing Labour",1]],"WHEEL BEARING CHANGE":[["Wheel Bearing Labour",1]],"CUSH RUBBER CHANGE":[["Cush Rubber Labour",1]],"RIM / SPOKE REPLACEMENT":[["Rim / Spoke Replacement Labour",1]],"CHASSIS REPAIR":[["Chassis Repair Labour",1]],"FORK REPAIR":[["Fork Repair Labour",1]],"HANDLE T REPAIR":[["Handle T Repair Labour",1]],"FAIRING / PANEL REPLACEMENT":[["Panel Replacement Labour",1]],"HEADLIGHT / TAIL LIGHT REPLACEMENT":[["Light Replacement Labour",1]],"SMALL DENT REPAIR":[["Small Dent Repair Labour",1]],"BIG DENT REPAIR":[["Big Dent Repair Labour",1]],"GRAPHENE / CERAMIC COATING":[["Graphene / Ceramic Coating Labour",1]],"CUSTOM PAINT (SINGLE COLOUR)":[["Custom Paint Labour (Single Colour)",1]],"CUSTOM PAINT (TWO-TONE)":[["Custom Paint Labour (Two-Tone)",1]],"CUSTOM PAINT (THREE-TONE)":[["Custom Paint Labour (Three-Tone)",1]],"TANK PAINT (SINGLE COLOUR)":[["Tank Paint Labour (Single Colour)",1]],"TANK PAINT (DUAL COLOUR)":[["Tank Paint Labour (Dual Colour)",1]],"TANK PAINT (MULTI COLOUR)":[["Tank Paint Labour (Multi Colour)",1]],"TANK PAINT (HAND PAINTED)":[["Tank Paint Labour (Hand Painted)",1]],"MUDGUARD PAINT (SINGLE COLOUR)":[["Mudguard Paint Labour (Single Colour)",1]],"MUDGUARD PAINT (DUAL COLOUR)":[["Mudguard Paint Labour (Dual Colour)",1]],"MUDGUARD PAINT (MULTI COLOUR)":[["Mudguard Paint Labour (Multi Colour)",1]],"ALLOY WHEEL PAINT (SINGLE COLOUR)":[["Alloy Wheel Paint Labour (Single Colour)",1]],"ALLOY WHEEL PAINT (DUAL COLOUR)":[["Alloy Wheel Paint Labour (Dual Colour)",1]],"ALLOY WHEEL PAINT (MULTI COLOUR)":[["Alloy Wheel Paint Labour (Multi Colour)",1]],"BODY PANEL PAINT (SINGLE COLOUR)":[["Body Panel Paint Labour (Single Colour)",1]],"BODY PANEL PAINT (DUAL COLOUR)":[["Body Panel Paint Labour (Dual Colour)",1]],"BODY PANEL PAINT (MULTI COLOUR)":[["Body Panel Paint Labour (Multi Colour)",1]],"SCRATCH / PAINT TOUCH-UP":[["Scratch / Paint Touch-Up Labour",1]],"ENGINE DETAILING / DEGREASING":[["Engine Detailing Labour",1]],"FUEL X":[["Fuel X Installation Labour",1]],"POWERTRONIC":[["Powertronic Installation Labour",1]],"PERFORMANCE BRAKE PADS":[["Performance Brake Pad Fitting Labour",1]],"PERFORMANCE AIR FILTER":[["Air Filter Fitting Labour",1]],"IRIDIUM SPARK PLUG":[["Iridium Spark Plug Fitting Labour",1]],"SELF STARTER REPAIR":[["Self Starter Repair Labour",1]],"WIRING REPAIR":[["Wiring Repair Labour",1]],"HEADLIGHT / HORN FAULT":[["Electrical Fault Repair Labour",1]],"CHARGING SYSTEM CHECK":[["Charging System Check Labour",1]],"BULB REPLACEMENT":[["Bulb Replacement Labour",1]],"FUSE / RELAY REPLACEMENT":[["Fuse / Relay Replacement Labour",1]],"SPEEDOMETER / SENSOR REPAIR":[["Speedometer Repair Labour",1]],"ABS / ECU SENSOR FAULT":[["Sensor Replacement Labour",1]],"INSPECTION / DIAGNOSIS":[["Inspection & Diagnosis Labour",1]],"ERROR CODE SCAN":[["Error Code Scan Labour",1]],"DECARBONISING (TOP OVERHAUL)":[["Top Overhaul Labour",1]],"ENGINE OVERHAUL (FULL)":[["Engine Overhaul Labour",1]],"CAM CHAIN & TENSIONER REPLACEMENT":[["Cam Chain Replacement Labour",1]],"GEARBOX REPAIR":[["Gearbox Repair Labour",1]],"OIL LEAK REPAIR (GASKET / SEAL)":[["Oil Leak Repair Labour",1]],"SILENCER CLEANING / DECARBONISING":[["Silencer Cleaning Labour",1]],"PICKUP & DROP":[["Pickup & Drop Charge",1]],"CHAIN SET CHANGE":[["Chain Set Labour (With Lock)",1]],"DENT REPAIR":[["Small Dent Repair Labour",1]],"CUSTOM PAINT JOB":[["Custom Paint Labour (Single Colour)",1]],"SCRATCH TOUCH-UP":[["Scratch / Paint Touch-Up Labour",1]],"THROTTLE BODY + INJECTOR CLEANING":[["Throttle Body Cleaning Labour","tb"],["Injector Cleaning Labour","cyl"]],"COOLANT FLUSH / TOP-UP":[["Coolant Flush Labour",1]],"BATTERY CHECK / CHARGING":[["Battery Check & Charging Labour",1]]};
+var ES_COVERS=['ENGINE FLUSH','ENGINE OIL','OIL FILTER','AIR FILTER','FUEL FILTER REPLACEMENT','ENGINE FLUSH + OIL'];
+var ES_AUTO=['ENGINE FLUSH','ENGINE OIL','OIL FILTER','AIR FILTER','FUEL FILTER REPLACEMENT','THROTTLE BODY CLEANING','INJECTOR CLEANING',
+  'CARBURETTOR CLEANING','FOAM WASHING AND POLISHING','CHAIN TREATMENT'];
+var PAINT_JOBS=['CUSTOM PAINT (SINGLE COLOUR)','CUSTOM PAINT (TWO-TONE)','CUSTOM PAINT (THREE-TONE)','CUSTOM PAINT JOB','SCRATCH / PAINT TOUCH-UP','SCRATCH TOUCH-UP',
+  'TANK PAINT (SINGLE COLOUR)','TANK PAINT (DUAL COLOUR)','TANK PAINT (MULTI COLOUR)','TANK PAINT (HAND PAINTED)',
+  'MUDGUARD PAINT (SINGLE COLOUR)','MUDGUARD PAINT (DUAL COLOUR)','MUDGUARD PAINT (MULTI COLOUR)',
+  'ALLOY WHEEL PAINT (SINGLE COLOUR)','ALLOY WHEEL PAINT (DUAL COLOUR)','ALLOY WHEEL PAINT (MULTI COLOUR)',
+  'BODY PANEL PAINT (SINGLE COLOUR)','BODY PANEL PAINT (DUAL COLOUR)','BODY PANEL PAINT (MULTI COLOUR)'];
+var COUNT_NAMES={tb:'throttle bodies',cyl:'cylinders',carbs:'carburettors',valves:'tappets (valves)',blank:'extra bends'};
+function headRate(name){ var k=pkey(name), h=LABOUR_HEADS.filter(function(x){ return pkey(x[0])===k; })[0]; return h?Math.round(h[1]*118):0; }
+function labourPartByName(nm){ var k=pkey(nm); return PARTS.filter(function(p){ return isLabour(p)&&pkey(p.name)===k; })[0]||null; }
+/* the counts for one bike: the edited figure first, then the research */
+function engineBase(o){
+  var mk=pkey(o.make), md=pkey(o.model), K=mk+'|'+md+'|', E=BIKE_ENGINE;
+  if(o.gen){
+    var g=genOf(o.make,o.model,o.gen);
+    if(E[K+pkey(o.gen)]) return E[K+pkey(o.gen)];
+    if(g&&g.variant&&E[mk+'|'+pkey(g.variant)+'|']) return E[mk+'|'+pkey(g.variant)+'|'];
+  }
+  if(E[K]) return E[K];
+  var rows=Object.keys(E).filter(function(k){ return k.indexOf(K)===0; }).map(function(k){ return E[k]; });
+  if(!rows.length) return null;
+  /* no version picked: a figure all its versions agree on still counts */
+  return [0,1,2,3,4,5].map(function(i){ var v=rows[0][i]; return rows.every(function(r){ return r[i]===v; })?v:null; });
+}
+function engineOf(o){
+  if(!o||!o.make||!o.model) return {};
+  var b=engineBase(o)||[], ed=((S.core&&S.core.engineEdits)||{})[bikeFK(o)]||{};
+  var pick=function(f,i){ return (ed[f]!==undefined&&ed[f]!==null&&ed[f]!=='')?ed[f]:(b[i]===undefined?null:b[i]); };
+  var out={cyl:pick('cyl',0), carbs:pick('carbs',1), valves:pick('valves',2), tb:pick('tb',3), adj:pick('adj',4), ff:pick('ff',5)};
+  out.edited=Object.keys(ed).length>0;
+  return out;
+}
+function countFor(E,spec){
+  if(spec==='tb') return E.tb||E.cyl||0;
+  if(spec==='cyl') return E.cyl||0;
+  if(spec==='carbs') return E.carbs||0;
+  if(spec==='valves') return E.valves||0;
+  return 0;
+}
+/* jobs that do not exist on this bike are not offered */
+function jobFitsBike(w,o){
+  if(!o||!o.make||!o.model) return true;
+  var E=engineOf(o);
+  if(w==='TAPPET / VALVE CLEARANCE SETTING') return !(E.adj==='N'||E.valves===0);
+  if(w==='FUEL FILTER REPLACEMENT') return E.ff!=='N';
+  return true;
+}
+/* every labour line the ticked reasons and jobs call for, once each */
+function labourPlan(j){
+  var types=jobTypesOf(j).map(upType), req=(j.required||[]).map(upReq), out=[], seen={};
+  var E=engineOf(j), es=types.indexOf('ENGINE SERVICE')>=0;
+  function add(key,name,q,extra){
+    if(seen[key]) return; seen[key]=1;
+    var l=Object.assign({planKey:key, name:name, q:q},extra||{});
+    if(typeof q==='string'){ var n=countFor(E,q); l.qty=n?n:''; l.needCount=n?'':q; } else l.qty=q||1;
+    out.push(l);
+  }
+  if(es) add('r:ENGINE SERVICE','Engine Service Labour',1,{reasonLine:'ENGINE SERVICE'});
+  if(types.indexOf('GENERAL CHECKUP')>=0) add('r:GENERAL CHECKUP','General Checkup Labour',1,{reasonLine:'GENERAL CHECKUP'});
+  var fs=types.indexOf('FORK SERVICE')>=0, seal=req.indexOf('FORK SEAL / DUST SEAL')>=0;
+  if(fs||seal||req.indexOf('FORK OIL')>=0)
+    add(seal?'fork:seal':'fork:oil',seal?'Fork Service Labour (With Seal Change)':'Fork Service Labour (Oil Change Only)',1,{reasonLine:fs?'FORK SERVICE':''});
+  var bs=types.indexOf('BRAKE SERVICE')>=0;
+  if(bs||req.indexOf('BRAKE FLUID')>=0) add('brake','Brake Service Labour',1,{reasonLine:bs?'BRAKE SERVICE':''});
+  var paint=req.some(function(w){ return PAINT_JOBS.indexOf(w)>=0; });
+  req.forEach(function(w){
+    if(ES_COVERS.indexOf(w)>=0){ if(w==='AIR FILTER'&&!es) add('j:AIR FILTER','Air Filter Replacement Labour',1); return; }
+    if(w==='REBADGING'){ if(!paint) add('j:REBADGING','Rebadging Labour',1); return; }
+    (JOB_LABOUR[w]||[]).forEach(function(s){ add('j:'+w+':'+pkey(s[0]),s[0],s[1],{forJob:w}); });
+  });
+  return out;
+}
+/* a plan line as a job card line, priced for the bike */
+function planLine(j,p){
+  var lp=labourPartByName(p.name);
+  var nm=lp?lp.name:p.name, rate=labourPrice(j,nm,lp)||(lp?0:headRate(p.name));
+  return {kind:'labour', desc:nm, qty:p.qty, unit:rate, gst:lp&&(lp.gst===0||lp.gst)?lp.gst:gstDefault('labour'),
+    hsn:(lp&&lp.hsn)||'998714', partId:lp?lp.id:'', partNo:lp?lp.no:'', batch:'main', planKey:p.planKey,
+    needCount:p.needCount||'', reasonLine:p.reasonLine||''};
+}
+function countMissing(lines){
+  return (lines||[]).filter(function(l){ return !l.void&&l.needCount&&(l.kind==='part'||!qtyNum(l.qty)); });
+}
+function countMissingText(lines){
+  var m=countMissing(lines); if(!m.length) return '';
+  return m.map(function(l){ return l.desc+' — number of '+(COUNT_NAMES[l.needCount]||l.needCount)+' not known'; }).join('; ');
+}
+/* One time: the labour heads go into Labour Rates at the owner's rates
+   (incl. 18% GST), and the generic heads come off. */
+function seedLabourV5(){
+  var n=0;
+  LABOUR_HEADS.forEach(function(h){
+    var nm=titleCase(h[0]), rate=Math.round(h[1]*118), p=labourPartByName(h[0]);
+    if(p){ if(p.sale!==rate){ p.sale=rate; p.updatedAt=Date.now(); n++; } return; }
+    PARTS.push({id:uid('pt'), no:'LAB-'+pkey(nm).slice(0,18), name:nm, category:'Labour', hsn:'998714', gst:18,
+      unit:'job', buyUnit:'job', conv:1, sale:rate, mrp:0, aliases:[], createdAt:Date.now(), updatedAt:Date.now()});
+    n++;
+  });
+  var generic=['ACCESSORYINSTALLATIONLABOUR','FITTINGLABOUR','REARSHOCKSERVICE','PPFWRAP'];
+  var before=PARTS.length;
+  PARTS=PARTS.filter(function(p){ return !(isLabour(p)&&generic.indexOf(pkey(p.name))>=0); });
+  return n+(before-PARTS.length);
+}
+/* ---------- the counts on the job card, edited by Ram and the admins ---------- */
+function engineLine(j){
+  if(!j||!j.make||!j.model) return '';
+  var E=engineOf(j), fuel=bikeFuel(j), bits=[];
+  var v=function(x){ return (x===null||x===undefined||x==='')?'<b style="color:var(--amber)">?</b>':'<b>'+esc(String(x))+'</b>'; };
+  bits.push(v(E.cyl)+' cylinders');
+  if(E.tb&&E.tb!==E.cyl) bits.push(v(E.tb)+' throttle bod'+(E.tb===1?'y':'ies'));
+  if(fuel==='Carb') bits.push(v(E.carbs)+' carb'+(E.carbs===1?'':'s'));
+  bits.push(v(E.valves)+' tappets'+(E.adj==='N'?' (not adjustable)':''));
+  bits.push('fuel filter '+(E.ff==='Y'?'<b>yes</b>':(E.ff==='N'?'<b>no</b>':'<b style="color:var(--amber)">?</b>')));
+  return '<div class="small" style="margin:10px 0 0;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center">'+
+    '<span class="muted">Engine:</span> '+bits.join(' · ')+(E.edited?' <span class="tag t-grey">edited</span>':'')+
+    (can('tech.assign')?' <button type="button" class="btn sm" data-act="engineEdit">Edit counts</button>':'')+'</div>';
+}
+function engineEditModal(){
+  var j=S.job; if(!j||!can('tech.assign')) return;
+  var E=engineOf(j), fuel=bikeFuel(j);
+  var f=function(n,l,v,hint){ return '<div class="field"><label>'+l+'</label><input type="number" min="0" step="1" inputmode="numeric" name="eg_'+n+'" value="'+(v===null||v===undefined?'':v)+'">'+(hint?'<div class="hint">'+hint+'</div>':'')+'</div>'; };
+  var yn=function(n,l,v){ return '<div class="field"><label>'+l+'</label><select name="eg_'+n+'"><option value=""'+(!v?' selected':'')+'>Not known</option>'+
+    '<option value="Y"'+(v==='Y'?' selected':'')+'>Yes</option><option value="N"'+(v==='N'?' selected':'')+'>No</option></select></div>'; };
+  openModal('<h2>Engine counts</h2><p class="muted small">'+esc(bikeName(j.make,j.model,j.gen))+' · changes this for every '+esc(bikeName(j.make,j.model,j.gen))+'</p>'+
+    '<div class="two">'+f('cyl','Cylinders',E.cyl)+f('tb','Throttle bodies',E.tb,'Only if different from cylinders')+'</div>'+
+    '<div class="two">'+(fuel==='FI'?'':f('carbs','Carburettors',E.carbs))+f('valves','Tappets (valves)',E.valves)+'</div>'+
+    '<div class="two">'+yn('adj','Tappets adjustable',E.adj)+yn('ff','Has a fuel filter',E.ff)+'</div>'+
+    '<div class="btn-row"><button class="btn" data-act="closeModal">Cancel</button><button class="btn primary" data-act="engineSave">Save</button></div>');
+}
+async function engineSave(){
+  var j=S.job, sh=document.querySelector('.sheet'); if(!j||!sh||!can('tech.assign')) return;
+  var g=function(n){ var e=sh.querySelector('[name="eg_'+n+'"]'); return e?String(e.value).trim():null; };
+  var key=bikeFK(j), was=engineOf(j), ed={};
+  ['cyl','tb','carbs','valves'].forEach(function(k){ var v=g(k); if(v!==null&&v!==''){ var n=parseInt(v,10); if(!isNaN(n)&&n>=0) ed[k]=n; } });
+  ['adj','ff'].forEach(function(k){ var v=g(k); if(v) ed[k]=v; });
+  S.core.engineEdits=S.core.engineEdits||{};
+  S.core.engineEdits[key]=Object.assign({},S.core.engineEdits[key]||{},ed,{by:S.user.id,at:Date.now()});
+  var now=engineOf(j), ch=[];
+  [['cyl','cylinders'],['tb','throttle bodies'],['carbs','carbs'],['valves','tappets'],['adj','tappets adjustable'],['ff','fuel filter']].forEach(function(x){
+    if(String(was[x[0]])!==String(now[x[0]])) ch.push(x[1]+' '+(was[x[0]]===null?'?':was[x[0]])+' → '+now[x[0]]); });
+  await saveCore();
+  /* fill the quantities that were waiting for these counts */
+  for(var li=0;li<(j.lines||[]).length;li++){
+    var l=j.lines[li]; if(l.void||!l.needCount) continue;
+    var n=countFor(now,l.needCount); if(!n) continue;
+    if(l.kind==='part'){ l.needCount=''; await setLineQty(j,l,n*0.5); }
+    else if(!qtyNum(l.qty)){ l.qty=n; l.needCount=''; }
+  }
+  if(ch.length){ logIt(j,'Engine counts changed',bikeName(j.make,j.model,j.gen)+': '+ch.join(' · '));
+    logAudit('Bike data','Engine counts',bikeName(j.make,j.model,j.gen)+': '+ch.join(' · '),j.no); await saveAudit(); }
+  closeModal(); await ensureReasonLines(j); await saveJob(j); rerender(); toast('Saved for every '+bikeName(j.make,j.model,j.gen),'good');
+}
+/* ---------- registration numbers ---------- */
+function plateGuess(k){
+  k=regKey(k);
+  if(/^NOPLATE/.test(k)) return 'none';
+  if(/^\d{2}BH/.test(k)) return 'bh';
+  if(/^[A-Z]{2}\d/.test(k)) return 'in';
+  return 'temp';
+}
+function regCheck(k,t){ k=regKey(k); if(!k) return ''; return plateProblem(t||plateGuess(k),k); }
+function regBad(e){
+  if(!e||!e.reg) return false;
+  var t=e.plateType||((S.core.bikes[regKey(e.reg)]||{}).plateType)||plateGuess(e.reg);
+  if(t!=='in'&&t!=='bh') return false;
+  return !!plateProblem(t,regKey(e.reg));
+}
+function regBadTag(e){ return regBad(e)?' <span class="tag t-red" title="Not a valid registration number — correct it">check number</span>':''; }
+function regFixList(){
+  var seen={}, rows=[];
+  (S.index||[]).forEach(function(e){ if(regBad(e)&&!seen['j'+e.id]){ seen['j'+e.id]=1; rows.push(e); } });
+  if(!rows.length) return '';
+  return '<div class="card"><div class="card-h"><h2>Registration numbers to correct</h2><span class="tag t-red" style="margin-left:auto">'+rows.length+'</span></div>'+
+    '<div class="card-b tight"><table class="lines"><thead><tr><th>Number</th><th>Bike</th><th>Job card</th><th></th></tr></thead><tbody>'+
+    rows.slice(0,60).map(function(e){
+      return '<tr><td><span class="plate sm">'+esc(regShow(e.reg))+'</span></td><td>'+esc(bikeName(e.make,e.model,e.gen))+'</td>'+
+        '<td class="mono small">'+esc(e.no||'')+'</td><td class="num"><button class="btn sm" data-act="openJob" data-id="'+esc(e.id)+'">Open</button></td></tr>';
+    }).join('')+'</tbody></table></div><div class="card-b"><p class="hint" style="margin:0">Open the job card and correct the number with “Edit job card”. '+
+    'An Indian number is 2 letters, 1–2 digits, up to 2 letters (3 in Delhi) and 1–4 digits.</p></div></div>';
+}
+
 
 /* Old job cards say "Periodic Service". Read them through these so nothing
    written before the lists changed comes up blank. */
@@ -4413,8 +4670,10 @@ function pickedTypes(){
 }
 /* The work list, ordered by the reason the bike came in. What is usually
    done for that reason sits on top; the rest is behind one tap. */
-function jobReqTiles(on,act,type,fuel){
+function jobReqTiles(on,act,type,fuel,bike){
   var have=(on||[]).map(upReq);
+  if(fuel) have=have.filter(function(w){ return jobFitsFuel(w,fuel); });
+  if(bike) have=have.filter(function(w){ return jobFitsBike(w,bike); });
   var picked=splitTypes(type).filter(function(t){ return TYPE_WORK[t]||LEGACY_TYPES[t]; });
   function tile(t){
     return '<button type="button" class="tile" data-act="'+act+'" data-v="'+esc(t)+'" aria-pressed="'+
@@ -4426,14 +4685,14 @@ function jobReqTiles(on,act,type,fuel){
   var shown=[], h='<div id="jobreq">';
   if(!picked.length) h+='<div class="small muted" style="padding:6px 0">Tick why it came in to see the jobs.</div>';
   picked.forEach(function(t){
-    var list=typeWork(t).filter(function(w){ return shown.indexOf(w)<0&&(jobFitsFuel(w,fuel)||have.indexOf(w)>=0); });
+    var list=typeWork(t).filter(function(w){ return shown.indexOf(w)<0&&((jobFitsFuel(w,fuel)&&jobFitsBike(w,bike))||have.indexOf(w)>=0); });
     if(!list.length) return;
     list.forEach(function(w){ shown.push(w); });
     h+=group(t,list);
   });
   /* anything already ticked that sits outside the ticked reasons \u2014 an older card, say \u2014 is still shown */
   var also=have.filter(function(w){ return shown.indexOf(w)<0; });
-  if(also.length) h+=group(JOBREQ.some(function(w){ return also.indexOf(w)>=0; })?'Also ticked':'From before the lists changed',also);
+  if(also.length) h+=group(also.some(function(w){ return JOBTYPES.some(function(t){ return TYPE_WORK[t].indexOf(w)>=0; }); })?'Also ticked':'From before the lists changed',also);
   return h+'</div>';
 }
 var ITEMS=[['helmet','Helmet'],['toolkit','Tool kit'],['docs','Documents'],['luggage','Luggage / panniers'],
@@ -4525,10 +4784,6 @@ function viewIntake(){
         return '<button class="chip" data-act="item" data-k="'+it[0]+'" aria-pressed="false">'+it[1]+'</button>'; }).join('')+'</div>'+
      '<div class="field" style="margin-top:12px"><label>Anything else</label>'+
      '<input type="text" name="itemsother" placeholder="Spare key, saree guard, GoPro mount…"></div>'+
-     '<div class="field"><label>Damage already on the bike</label>'+
-     '<div class="chips" id="dmgchips" style="margin-bottom:10px">'+DAMAGE.map(function(t){
-        return '<button class="chip" data-act="dmg" data-v="'+esc(t)+'" aria-pressed="false">'+esc(t)+'</button>'; }).join('')+'</div>'+
-     '<textarea name="damage" placeholder="Where exactly, how bad — write it down now so there is no argument at delivery"></textarea></div>'+
      '</div></div>';
 
   h+='<div class="card"><div class="card-h"><h2>6 · Handover</h2></div><div class="card-b">'+
@@ -4801,7 +5056,8 @@ var PLATE_TYPES=[['in','Indian'],['bh','BH series'],['temp','Temporary'],['forei
 function plateProblem(t,k){
   if(t==='none') return '';
   if(!k) return 'type the number';
-  if(t==='in'&&!/^[A-Z]{2}\d{1,2}[A-Z]{0,3}\d{1,4}$/.test(k)) return 'that is not an Indian number \u2014 check it, or pick Temporary or Foreign';
+  if(t==='in'&&!(/^DL/.test(k)?/^DL\d{1,2}[A-Z]{0,3}\d{1,4}$/:/^[A-Z]{2}\d{1,2}[A-Z]{0,2}\d{1,4}$/).test(k))
+    return 'that is not an Indian number \u2014 2 letters, 1\u20132 digits, up to 2 letters (3 in Delhi) and 1\u20134 digits. Check it, or pick Temporary or Foreign';
   if(t==='bh'&&!/^\d{2}BH\d{4}[A-Z]{1,2}$/.test(k)) return 'a BH number looks like 22 BH 1234 AB';
   if(k.length<3) return 'too short';
   return '';
@@ -5017,6 +5273,7 @@ function sectionPartyBikes(p){
    ===================================================================== */
 var MEDIA_SIDES=[['front','Front'],['right','Right side'],['rear','Rear'],['left','Left side'],['cluster','Instrument cluster'],['top','Top view']];
 var MEDIA_DRAFT={};          /* slot -> {url,size,type} for what is on screen */
+var MEDIA_LABELS={};         /* close-up slot -> what it shows (optional) */
 var MEDIA_MAX_VIDEO=150*1024*1024;
 var IDB=null;
 function idb(){
@@ -5103,8 +5360,14 @@ function mediaGrid(){
   h+='</div>';
   h+='<div class="eyebrow" style="margin:14px 0 8px">Video \u00B7 optional</div><div class="mgrid">'+mediaTile('video','Walk-round video','video')+'</div>';
   var ex=mediaSlots().extras;
-  h+='<div class="eyebrow" style="margin:14px 0 8px">Close-ups \u00B7 optional</div><div class="mgrid">';
-  ex.forEach(function(k,i){ h+=mediaTile(k,'Close-up '+(i+1),'photo'); });
+  h+='<div class="eyebrow" style="margin:14px 0 8px">Close-ups \u00B7 optional \u2014 photograph any damage already on the bike</div><div class="mgrid">';
+  ex.forEach(function(k,i){
+    var lb=MEDIA_LABELS[k]||'', inList=DAMAGE.indexOf(lb)>=0;
+    h+='<div class="mclose">'+mediaTile(k,lb||('Close-up '+(i+1)),'photo')+
+      '<select data-mlabel="'+k+'" aria-label="What it shows"><option value="">What it shows (optional)</option>'+
+      DAMAGE.map(function(t){ return '<option'+(t===lb?' selected':'')+'>'+esc(t)+'</option>'; }).join('')+'</select>'+
+      '<input type="text" data-mlabeltxt="'+k+'" placeholder="or a few words" value="'+(inList?'':esc(lb))+'"></div>';
+  });
   h+='<button type="button" class="mslot" data-act="mediaShot" data-k="extra"><span class="mplus">+</span>'+
      '<span class="mlbl">Add a close-up</span></button></div>';
   var miss=intakeMediaMissing();
@@ -5222,7 +5485,7 @@ function mediaCapture(k){
 }
 async function mediaDrop(k){
   try{ await MEDIA.del('draft:'+k); }catch(e){}
-  delete MEDIA_DRAFT[k]; paintMedia();
+  delete MEDIA_DRAFT[k]; delete MEDIA_LABELS[k]; paintMedia();
 }
 /* Photos are shown from their data rather than a blob: link, because a
    page opened straight from a folder on the computer is not allowed to
@@ -5259,6 +5522,14 @@ async function jobMediaView(key){
    Each phone fetches a job's photos the first time it opens that card and
    keeps them in its own file store after that. Videos are fetched only when
    someone presses play: they are big, and most people never need them. */
+function damageLabels(j){ var L=(j&&j.media&&j.media.labels)||{}; return Object.keys(L).sort().map(function(k){ return L[k]; }).filter(Boolean); }
+document.addEventListener('change',function(e){
+  var el=e.target; if(!el||!el.dataset) return;
+  if(el.dataset.mlabel){ MEDIA_LABELS[el.dataset.mlabel]=el.value; var tx=el.parentNode.querySelector('[data-mlabeltxt]'); if(tx&&el.value) tx.value='';
+    var lb=el.parentNode.querySelector('.mlbl'); if(lb) lb.textContent=el.value||'Close-up'; }
+  if(el.dataset.mlabeltxt){ var v=sentenceCase(String(el.value||'').trim()); MEDIA_LABELS[el.dataset.mlabeltxt]=v;
+    var sl=el.parentNode.querySelector('[data-mlabel]'); if(sl&&v) sl.value=''; var lb2=el.parentNode.querySelector('.mlbl'); if(lb2) lb2.textContent=v||'Close-up'; }
+});
 function mediaFile(j,slot){ return ((j&&j.media&&j.media.files)||[]).filter(function(f){ return f.slot===slot; })[0]||null; }
 var MEDIA_FETCHING={};
 async function fetchMediaFile(j,f){
@@ -5311,7 +5582,7 @@ async function loadDraftMedia(){
 }
 async function dropDraftMedia(){
   try{ var keys=await MEDIA.keys('draft:'); for(var i=0;i<keys.length;i++) await MEDIA.del(keys[i]); }catch(e){}
-  MEDIA_DRAFT={};
+  MEDIA_DRAFT={}; MEDIA_LABELS={};
 }
 /* the draft files become the job card's own */
 async function commitIntakeMedia(j){
@@ -5343,8 +5614,9 @@ async function commitIntakeMedia(j){
       else list.sides.push(slot);
     }
     for(var k=0;k<keys.length;k++) await MEDIA.del(keys[k]);
+    var labels={}; Object.keys(MEDIA_LABELS).forEach(function(k){ if(MEDIA_LABELS[k]) labels[k]=MEDIA_LABELS[k]; });
     j.media={at:Date.now(), by:S.user.id, byName:S.user.name, sides:list.sides, video:list.video,
-      extras:list.extras, bytes:list.bytes, device:MODE!=='cloud', files:files};
+      extras:list.extras, bytes:list.bytes, device:MODE!=='cloud', files:files, labels:labels};
     logIt(j,'Walk-round recorded',list.sides.length+' sides, '+(list.video?'video':'no video')+
       (list.extras?', '+list.extras+' close-up'+(list.extras>1?'s':''):'')+' \u00B7 '+fmtKb(list.bytes));
     return true;
@@ -5388,7 +5660,7 @@ async function mountJobMedia(){
     for(var i=0;i<keys.length;i++){
       var rec=await MEDIA.get(keys[i]); if(!rec||!rec.blob) continue;
       var isVid=(rec.type||'').indexOf('video')===0, u=isVid?'':await blobToDataUrl(rec.blob);
-      var slot=keys[i].split(':').pop(), lbl=names[slot]||'Close-up';
+      var slot=keys[i].split(':').pop(), lbl=names[slot]||((S.job.media.labels||{})[slot])||'Close-up';
       h+='<button type="button" class="mslot done" data-act="jobMedia" data-k="'+esc(keys[i])+'"><span class="mthumb">'+
         (isVid?'<span class="mvid">\u25B6</span>':'<img src="'+u+'" alt="">')+
         '<span class="mlbl">'+esc(lbl)+(isVid?' \u00B7 '+fmtKb(rec.size||0):'')+'</span></span></button>';
@@ -5562,8 +5834,7 @@ document.addEventListener('change',function(e){
 var JOB_CATS={
   'ENGINE FLUSH':['Additives'],'ENGINE OIL':['Engine Oil'],'ENGINE FLUSH + OIL':['Engine Oil'],
   'OIL FILTER':['Oil Filter'],'AIR FILTER':['Air Filter'],
-  'THROTTLE BODY CLEANING':['Additives'],'INJECTOR CLEANING':['Additives'],'THROTTLE BODY + INJECTOR CLEANING':['Additives'],
-  'CARBURETTOR CLEANING':['Additives'],
+  'THROTTLE BODY CLEANING':['Additives'],'THROTTLE BODY + INJECTOR CLEANING':['Additives'],
   'FOAM WASHING AND POLISHING':['Wash & Shampoo','Polish & Wax'],'CHAIN TREATMENT':['Chain Lube & Cleaner'],
   'FORK OIL':['Fork Oil'],'BRAKE FLUID':['Brake Fluid'],
   'BRAKE PADS':['Brake Pads'],'BRAKE PAD CHANGE':['Brake Pads'],'PERFORMANCE BRAKE PADS':['Brake Pads']
@@ -5617,6 +5888,7 @@ function unitAmount(p,litres){
   return 0;
 }
 function defaultQty(j,job,p){
+  if(job==='THROTTLE BODY CLEANING'||job==='THROTTLE BODY + INJECTOR CLEANING'){ var cy=engineOf(j).cyl; return cy?cy*0.5:''; }
   var F=bikeFluids(j), q=0;
   if(job==='ENGINE OIL'||job==='ENGINE FLUSH + OIL') q=unitAmount(p,F.ed||F.er||0);
   if(job==='FORK OIL'&&(F.fl||F.fr)) q=unitAmount(p,((F.fl||0)+(F.fr||F.fl||0))/1000);
@@ -5653,6 +5925,7 @@ function pickOptions(j,job,sel,all){
 }
 /* the jobs worth a drop-down: a category or a kit part to look for */
 function pickJobs(req){ return (req||[]).map(upReq).filter(function(w){
+  if(w==='INJECTOR CLEANING'||w==='CARBURETTOR CLEANING') return false;
   return JOB_CATS[w]||(parseKits(kitsText())[w]||[]).some(function(i){ return i.kind==='part'; }); }); }
 function pickRow(j,job,ctx,cur){
   var sel=cur?cur.partId:'', o=pickOptions(j,job,sel,false), q=cur?qtyNum(cur.qty):'';
@@ -5702,11 +5975,14 @@ function paintRestTotal(){
     var p=partById(s.value), q=parseFloat((document.querySelector('#restpicks input[data-jq="'+s.dataset.jp+'"]')||{}).value)||1;
     if(p){ t+=Math.round(q*(p.sale||0)); n++; if(cur) { t-=lineAmount(cur); n--; } }
   });
-  var labs=0; Object.keys(REASON_LABOUR).forEach(function(rs){
-    var on=!!document.querySelector('#jobtypes [data-v="'+rs+'"][aria-pressed="true"]');
-    if(on&&!mainLines(j).some(function(l){ return l.reasonLine===rs; })){
-      var nm=REASON_LABOUR[rs], lp=PARTS.filter(function(p){ return isLabour(p)&&pkey(p.name)===pkey(nm); })[0];
-      t+=labourPrice(j,nm,lp)||0; n++; labs++; }
+  /* v5: the labour the ticked reasons and jobs will bring, not yet on the card */
+  var tps=[], rq=[];
+  document.querySelectorAll('.sheet #jobtypes [aria-pressed="true"]').forEach(function(b){ tps.push(b.dataset.v); });
+  document.querySelectorAll('.sheet #reqwrap [aria-pressed="true"]').forEach(function(b){ rq.push(b.dataset.v); });
+  var tj=Object.assign({},j,{jobTypes:tps, jobType:tps.join(' + '), required:rq}), labs=0, onL=mainLines(j);
+  labourPlan(tj).forEach(function(p){
+    if(onL.some(function(l){ return l.kind!=='part'&&(l.planKey===p.planKey||pkey(l.desc)===pkey(p.name)||(p.reasonLine&&l.reasonLine===p.reasonLine)); })) return;
+    var pl=planLine(tj,p); t+=Math.round(qtyNum(pl.qty)*(pl.unit||0)); n++; labs++;
   });
   el.innerHTML='<div class="totrow grand" style="margin-top:10px"><span>Estimate so far \u00B7 '+n+' item'+(n===1?'':'s')+'</span><span class="money">'+money(t)+'</span></div>'+
     (labs?'<div class="hint">Includes the labour the ticked reasons bring.</div>':'');
@@ -5748,7 +6024,8 @@ async function applyRestPicks(j,picks){
       if(cur.partId&&cur.kind==='part') moveIn({partId:cur.partId, batchId:cur.batchId||'', qty:qtyNum(cur.qty), kind:'return', ref:j.no, note:'picked another for '+titleCase(k.job)}); }
     await pickPart(k.pid,'main','part',true);
     var l=j.lines[j.lines.length-1];
-    if(l&&l.partId===k.pid){ l.jobPick=k.job; var q=k.qty||defaultQty(j,k.job,partById(k.pid)); if(q!==1) await setLineQty(j,l,q); n++; }
+    if(l&&l.partId===k.pid){ l.jobPick=k.job; var q=k.qty||defaultQty(j,k.job,partById(k.pid));
+      if(q==='') l.needCount='cyl'; else if(q!==1) await setLineQty(j,l,q); n++; }
   }
   await saveStore('moves');
   return n;
@@ -5824,6 +6101,7 @@ function needLitres(tj,job){
 /* engine oil: exactly what the bike takes; the rest in whole packs */
 function intakeQty(tj,job,p){
   if(!p) return '';
+  if(job==='THROTTLE BODY CLEANING') return defaultQty(tj,job,p);
   if(job==='ENGINE OIL'||job==='ENGINE FLUSH + OIL') return defaultQty(tj,job,p);
   var need=needLitres(tj,job), pack=packLitres(p);
   if(!need||!pack) return 1;
@@ -5846,7 +6124,18 @@ function paintIntakePicks(){
     else {
       var list=intakeList(tj,job), rec=recText(tj,job);
       if(rec) h+='<div class="small" style="flex:1 1 100%;color:var(--blue)">'+rec+'</div>';
-      if(!list.length){ h+='<div class="small" style="color:var(--amber);font-weight:700">None on the shelf for this bike</div>'; delete IPICK[job]; }
+      var cl=list.length?[]:catIntakeList(tj,job);
+      if(!list.length&&cl.length){
+        var kc=IPICK[job], csel=(kc&&kc.touched&&String(kc.pid).indexOf('cat:')===0)?kc.pid:'';
+        h+='<div class="small" style="flex:1 1 100%;color:var(--amber);font-weight:700">None on the shelf \u2014 order from the catalogue</div>'+
+          '<select data-ip="'+esc(job)+'"><option value=""'+(csel===''?' selected':'')+'>\u2014 Not needed \u2014</option>'+
+          cl.map(function(ci){ var v='cat:'+catRef(ci);
+            return '<option value="'+esc(v)+'"'+(v===csel?' selected':'')+'>Order \u00B7 '+esc(catTitle(ci))+' \u00B7 '+esc(catNo(ci))+
+              (catMrp(ci)&&seeMoney()?' \u00B7 '+money(catMrp(ci)):'')+'</option>'; }).join('')+'</select>'+
+          '<input type="number" step="0.01" min="0" inputmode="decimal" data-iq="'+esc(job)+'" value="'+(csel?esc(String((kc&&kc.qty)||1)):'')+'" placeholder="Qty"'+(csel?'':' disabled')+'>';
+        IPICK[job]={pid:csel, qty:csel?String((kc&&kc.qty)||1):'', touched:kc&&kc.touched?1:0};
+      }
+      else if(!list.length){ h+='<div class="small" style="color:var(--amber);font-weight:700">None on the shelf for this bike</div>'; delete IPICK[job]; }
       else {
         var k=IPICK[job], ids=list.map(function(x){ return x.p.id; });
         var keep=!!(k&&k.touched&&(k.pid===''||ids.indexOf(k.pid)>=0));
@@ -5869,35 +6158,21 @@ function paintIntakePicks(){
    A reason with its own labour (Engine, Fork, Brake Service) covers the
    jobs it ticks; other jobs bring their kit labour. */
 function intakeLabour(tj){
-  var out=[], seen={}, covered=[], fuel=bikeFuel(tj);
-  var labPart=function(nm){ return PARTS.filter(function(p){ return isLabour(p)&&pkey(p.name)===pkey(nm); })[0]; };
-  var add=function(desc,lp,extra){
-    var k=pkey(desc); if(!k||seen[k]) return; seen[k]=1;
-    out.push(Object.assign({kind:'labour', desc:desc, qty:1, unit:labourPrice(tj,desc,lp)||0,
-      gst:lp&&(lp.gst===0||lp.gst)?lp.gst:gstDefault('labour'), hsn:(lp&&lp.hsn)||'998714', partId:lp?lp.id:'', partNo:lp?lp.no:'', batch:'main'},extra||{}));
-  };
-  (tj.jobTypes||[]).map(upType).forEach(function(rs){
-    var nm=REASON_LABOUR[rs]; if(!nm) return;
-    add(nm,labPart(nm),{reasonLine:rs});
-    autoTickJobs(rs,fuel).forEach(function(w){ covered.push(w); });
-  });
-  var kits=parseKits(kitsText());
-  (tj.required||[]).map(upReq).forEach(function(w){
-    if(covered.indexOf(w)>=0) return;
-    (kits[w]||[]).filter(function(i){ return i.kind==='labour'; }).forEach(function(item){
-      var c=kitCandidates(item,tj)[0]||null;
-      add(c?c.name:titleCase(item.name), c, {kitItem:'labour|'+item.name.toLowerCase()});
-    });
-  });
-  return out;
+  return labourPlan(tj).map(function(p){ return planLine(tj,p); });
 }
 function intakeLines(tj){
   var out=[];
   document.querySelectorAll('#intakeform #jobreq select[data-ip]').forEach(function(s){
-    if(!s.value) return; var p=partById(s.value); if(!p) return;
+    if(!s.value) return;
+    if(s.value.indexOf('cat:')===0){ var ci=catByRef(s.value.slice(4)); if(ci<0) return;
+      var cq=s.parentNode.querySelector('input[data-iq]'), cl=catOrderLine(ci,Math.round((parseFloat(cq&&cq.value)||1)*100)/100,'main',s.dataset.ip);
+      cl.id='e'+out.length; out.push(cl); return; }
+    var p=partById(s.value); if(!p) return;
     var q=s.parentNode.querySelector('input[data-iq]'), qty=Math.round((parseFloat(q&&q.value)||1)*100)/100;
+    var nc='';
+    if(s.dataset.ip==='THROTTLE BODY CLEANING'&&!(parseFloat(q&&q.value)>0)){ qty=''; nc='cyl'; }
     var b=pickBatch(p.id), bNo=b?(b.supplyType==='composition'):!!p.noGst;
-    out.push({id:'e'+out.length, kind:'part', desc:p.name, qty:qty, unit:p.sale||0,
+    out.push({id:'e'+out.length, kind:'part', desc:p.name, qty:qty, unit:p.sale||0, needCount:nc,
       gst:bNo?0:((p.gst===0||p.gst)?p.gst:gstDefault('part')), noGst:bNo, hsn:p.hsn||'', partId:p.id, partNo:p.no,
       batchId:b?b.id:'', batch:'main', jobPick:s.dataset.ip});
   });
@@ -5922,9 +6197,12 @@ function paintIntakeBar(){
 }
 document.addEventListener('change',function(e){
   var el=e.target; if(!el||!el.dataset) return;
+  if(el.dataset.catf!==undefined){ var F=catF(), k=el.dataset.catf; F[k]=el.value; F.n=60;
+    if(k==='make'){ F.model=''; F.ver=''; } if(k==='model') F.ver=''; if(k==='grp') F.sub='';
+    rerender(); return; }
   if(el.dataset.ip!==undefined){
-    var job=el.dataset.ip, q=el.parentNode.querySelector('input[data-iq]'), p=partById(el.value);
-    if(q){ q.disabled=!p; q.value=p?intakeQty(intakeJob(),job,p):''; }
+    var job=el.dataset.ip, q=el.parentNode.querySelector('input[data-iq]'), p=partById(el.value), isCat=String(el.value).indexOf('cat:')===0;
+    if(q){ q.disabled=!(p||isCat); q.value=p?intakeQty(intakeJob(),job,p):(isCat?1:''); }
     IPICK[job]={pid:el.value, qty:q?q.value:'', touched:1}; paintIntakeBar();
   } else if(el.dataset.iq!==undefined){
     var s=el.parentNode.querySelector('select[data-ip]');
@@ -5940,9 +6218,11 @@ function intakeEstModal(){
   var E=intakeEstBill(); if(!E.j.lines.length){ toast('Tick the work first','bad'); return; }
   EST=E;
   var bk=E.j.make?bikeName(E.j.make,E.j.model,E.j.gen):'';
+  var miss=countMissingText(E.j.lines);
   openModal('<div class="widemodal"></div><h2>Estimate</h2><p class="muted small">'+
     esc([regShow(E.j.reg),bk,money(E.c.grand)].filter(Boolean).join(' · '))+'</p>'+
-    '<div class="docpaper"><div class="doc" id="estdoc">'+billDocHtml(E.j,E.b)+'</div></div>'+
+    (miss?'<div class="banner warn small"><b>Cannot be sent yet.</b> '+esc(miss)+'. Ram or an admin fills it in on the job card (Edit counts), and it is kept for every bike of this model.</div>':'')+
+    '<div class="docpaper estfit"><div class="doc" id="estdoc">'+billDocHtml(E.j,E.b)+'</div></div>'+
     '<div class="btn-row"><button class="btn" data-act="closeModal">Close</button>'+
     '<button class="btn" data-act="estPrint">Print</button>'+
     '<button class="btn" data-act="estPdf">Download PDF</button>'+
@@ -5963,13 +6243,14 @@ async function htmlPdfBlob(html,name){
       .from(holder.firstChild).outputPdf('blob');
   } finally { holder.remove(); }
 }
+function estBlocked(){ var m=EST&&countMissingText(EST.j.lines); if(m){ toast('Not yet — '+m,'bad'); return true; } return false; }
 async function estPdf(){
-  if(!EST) return;
+  if(!EST||estBlocked()) return;
   try{ saveBlob(await htmlPdfBlob(billDocHtml(EST.j,EST.b),estFileName()),estFileName()); toast('Downloaded '+estFileName(),'good'); }
   catch(e){ toast('Could not make the PDF without an internet connection. Use Print and choose “Save as PDF”.','bad'); printDoc(billDocHtml(EST.j,EST.b)); }
 }
 async function estWa(){
-  if(!EST) return;
+  if(!EST||estBlocked()) return;
   var ph=readPhone('cphone'), phone=ph&&ph.ok?ph.e164:'', W=S.core.workshop||{};
   var bk=EST.j.make?bikeName(EST.j.make,EST.j.model,EST.j.gen):'bike';
   var txt='Hello'+(EST.j.cust.name?' '+EST.j.cust.name:'')+', here is the estimate for your '+bk+(EST.j.reg?' ('+regShow(EST.j.reg)+')':'')+
@@ -5990,18 +6271,18 @@ async function applyIntakePending(j){
   try{
     var req=(j.required||[]).map(upReq);
     var picks=(P.picks||[]).filter(function(k){ return req.indexOf(upReq(k.job))>=0&&partById(k.pid); });
+    (P.picks||[]).forEach(function(k){
+      if(String(k.pid).indexOf('cat:')!==0||req.indexOf(upReq(k.job))<0) return;
+      var ref=String(k.pid).slice(4), ci=catByRef(ref); if(ci<0) return;
+      if((j.lines||[]).some(function(l){ return l.order&&l.catRef===ref&&l.jobPick===k.job&&!l.void; })) return;
+      j.lines.push(catOrderLine(ci,k.qty||1,'main',k.job));
+      logIt(j,'Added from the catalogue \u2014 not in stock, to order',catNo(ci)+' '+catName(ci)); n++;
+    });
     j.pickSkip=P.skip||j.pickSkip||[];
     n+=await applyRestPicks(j,picks);
+    var before=(j.lines||[]).length;
     await ensureReasonLines(j);
-    var on=mainLines(j), labs=intakeLabour(j).filter(function(l){ return !l.reasonLine; });
-    for(var i=0;i<labs.length;i++){
-      var l=labs[i];
-      if(on.some(function(x){ return x.kind!=='part'&&(pkey(x.desc)===pkey(l.desc)||(l.kitItem&&x.kitItem===l.kitItem)); })) continue;
-      if(l.partId){ await pickPart(l.partId,'main','labour',true); var last=j.lines[j.lines.length-1]; if(last&&last.partId===l.partId) last.kitItem=l.kitItem; }
-      else { j.lines.push(Object.assign({},l,{id:uid('ln'), addedBy:S.user.id, addedAt:Date.now(), done:false}));
-        logIt(j,'Added from the new job card',l.desc+(l.unit?' at '+money(l.unit):' — no rate yet')); }
-      on=mainLines(j); n++;
-    }
+    n+=(j.lines||[]).length-before;
     delete j.intakePending;
   } finally { S.job=prev||j; }
   return n;
@@ -6034,7 +6315,7 @@ function restModal(){
     '<div id="restform">'+
     '<div class="field"><label class="req">What the customer says</label><textarea name="r_complaint">'+esc(j.complaint||'')+'</textarea></div>'+
     '<div class="field"><label class="req">Why has it come in</label>'+jobTypeTiles(j.jobType||'')+'</div>'+
-    (can('req.set')?'<div class="field"><label>Job required</label><div id="reqwrap">'+jobReqTiles(j.required||[],'jobreq',jobTypesOf(j),bikeFuel(j))+'</div></div>'+
+    (can('req.set')?'<div class="field"><label>Job required</label><div id="reqwrap" data-fuel="'+esc(bikeFuel(j))+'">'+jobReqTiles(j.required||[],'jobreq',jobTypesOf(j),bikeFuel(j),j)+'</div></div>'+
       '<div id="restpicks"></div>':'')+
     '<div id="resttotal"></div>'+
     '<div class="field"><label class="req">Expected delivery</label><input type="date" name="t_expected" value="'+esc(ex)+'"></div>'+
@@ -6064,7 +6345,7 @@ async function restSave(){
     /* ticking Engine Service ticks its jobs */
     j.required=j.required||[];
     var fuel=bikeFuel(j);
-    if(!reqOn) added.forEach(function(t){ autoTickJobs(t,fuel).forEach(function(w){ if(j.required.indexOf(w)<0) j.required.push(w); }); });
+    if(!reqOn) added.forEach(function(t){ autoTickJobs(t,fuel,j).forEach(function(w){ if(j.required.indexOf(w)<0) j.required.push(w); }); });
   }
   if(reqOn&&reqOn.slice().sort().join('|')!==(j.required||[]).slice().sort().join('|')){ j.required=reqOn; ch.push('job required'); }
   var est=readDuration(sh,'t_'); if(est!==(j.estMins||0)){ j.estMins=est; ch.push('duration '+fmtMins(est)); }
@@ -6093,15 +6374,28 @@ async function ensureReasonLines(j){
   var prev=S.job; S.job=j;
   try{
     var on=(j.lines||[]).filter(function(l){ return !l.void&&l.batch==='main'; });
-    Object.keys(REASON_LABOUR).forEach(function(rs){
-      var nm=REASON_LABOUR[rs];
-      if(jobTypesOf(j).indexOf(rs)<0) return;
-      if(on.some(function(l){ return l.reasonLine===rs||(l.kind!=='part'&&pkey(l.desc)===pkey(nm)); })) return;
-      var lp=PARTS.filter(function(p){ return isLabour(p)&&pkey(p.name)===pkey(nm); })[0];
-      var price=labourPrice(j,nm,lp);
-      var l={ id:uid('ln'), kind:'labour', desc:nm, qty:1, unit:price, gst:lp&&(lp.gst===0||lp.gst)?lp.gst:gstDefault('labour'),
-        hsn:(lp&&lp.hsn)||'998714', partId:lp?lp.id:'', partNo:lp?lp.no:'', batch:'main', addedBy:S.user.id, addedAt:Date.now(), done:false, reasonLine:rs };
-      j.lines.push(l); on.push(l); logIt(j,'Added for '+titleCase(rs),nm+(price?' at '+money(price):' \u2014 no price yet'));
+    /* v5: every labour the ticked work calls for goes on; a labour this app
+       put on for work that is no longer ticked comes off again (not once done) */
+    var plan=labourPlan(j), keys=plan.map(function(p){ return p.planKey; });
+    var gone=on.filter(function(l){ return l.planKey&&keys.indexOf(l.planKey)<0&&!l.done; });
+    if(gone.length){
+      j.lines=j.lines.filter(function(l){ return gone.indexOf(l)<0; });
+      on=on.filter(function(l){ return gone.indexOf(l)<0; });
+      gone.forEach(function(l){ logIt(j,'Labour taken off',l.desc+' \u2014 the work it was for is no longer ticked'); });
+    }
+    plan.forEach(function(p){
+      if(on.some(function(l){
+        if(l.kind==='part') return false;
+        if(l.planKey===p.planKey) return true;
+        if(pkey(l.desc)===pkey(p.name)) return true;
+        /* a card from before v5 already carries its reason's labour */
+        if(p.reasonLine&&!l.planKey&&l.reasonLine===p.reasonLine) return true;
+        if(p.planKey.indexOf('fork:')===0&&!l.planKey&&(l.reasonLine==='FORK SERVICE'||/^FORKSERVICELABOUR/.test(pkey(l.desc)))) return true;
+        return false; })) return;
+      var l=Object.assign(planLine(j,p),{id:uid('ln'), addedBy:S.user.id, addedAt:Date.now(), done:false});
+      j.lines.push(l); on.push(l);
+      logIt(j,'Labour added for the work ticked',l.desc+(l.needCount?' \u2014 quantity waits for the number of '+(COUNT_NAMES[l.needCount]||l.needCount):'')+
+        (l.unit?' at '+money(l.unit):' \u2014 no price yet'));
     });
     if((j.required||[]).indexOf('AIR FILTER')>=0&&(j.pickSkip||[]).indexOf('AIR FILTER')<0&&!on.some(function(l){ return l.jobPick==='AIR FILTER'||l.kitItem==='part|air filter'||(l.kind==='part'&&/air\s*filter/i.test(l.desc)); })){
       var kits=parseKits(kitsText()), item=(kits['AIR FILTER']||[]).filter(function(i){ return i.kind==='part'; })[0];
@@ -6417,6 +6711,7 @@ async function saleSet(f,v){
   else if(f==='email') j.cust.email=v.trim().toLowerCase();
   else if(f==='pin') j.cust.pin=v.replace(/[^0-9]/g,'').slice(0,6);
   else if(f==='reg'){
+    var sw=regCheck(v); if(sw){ toast('Registration: '+sw,'bad'); rerender(); return; }
     j.reg=regKey(v);
     var rb=j.reg?S.core.bikes[j.reg]:null;
     if(rb){ saleFillBike(j,rb);
@@ -6764,8 +7059,7 @@ async function saveIntake(){
   if(ipk.length||j.required.length||types.length) j.intakePending={picks:ipk, skip:iskip, at:Date.now()};
   j.items={other:titleCase(g('itemsother'))};
   document.querySelectorAll('#itemchips .chip').forEach(function(c){ j.items[c.dataset.k]=c.getAttribute('aria-pressed')==='true'; });
-  var dl=[]; document.querySelectorAll('#dmgchips .chip').forEach(function(c){ if(c.getAttribute('aria-pressed')==='true') dl.push(c.dataset.v); });
-  j.damage=sentenceCase((dl.join('; ')+(g('damage')?(dl.length?'; ':'')+g('damage'):'')).trim());
+  /* v5: damage is recorded with the close-up photos and their labels */
   j.mechanicId=(can('tech.assign')&&g('mechanicId')&&g('mechanicId')!=='TBA')?g('mechanicId'):''; j.expected=g('expected');
   var adv=toPaise(g('advance'));
   if(adv>0){ j.advance={paise:adv, mode:g('advmode')||'cash', at:Date.now(), by:S.user.id};
@@ -6789,7 +7083,7 @@ async function saveIntake(){
   var saved=await saveJob(j);
   if(!saved) return;          /* keep the draft: the answers are still needed */
   if(j.mechanicId) notify([j.mechanicId],j,'assigned','gave you this job: '+titleCase(j.jobType)+(j.complaint?' \u2014 '+j.complaint.slice(0,90):''));
-  clearDraft(); MEDIA_DRAFT={}; IPICK={};
+  clearDraft(); MEDIA_DRAFT={}; MEDIA_LABELS={}; IPICK={};
   S.job=j; S.draft={}; S.view={name:'job',id:j.id};
   if(!intakeGaps(j).length){ await applyIntakePending(j); await ensureReasonLines(j); await saveJob(j); }
   toast('Job card '+j.no+' created'+(intakeGaps(j).length?' \u2014 fill in the rest before work starts':''),'good');
@@ -6809,7 +7103,7 @@ function viewJob(){
   var h='';
 
   h+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:16px 0 10px">'+
-     '<button class="plate lg" style="cursor:pointer" title="Bike history" data-act="bikeHist" data-k="'+esc(regKey(j.reg))+'">'+esc(regShow(j.reg))+'</button>'+
+     '<button class="plate lg" style="cursor:pointer" title="Bike history" data-act="bikeHist" data-k="'+esc(regKey(j.reg))+'">'+esc(regShow(j.reg))+'</button>'+regBadTag(j)+
      '<div><div class="jid">'+esc(j.no)+'</div><div style="font-weight:800;font-size:19px">'+esc(bikeName(j.make,j.model,j.gen))+
      (j.cc?' · '+esc(ccLabel(j.cc)):'')+'</div></div>'+
      '<div style="margin-left:auto">'+stageTag(j)+'</div></div>'+gapsBanner(j)+clubBadge(j)+liveEstimate(j);
@@ -6870,8 +7164,9 @@ function viewJob(){
   if(j.items.other) it.push(j.items.other);
   h+='<div class="sub" style="margin:14px -14px -14px"><div class="eyebrow">Received With The Bike</div>'+
      '<div style="margin-top:6px;font-weight:700">'+(it.length?esc(it.join(' · ')):'<span class="muted">Nothing</span>')+'</div></div>';
-  if(j.damage) h+='<div class="sub" style="margin:0 -14px -14px"><div class="eyebrow">Existing Damage</div>'+
-     '<div style="margin-top:6px;font-weight:700;color:var(--red)">'+esc(j.damage)+'</div></div>';
+  var dmgL=damageLabels(j);
+  if(dmgL.length) h+='<div class="sub" style="margin:0 -14px -14px"><div class="eyebrow">Damage photographed</div>'+
+     '<div style="margin-top:6px;font-weight:700;color:var(--red)">'+esc(dmgL.join(' \u00B7 '))+'</div></div>';
   h+='</div></div>';
 
   h+=sectionComeback(j);
@@ -6948,6 +7243,8 @@ async function saveJobEdit(){
   }
   var newReg=regKey(g('ejreg'));
   if(newReg&&newReg!==j.reg){
+    var rw=regCheck(newReg,j.plateType||'');
+    if(rw){ toast('Registration: '+rw,'bad'); return; }
     var clash=S.index.filter(function(e){ return e.id!==j.id&&regKey(e.reg)===newReg&&e.stage!=='closed'; })[0];
     if(clash){ toast('That number already has a live job card ('+clash.no+')','bad'); return; }
     changes.push('Registration: '+regShow(j.reg)+' \u2192 '+regShow(newReg));
@@ -6959,6 +7256,13 @@ async function saveJobEdit(){
   var ngen=g('ejgen')||esp.gen||'';
   if(!gensFor(j.make,j.model).some(function(x){ return x.label===ngen; })) ngen='';
   if(ngen!==(j.gen||'')){ changes.push('Version: '+(j.gen||'\u2014')+' \u2192 '+(ngen||'\u2014')); j.gen=ngen; }
+  var nf=bikeFuel(j);
+  if(nf&&(j.required||[]).length){
+    var keepR=(j.required||[]).filter(function(w){ return jobFitsFuel(upReq(w),nf)&&jobFitsBike(upReq(w),j); });
+    if(jobTypesOf(j).indexOf('ENGINE SERVICE')>=0) autoTickJobs('ENGINE SERVICE',nf,j).filter(function(w){ return FUEL_ONLY[w]; })
+      .forEach(function(w){ if(keepR.map(upReq).indexOf(w)<0) keepR.push(w); });
+    if(keepR.join('|')!==(j.required||[]).join('|')){ changes.push('Job required matched to the bike ('+nf+')'); j.required=keepR; }
+  }
   set('Engine cc',j.cc,g('ejcc'),function(v){ j.cc=v; });
   set('Odometer',j.odo,g('ejodo'),function(v){ j.odo=v; });
   set('Customer',j.cust.name,g('ejname'),function(v){ j.cust.name=titleCase(v); });
@@ -6990,6 +7294,7 @@ async function saveJobEdit(){
   logAudit('Job card','Job card corrected',changes.join(' \u00B7 '),j.no); await saveAudit();
   await saveBike(Object.assign({},S.core.bikes[j.reg]||{},{reg:j.reg,make:j.make,model:j.model,gen:j.gen||'',cc:j.cc,
     name:j.cust.name,phone:j.cust.phone,lastOdo:j.odo}));
+  await ensureReasonLines(j);
   await saveJob(j);
   if(reassignedTo) notify([reassignedTo],j,'assigned','gave you this job: '+titleCase(j.jobType));
   closeModal(); rerender(); toast('Corrected \u2014 and logged','good');
@@ -7006,9 +7311,9 @@ function sectionRequired0(j){
   if(!on.length&&!editable){
     h+='<div class="empty" style="padding:22px 8px"><b>Not set yet.</b>The technician ticks this after looking at the bike.</div>';
   } else if(editable){
-    h+=jobReqTiles(on,'toggleReq',jobTypesOf(j),bikeFuel(j))+
+    h+=jobReqTiles(on,'toggleReq',jobTypesOf(j),bikeFuel(j),j)+
        '<div class="hint">What the bike needs doing. This is the scope of work \u2014 it carries no price and never goes on a bill. '+
-       'Spares and labour are issued separately.</div>';
+       'Spares and labour are issued separately.</div>'+engineLine(j);
   } else {
     h+='<div class="chips">'+on.map(function(r){
       return '<span class="chip" style="background:var(--hivis);border-color:var(--ink)">'+esc(titleCase(r))+'</span>'; }).join('')+'</div>'+
@@ -7114,6 +7419,8 @@ function lineRow(j,l,editable,priceable,showMoney){
       : (l.done?'<span class="tag t-green">Done</span>':''))+
     (l.done&&l.markedBy?'<span class="small muted">'+esc(coreUser(l.doneBy).name)+', ticked by '+esc(coreUser(l.markedBy).name)+'</span>':'')+
     (l.partNo?'<span class="small muted mono">'+esc(l.partNo)+'</span>':'')+
+    (l.order?(l.partId?'<span class="tag t-green" style="font-size:9px;padding:2px 5px">In the Store now</span>'
+                      :'<span class="tag t-amber" style="font-size:9px;padding:2px 5px">Not in stock \u2014 order</span>'):'')+
     (l.hsn?'<span class="small muted mono">HSN '+esc(l.hsn)+'</span>':'')+
     (l.fromList?'':'<span class="tag t-amber" style="font-size:9px;padding:2px 5px">off-list</span>')+
     (l.noGst?'<span class="tag t-red" style="font-size:9px;padding:2px 5px">no GST</span>':'')+
@@ -7519,7 +7826,24 @@ function taskWords(s){
   return String(s||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').split(/\s+/).filter(function(w){
     return w.length>=3&&TASK_SKIP.indexOf(w)<0; }).map(function(w){ return w.replace(/(ing|es|s)$/,''); });
 }
+/* the labour that belongs to a job, from the workshop team's JOB_LABOUR table;
+   an older combined job ("THROTTLE BODY + INJECTOR CLEANING") takes the labour
+   of every job whose words it contains */
+function labNorm(x){ return pkey(String(x||'').replace(/\blabou?r\b/ig,'').replace(/&/g,' and ')); }
+function reqLabourNames(r){
+  if(typeof JOB_LABOUR==='undefined') return [];
+  var R=upReq(r), w=R.split(/[^A-Z0-9]+/).filter(Boolean), out=[];
+  Object.keys(JOB_LABOUR).forEach(function(k){
+    var kw=k.split(/[^A-Z0-9]+/).filter(Boolean);
+    if(k===R||(kw.length&&kw.every(function(x){ return w.indexOf(x)>=0; }))) JOB_LABOUR[k].forEach(function(s){ out.push(labNorm(s[0])); });
+  });
+  return out;
+}
 function lineFitsReq(l,r,kits,j){
+  if(l.kind!=='part'){
+    if(l.planKey&&l.planKey.indexOf('j:'+upReq(r)+':')===0) return 2;
+    if(reqLabourNames(r).indexOf(labNorm(l.desc))>=0) return 2;
+  }
   var items=kits[upReq(r)]||[];
   for(var i=0;i<items.length;i++){
     var it=items[i], key=it.kind+'|'+it.name.toLowerCase();
@@ -7917,7 +8241,7 @@ function viewJobMechanic(j){
     '<div style="font-size:18px;font-weight:600;line-height:1.5;border-left:5px solid var(--hivis);padding-left:12px">'+esc(j.complaint)+'</div>'+
     (j.voice?'<button class="btn" style="margin-top:12px;width:100%" data-act="playVoice">\u25B6 Hear the customer \u00B7 '+vTime(j.voice.ms)+'</button><div id="voiceplay"></div>':'')+
     '<div class="sub" style="margin:14px -14px -14px">'+kv('Odometer',j.meterBad?'Meter not working':'<span class="mono">'+esc(j.odo)+' km</span>')+kv('Fuel',esc(j.fuel))+
-    (j.damage?kv('Damage noted','<span style="color:var(--red)">'+esc(j.damage)+'</span>'):'')+'</div></div></div>';
+    (damageLabels(j).length?kv('Damage photographed','<span style="color:var(--red)">'+esc(damageLabels(j).join(' \u00B7 '))+'</span>'):'')+'</div></div></div>';
   h+=sectionChat(j);
   h+=sectionMedia(j);
   h+=sectionInspect(j);
@@ -8489,6 +8813,7 @@ function upsertPart(p,l){
       brand:l.brand||brandGuess(l.name)||'', hsn:l.hsn, gst:l.gst,
       unit:l.unit, buyUnit:l.buyUnit, conv:l.conv, mrp:l.mrp, sale:l.sale, minQty:0,
       createdAt:Date.now(), updatedAt:Date.now()};
+    catEnrich(part);
     PARTS.push(part);
   } else {
     /* the latest bill wins on price, but the part keeps its identity */
@@ -9131,14 +9456,28 @@ function expenseModal(){
 function reorderReq(type,justTicked){
   var wrap=document.getElementById('reqwrap');
   if(!wrap) return;
-  var on=[], keep=usualWork(type), fuel=intakeFuel();
+  var on=[], keep=usualWork(type), fuel=intakeFuel(), bike=intakeBike();
   wrap.querySelectorAll('[aria-pressed="true"]').forEach(function(b){
     var v=b.dataset.v; if(keep.indexOf(v)>=0||JOBREQ.indexOf(v)<0) on.push(v); });
   /* ticking Engine Service ticks all its jobs; untick what is not needed */
-  if(justTicked) autoTickJobs(justTicked,fuel).forEach(function(w){ if(on.indexOf(w)<0) on.push(w); });
-  wrap.innerHTML=jobReqTiles(on,'jobreq',type,fuel);
+  if(justTicked) autoTickJobs(justTicked,fuel,bike).forEach(function(w){ if(on.indexOf(w)<0) on.push(w); });
+  /* the bike decides carb or FI whatever order the form was filled in */
+  if(fuel) on=on.filter(function(w){ return jobFitsFuel(w,fuel); });
+  if(bike) on=on.filter(function(w){ return jobFitsBike(w,bike); });
+  var was=wrap.dataset.fuel||'', tlist=splitTypes(type);
+  if(fuel&&fuel!==was&&tlist.indexOf('ENGINE SERVICE')>=0)
+    autoTickJobs('ENGINE SERVICE',fuel,bike).filter(function(w){ return FUEL_ONLY[w]||w==='FUEL FILTER REPLACEMENT'; })
+      .forEach(function(w){ if(on.indexOf(w)<0) on.push(w); });
+  wrap.dataset.fuel=fuel||'';
+  wrap.innerHTML=jobReqTiles(on,'jobreq',type,fuel,bike);
   if(document.getElementById('restpicks')) paintRestPicks();
   paintIntakePicks();
+}
+function intakeBike(){
+  var mk=document.getElementById('f_make'), md=document.getElementById('f_model'), hg=document.getElementById('f_gen');
+  if(mk&&md&&mk.value&&md.value&&mk.value!=='__other'&&md.value!=='__other') return {make:mk.value, model:md.value, gen:hg?hg.value:''};
+  if(!mk&&S.job) return S.job;
+  return null;
 }
 function intakeFuel(){
   var mk=document.getElementById('f_make'), md=document.getElementById('f_model');
@@ -9424,6 +9763,7 @@ async function bookSave(){
   var reg=regKey(g('breg')), name=g('bname'), bp=readPhone('bphone'), phone=bp.e164;
   if(!name){ toast('A name is needed, even a first name','bad'); return; }
   if(!bp.empty&&!bp.ok){ toast('Phone: '+bp.why,'bad'); return; }
+  var bw=regCheck(reg); if(bw){ toast('Registration: '+bw,'bad'); return; }
   var day=S.bookDay||todayKey(), slot=S.bookSlot;
   if(!slot){ toast('Pick a slot first','bad'); return; }
   if(slotTaken(day,slot)>=(S.core.workshop.bays||3)){ toast('That slot filled up while you were typing','bad'); rerender(); return; }
@@ -10314,6 +10654,96 @@ async function fitAdd(partId){
    the final word, not the list.
    ===================================================================== */
 var KIT_DEFAULT=[
+"ENGINE FLUSH: part Engine flush",
+"ENGINE OIL: part Engine oil",
+"OIL FILTER: part Oil filter",
+"AIR FILTER: part Air filter",
+"FUEL FILTER REPLACEMENT: part Fuel filter",
+"THROTTLE BODY CLEANING: part Throttle body cleaner",
+"CHAIN TREATMENT: part Chain cleaner; part Chain lube",
+"TAPPET / VALVE CLEARANCE SETTING: part Tappet cover gasket",
+"ENGINE OIL TOP-UP: part Engine oil",
+"BRAKE PAD CHANGE: part Brake pads",
+"CONTROL CABLE CHANGE: part Clutch cable; part Throttle cable",
+"COOLANT TOP-UP / FLUSH: part Coolant",
+"LUBRICATION (LEVERS, STANDS, PIVOTS): part Grease spray lube",
+"CRASH GUARD: part Crash guard",
+"AUX LIGHT: part Fog lights; part Wire harness; part Switch",
+"SADDLE STAY: part Saddle stay",
+"TOP RACK: part Top rack",
+"NAVIGATION SCREEN: part Navigation screen; part Mount",
+"PHONE HOLDER / USB CHARGER: part Phone holder; part USB charger",
+"KNUCKLE GUARDS / HANDGUARDS: part Knuckle guards",
+"VISOR / WINDSCREEN: part Visor",
+"HORN UPGRADE: part Horn; part Relay",
+"EXHAUST: part Exhaust; part Exhaust gasket",
+"FORK OIL: part Fork oil",
+"FORK SEAL / DUST SEAL: part Fork oil seal; part Dust seal",
+"REAR SHOCK REPLACEMENT: part Rear shock absorber",
+"FORK PIPE REPLACEMENT: part Fork pipe; part Fork oil seal; part Fork oil",
+"BRAKE FLUID: part Brake fluid",
+"BRAKE PADS: part Brake pads",
+"BRAKE SHOE: part Brake shoe",
+"MASTER CYLINDER FRONT: part Master cylinder kit; part Brake fluid",
+"MASTER CYLINDER REAR: part Master cylinder kit; part Brake fluid",
+"DISC ROTOR CHANGE: part Disc rotor",
+"CALIPER SERVICE: part Caliper kit; part Brake fluid",
+"BRAKE HOSE REPLACEMENT: part Brake hose; part Brake fluid",
+"SPARK PLUG CHANGE: part Spark plug",
+"CHAIN SET CHANGE (WITH LOCK): part Chain sprocket kit",
+"CHAIN SET CHANGE (WITHOUT LOCK): part Chain sprocket kit",
+"CLUTCH / THROTTLE CABLE CHANGE: part Clutch cable; part Throttle cable",
+"SWING ARM BUSH CHANGE: part Swing arm bush",
+"CLUTCH PLATE CHANGE: part Clutch plate; part Clutch cover gasket",
+"INDICATOR REPLACEMENT: part Indicator",
+"MIRROR REPLACEMENT: part Mirror",
+"LEVER REPLACEMENT: part Lever",
+"BATTERY REPLACEMENT: part Battery",
+"STEERING BEARING (CONE SET) CHANGE: part Steering cone set",
+"SIDE / CENTRE STAND REPAIR: part Stand; part Stand spring",
+"FOOTREST / PEGS REPLACEMENT: part Footrest pegs",
+"IGNITION / LOCK SET REPLACEMENT: part Lock set",
+"SEAT REPAIR / COVER: part Seat cover",
+"TYRES: part Tyre; part Tube",
+"TUBELESS CONVERSION: part Tubeless kit",
+"WHEEL BALANCING: part Balancing weights",
+"WHEEL BEARING CHANGE: part Wheel bearing",
+"CUSH RUBBER CHANGE: part Cush rubber",
+"RIM / SPOKE REPLACEMENT: part Rim; part Spokes",
+"FORK REPAIR: part Fork pipe",
+"FAIRING / PANEL REPLACEMENT: part Fairing; part Panel",
+"HEADLIGHT / TAIL LIGHT REPLACEMENT: part Headlight; part Tail light",
+"REBADGING: part Stickers badges",
+"GRAPHENE / CERAMIC COATING: part Coating",
+"CUSTOM PAINT (SINGLE COLOUR): part Paint material",
+"CUSTOM PAINT (TWO-TONE): part Paint material",
+"CUSTOM PAINT (THREE-TONE): part Paint material",
+"ENGINE DETAILING / DEGREASING: part Degreaser",
+"FUEL X: part Fuel X",
+"POWERTRONIC: part Powertronic",
+"PERFORMANCE BRAKE PADS: part Performance brake pads",
+"PERFORMANCE AIR FILTER: part Performance air filter",
+"IRIDIUM SPARK PLUG: part Iridium spark plug",
+"SELF STARTER REPAIR: part Self starter",
+"WIRING REPAIR: part Wire harness; part Connectors",
+"HEADLIGHT / HORN FAULT: part Bulb; part Relay; part Fuse",
+"CHARGING SYSTEM CHECK: part Regulator rectifier",
+"BULB REPLACEMENT: part Bulb",
+"FUSE / RELAY REPLACEMENT: part Fuse; part Relay",
+"SPEEDOMETER / SENSOR REPAIR: part Speedometer cable sensor",
+"ABS / ECU SENSOR FAULT: part Sensor",
+"DECARBONISING (TOP OVERHAUL): part Head gasket; part Valve stem seals; part Tappet cover gasket",
+"ENGINE OVERHAUL (FULL): part Gasket kit; part Piston rings; part Bearings",
+"CAM CHAIN & TENSIONER REPLACEMENT: part Cam chain; part Cam chain tensioner",
+"GEARBOX REPAIR: part Gear parts; part Gasket kit",
+"OIL LEAK REPAIR (GASKET / SEAL): part Gasket; part Oil seal",
+"CHAIN SET CHANGE: part Chain sprocket kit",
+"CUSTOM PAINT JOB: part Paint material",
+"THROTTLE BODY + INJECTOR CLEANING: part Throttle body cleaner",
+"COOLANT FLUSH / TOP-UP: part Coolant"
+].join('\n');
+/* the kit list before v5, so a saved copy of it can be recognised */
+var KIT_V4=[
  'ENGINE FLUSH: part Engine flush',
  'ENGINE OIL: part Engine oil',
  'THROTTLE BODY CLEANING: part Throttle body cleaner; labour Throttle body cleaning labour',
@@ -10466,6 +10896,7 @@ function kitSuggestions(job){
   var onCard=(job.lines||[]).filter(function(l){ return !l.void&&l.batch==='main'; });
   (job.required||[]).forEach(function(r){
     (kits[upReq(r)]||[]).forEach(function(item){
+      if(item.kind==='labour') return;
       var key=item.kind+'|'+item.name.toLowerCase();
       if(seen[key]){ seen[key].jobs.push(r); return; }
       var cands=kitCandidates(item,job);
@@ -12713,9 +13144,25 @@ function dueIn(at,creditDays){
   return '<span class="due over">Overdue '+(-days)+' day'+(days===-1?'':'s')+'</span>';
 }
 /* Billed and outstanding on one line, the way it reads on paper. */
-function amountPair(total,unpaid){
+function amountPair(total,unpaid,part){
   return '<b class="money">'+money(total)+'</b>'+
-    (unpaid>0?'<div class="small" style="color:var(--bad)">'+money(unpaid)+' unpaid</div>':'');
+    (unpaid>0?'<div class="small" style="color:var(--bad);font-weight:700">'+money(unpaid)+(part?' due':' unpaid')+'</div>':'');
+}
+/* v5: Purchases and Sales lists are one table, newest first. The amount
+   carries the red unpaid line; the last column is the button, or Paid. */
+function billTableHead(who,btnLabel){
+  return '<div class="card"><div class="card-b tight" style="overflow-x:auto"><table class="lines billtbl"><thead><tr>'+
+    '<th>Date</th><th>Invoice No</th><th>'+who+'</th><th>GST type</th><th>Due</th><th class="num">Amount</th><th class="num">'+btnLabel+'</th></tr></thead><tbody>';
+}
+function billTableRow(o){
+  return '<tr'+(o.dim?' style="opacity:.5"':'')+'><td class="bt-date small">'+o.date+'</td>'+
+    '<td class="bt-no">'+o.no+'</td><td class="bt-who">'+o.who+'</td>'+
+    '<td class="bt-gst">'+o.gst+'</td><td class="bt-due small">'+(o.due||'<span class="muted">\u2014</span>')+'</td>'+
+    '<td class="num bt-amt">'+o.amount+'</td><td class="num bt-act">'+o.act+'</td></tr>';
+}
+function gstTypeTag(kind){
+  if(kind==='none') return '<span class="tag t-amber">No GST</span>';
+  return '<span class="tag t-blue">'+kind+'</span>';
 }
 function statusTag(s){
   var m={paid:['t-green','Paid'],unpaid:['t-red','Unpaid'],part:['t-amber','Part paid'],
@@ -12800,20 +13247,18 @@ function salesInvoices(all){
   h+='<div class="searchbar" style="position:static;margin:0;padding:6px 0;border:0">'+
     '<input type="text" id="salesq" placeholder="Invoice, customer or vehicle" value="'+esc(S.salesQ||'')+'" autocomplete="off"></div>';
   if(!list.length) return h+listEmpty('No bills match that.');
-  h+='<div class="card"><div class="card-b tight"><table class="lines"><tbody>';
+  h+=billTableHead('Customer','');
   list.slice(0,120).forEach(function(s){
     var pty=s.partyId?partyById(s.partyId):null;
     var st=saleStatus(s);
-    h+='<tr'+(st==='cancelled'?' style="opacity:.5"':'')+'>'+
-      '<td><button class="linkish" data-act="openInvoice" data-job="'+esc(s.jobId)+'" data-bill="'+esc(s.id)+'">'+esc(s.number)+'</button>'+
-      '<div class="small muted">'+dOnly(s.at)+' \u00B7 '+esc(s.custName)+'</div>'+
-      '<div class="small muted mono">'+(s.channel&&s.channel!=='workshop'?esc(channelName(s.channel)):esc(regShow(s.reg)))+'</div>'+
-      (st!=='paid'&&st!=='cancelled'&&pty?'<div class="small">'+dueIn(s.at,pty.creditDays)+'</div>':'')+
-      '</td>'+
-      '<td class="num">'+amountPair(s.grand,saleDue(s))+
-      '<div style="margin-top:6px">'+statusTag(st)+'</div>'+
-      (st!=='paid'&&st!=='cancelled'&&s.jobId&&can('pay.take')?'<div style="margin-top:6px"><button class="btn sm go" data-act="salePay" data-job="'+esc(s.jobId)+'" data-bill="'+esc(s.id)+'">Receive</button></div>':'')+
-      '</td></tr>';
+    h+=billTableRow({dim:st==='cancelled', date:dOnly(s.at),
+      no:'<button class="linkish" data-act="openInvoice" data-job="'+esc(s.jobId)+'" data-bill="'+esc(s.id)+'">'+esc(s.number)+'</button>',
+      who:esc(s.custName||'\u2014')+'<div class="small muted mono">'+(s.channel&&s.channel!=='workshop'?esc(channelName(s.channel)):esc(regShow(s.reg)))+'</div>',
+      gst:gstTypeTag(s.type==='gst'?(s.inter?'IGST':'CGST+SGST'):'none'),
+      due:(st!=='paid'&&st!=='cancelled'&&pty)?dueIn(s.at,pty.creditDays):'',
+      amount:amountPair(s.grand,st==='cancelled'?0:saleDue(s),st==='part'),
+      act:st==='cancelled'?'<span class="tag t-grey">Cancelled</span>':(st==='paid'?'<b style="color:var(--green)">Paid</b>':
+        (s.jobId&&can('pay.take')?'<button class="btn sm go" data-act="salePay" data-job="'+esc(s.jobId)+'" data-bill="'+esc(s.id)+'">Receive</button>':''))});
   });
   h+='</tbody></table></div>';
   if(list.length>120) h+='<div class="hint" style="padding:10px 14px">Showing 120 of '+list.length+'.</div>';
@@ -12891,22 +13336,17 @@ function purchBills(all){
   h+='<div class="searchbar" style="position:static;margin:0;padding:6px 0;border:0">'+
     '<input type="text" id="purchq" placeholder="Invoice or supplier" value="'+esc(S.purchQ||'')+'" autocomplete="off"></div>';
   if(!list.length) return h+listEmpty('No bills match that.');
-  h+='<div class="card"><div class="card-b tight"><table class="lines"><tbody>';
+  h+=billTableHead('Vendor','');
   list.slice(0,120).forEach(function(p){
     var x=purchPaid(p), st=purchStatus(p);
     var sup=partyById(p.supplierId)||supplierById(p.supplierId)||{name:'\u2014',creditDays:0};
-    h+='<tr><td><button class="linkish" data-act="openPurchase" data-id="'+p.id+'">'+esc(p.invNo)+'</button>'+
-      '<div class="small muted">'+dOnly(new Date(p.invDate).getTime())+' \u00B7 '+esc(sup.name)+'</div>'+
-      '<div class="small muted">'+(p.supplyType==='composition'
-        ? '<span class="tag t-amber" style="font-size:9px;padding:1px 5px">no GST</span>'
-        : '<span class="tag t-blue" style="font-size:9px;padding:1px 5px">'+(p.taxMode==='intra'?'CGST+SGST':'IGST')+'</span>')+
-      '</div>'+
-      (st!=='paid'?'<div class="small">'+dueLabel(purchDueAt(p))+'</div>':'')+
-      '</td>'+
-      '<td class="num">'+amountPair(x.total,x.due)+
-      '<div style="margin-top:6px">'+statusTag(st)+'</div>'+
-      (x.due>0&&can('pay.vendor')?'<div style="margin-top:6px"><button class="btn sm primary" data-act="purchPay" data-id="'+p.id+'">Pay</button></div>':'')+
-      '</td></tr>';
+    h+=billTableRow({date:dOnly(new Date(p.invDate).getTime()),
+      no:'<button class="linkish" data-act="openPurchase" data-id="'+p.id+'">'+esc(p.invNo)+'</button>',
+      who:esc(sup.name),
+      gst:gstTypeTag(p.supplyType==='composition'?'none':(p.taxMode==='intra'?'CGST+SGST':'IGST')),
+      due:st!=='paid'?dueLabel(purchDueAt(p)):'',
+      amount:amountPair(x.total,x.due,st==='part'),
+      act:st==='paid'?'<b style="color:var(--green)">Paid</b>':(can('pay.vendor')?'<button class="btn sm primary" data-act="purchPay" data-id="'+p.id+'">Pay</button>':'')});
   });
   h+='</tbody></table></div>';
   if(list.length>120) h+='<div class="hint" style="padding:10px 14px">Showing 120 of '+list.length+'.</div>';
@@ -14823,7 +15263,7 @@ function viewPart(){
       ? '<div class="chips" style="margin-top:8px">'+p.fits.map(function(k){
           return '<span class="chip" style="background:var(--blue-bg);border-color:var(--blue)">'+esc(fitLabel(k))+'</span>'; }).join('')+'</div>'
       : '<div class="hint" style="margin-top:6px">Not mapped yet. Map it and this part gets offered on every matching job card.</div>')+
-    '</div></div>';
+    '</div>'+catFitHtml(p)+'</div>';
 
   h+='<div class="card"><div class="card-h"><h2>Batches</h2></div><div class="card-b tight">';
   if(!bs.length) h+='<div class="empty" style="padding:20px 8px"><b>This part has never been received.</b>'+
@@ -15109,11 +15549,21 @@ function paintPnoResults(){
       '<button class="btn sm" style="margin-left:10px;background:var(--surface)" data-act="fillPart" data-id="'+exact.id+'">Fill it in</button></div>';
     return;
   }
-  var res=findParts(v,'');
-  box.innerHTML=res.length
-    ? '<div class="presults" style="max-height:150px">'+res.map(function(p){
+  var ci=catByNo(v);
+  if(ci>=0){
+    box.innerHTML='<div class="banner info small" style="margin:8px 0 0"><b>'+esc(catName(ci))+'</b> \u2014 in the parts catalogue'+
+      (catMrp(ci)?' \u00B7 MRP '+money(catMrp(ci)):'')+
+      '<button class="btn sm" style="margin-left:10px;background:var(--surface)" data-act="catFill" data-ci="'+ci+'">Fill it in</button></div>';
+    return;
+  }
+  var res=findParts(v,''), cres=(pkey(v).length>=4)?catSearch(v,{}).filter(function(i){ return !catInStore(i); }).slice(0,5):[];
+  box.innerHTML=(res.length||cres.length)
+    ? '<div class="presults" style="max-height:190px">'+res.map(function(p){
         return '<button class="partrow" data-act="fillPart" data-id="'+p.id+'"><div style="flex:1">'+
           '<div style="font-weight:800">'+esc(p.name)+'</div><div class="small muted mono">'+esc(p.no)+'</div></div></button>';
+      }).join('')+cres.map(function(i){
+        return '<button class="partrow" data-act="catFill" data-ci="'+i+'"><div style="flex:1">'+
+          '<div style="font-weight:800">'+esc(catName(i))+'</div><div class="small muted mono">'+esc(catNo(i))+' \u00B7 catalogue</div></div></button>';
       }).join('')+'</div>'
     : '<div class="hint">New part \u2014 fill in the details below.</div>';
 }
@@ -15132,6 +15582,17 @@ function paintBatchPick(costPer){
     var same=labs.filter(function(x){ return x.label===auto; })[0];
     hint.textContent=same?('Same cost as '+auto+', so it joins that batch.'):('The cost is different from every earlier lot, so this becomes '+auto+'.');
   }
+}
+function catFillInto(i){
+  i=parseInt(i,10); if(!(i>=0&&i<catN())) return;
+  var set=function(n,v){ var e=document.querySelector('.sheet [name="'+n+'"]'); if(e&&v!==undefined&&v!==null&&v!=='') e.value=v; };
+  var c=catCat(i);
+  set('pno',catNo(i)); set('pname',catName(i));
+  if(c[0]!=='Unmapped'&&catIsSet(c[1])) set('pcat',c[1]);
+  set('pbrand',catBrandFull(i)); set('pbuyunit',catUom(i)); set('punit',catUom(i));
+  if(catMrp(i)){ set('pmrp',paiseToInput(catMrp(i))); set('psale',paiseToInput(catMrp(i))); }
+  var box=document.getElementById('pnores'); if(box) box.innerHTML='<div class="banner ok small" style="margin:8px 0 0">Filled from the catalogue \u2014 its fitment goes on when the bill is saved.</div>';
+  try{ paintPCalc(); }catch(e){}
 }
 function fillPartInto(id){
   var p=partById(id); if(!p) return;
@@ -15381,23 +15842,24 @@ function paintPartResults(){
   var box=document.getElementById('presults'); if(!box) return;
   var inp=document.querySelector('.sheet [name="psearch"]');
   var kind=box.dataset.kind, batch=box.dataset.batch;
-  if(!PARTS.length){
-    box.innerHTML='<div class="banner info small"><b>The store is empty.</b> New Purchase Bill in the store and the '+
-      'parts appear here on their own, with their price and what is on the shelf. Until then, type it in below.</div>'; return;
-  }
   var q=inp?inp.value:'';
+  var cat=(kind==='part')?catPickerHtml(q,batch):'';
+  if(!PARTS.length){
+    box.innerHTML=(cat||'<div class="banner info small"><b>The store is empty.</b> New Purchase Bill in the store and the '+
+      'parts appear here on their own, with their price and what is on the shelf. Until then, type it in below.</div>'); return;
+  }
   var res=findParts(q,kind);
   if(S.fitOnly&&S.job&&S.job.make){
     var fk=bikeFK(S.job);
     if(!q.trim()) res=partsForBike(S.job.make,S.job.model,{gen:S.job.gen});
     else res=res.filter(function(p){ return (p.fits||[]).indexOf(fk)>=0; });
-    if(!res.length){ box.innerHTML='<div class="hint">Nothing mapped to this bike matches. Untick to search everything.</div>'; return; }
-    box.innerHTML=res.map(function(p){ return partRow(p,batch,kind); }).join('');
+    if(!res.length){ box.innerHTML=cat||'<div class="hint">Nothing mapped to this bike matches. Untick to search everything.</div>'; return; }
+    box.innerHTML=res.map(function(p){ return partRow(p,batch,kind); }).join('')+cat;
     return;
   }
   if(!q.trim()){ box.innerHTML='<div class="hint">Part number or name.</div>'; return; }
-  if(!res.length){ box.innerHTML='<div class="hint">Nothing in the store matches that. Type it in below instead.</div>'; return; }
-  box.innerHTML=res.map(function(p){ return partRow(p,batch,kind); }).join('');
+  if(!res.length){ box.innerHTML=cat?'<div class="hint">Nothing in the store matches that.</div>'+cat:'<div class="hint">Nothing in the store matches that. Type it in below instead.</div>'; return; }
+  box.innerHTML=res.map(function(p){ return partRow(p,batch,kind); }).join('')+cat;
 }
 
 var COMMON=['Engine oil','Oil filter','Air filter','Spark plug','Brake pads — front','Brake pads — rear',
@@ -15503,6 +15965,7 @@ async function toggleReq(r){
   } else {
     j.required=(j.required||[]).concat([r]);
     logIt(j,'Work required added',r);
+    if(upReq(r)==='CHAIN ADJUSTMENT'&&j.required.map(upReq).indexOf('CHAIN TREATMENT')<0){ j.required.push('CHAIN TREATMENT'); logIt(j,'Work required added','CHAIN TREATMENT (comes with chain adjustment)'); }
   }
   await ensureReasonLines(j);
   await saveJob(j); rerender();
@@ -15529,7 +15992,9 @@ async function editLineField(lineId,field,value){
     if(j.stage==='work_listed') j.stage='priced';
   }
   if(field==='qty'){
-    var oq=qtyNum(l.qty), nq=qtyNum(value); if(oq===nq) return;
+    var oq=qtyNum(l.qty), nq=qtyNum(value);
+    if(nq>0&&l.needCount){ l.needCount=''; if(oq===nq){ await saveJob(j); rerender(); return; } }
+    if(oq===nq) return;
     l.qty=nq;
     if(l.partId&&l.kind==='part'){
       moveIn({partId:l.partId, batchId:l.batchId||'', qty:oq-nq, kind:(nq>oq?'issue':'return'),
@@ -15586,6 +16051,8 @@ async function sendPricing(){
 }
 function sendEstimateModal(){
   var j=S.job, ls=mainLines(j), t=estimateTotal(j);
+  var miss=countMissingText(ls);
+  if(miss){ toast('Fill in the quantity first: '+miss,'bad'); return; }
   var prev=(j.estimates||[]).length;
   openModal('<h2>'+(prev?'Send it again':'Send the estimate')+'</h2>'+
     (prev?'<p class="muted small">This will be version '+(prev+1)+'. The earlier ones stay on the card.</p>':'')+
@@ -16564,7 +17031,7 @@ function billDocHtml(j,b){
     if(!g[1].length) return;
     h+='<div style="margin-top:10px;font-weight:800;letter-spacing:.06em;font-size:12px">'+g[0].toUpperCase()+'</div>';
     h+='<table style="margin-top:4px"><thead><tr><th style="width:26px">#</th><th>Particulars</th>'+
-      (gst?'<th>HSN/SAC</th>':'')+'<th class="num">Qty</th><th class="num">Rate</th>'+
+      (gst?'<th class="hsn">HSN/SAC</th>':'')+'<th class="num">Qty</th><th class="num">Rate</th>'+
       (anyDisc?'<th class="num">Disc</th>':'')+
       (gst?'<th class="num">Taxable</th>'+(IG?'<th class="num">IGST</th>':'<th class="num">CGST</th><th class="num">SGST</th>'):'')+
       '<th class="num">Amount</th></tr></thead><tbody>';
@@ -16573,7 +17040,7 @@ function billDocHtml(j,b){
       grpN++; sub+=r.total;
       var dA=rowDisc(r), cg=Math.floor(r.tax/2), sg=r.tax-cg, hr=r.rate/2;
       h+='<tr><td>'+grpN+'</td><td>'+esc(r.line.desc)+'</td>'+
-        (gst?'<td class="num">'+esc(r.line.hsn||'')+'</td>':'')+
+        (gst?'<td class="num hsn">'+esc(r.line.hsn||'')+'</td>':'')+
         '<td class="num">'+qtyNum(r.line.qty)+'</td><td class="num">'+money(r.line.unit,{bare:1})+'</td>'+
         (anyDisc?'<td class="num">'+(dA?esc(rowDiscTxt(r))+(String(rowDiscTxt(r)).indexOf('%')>=0?'<br>'+money(dA,{bare:1}):''):'—')+'</td>':'')+
         (gst?'<td class="num">'+money(r.base,{bare:1})+'</td>'+
@@ -16581,7 +17048,7 @@ function billDocHtml(j,b){
              :'<td class="num">'+hr+'%<br>'+money(cg,{bare:1})+'</td><td class="num">'+hr+'%<br>'+money(sg,{bare:1})+'</td>'):'')+
         '<td class="num">'+money(r.total,{bare:1})+'</td></tr>';
     });
-    h+='<tr><td colspan="'+(cols-1)+'" style="text-align:right;font-weight:800">'+g[0]+' total</td>'+
+    h+='<tr><td colspan="'+(cols-1)+'" class="grptot" style="text-align:right;font-weight:800">'+g[0]+' total</td>'+
       '<td class="num" style="font-weight:800">'+money(sub,{bare:1})+'</td></tr></tbody></table>';
   });
 
@@ -16775,7 +17242,7 @@ function printCard(){
     '<br>Odometer '+esc(j.odo)+' km · Fuel '+esc(j.fuel)+'</td></tr></table>';
   h+='<table><tr><td><b>Customer complaint</b><br>'+esc(j.complaint)+'</td></tr>'+
     '<tr><td><b>Received With The Bike:</b> '+(it.length?esc(it.join(', ')):'nothing')+'</td></tr>'+
-    '<tr><td><b>Existing damage:</b> '+(j.damage?esc(j.damage):'none noted')+'</td></tr>'+
+    '<tr><td><b>Damage photographed:</b> '+(damageLabels(j).length?esc(damageLabels(j).join(', ')):((j.media&&j.media.extras)?j.media.extras+' close-up photo'+(j.media.extras>1?'s':''):'none'))+'</td></tr>'+
     ((j.required&&j.required.length)?'<tr><td><b>Work required:</b> '+esc(j.required.join(', '))+'</td></tr>':'')+
     '<tr><td><b>Job type:</b> '+esc(j.jobType)+' &nbsp; <b>Expected delivery:</b> '+(j.expected?dOnly(new Date(j.expected).getTime()):'—')+
     ' &nbsp; <b>Technician:</b> '+esc(j.mechanicId?coreUser(j.mechanicId).name:'—')+'</td></tr>'+
@@ -17108,6 +17575,8 @@ function viewSettings(){
     '<div class="kv"><div class="k">Workshop login</div><div class="v">'+esc(Cloud.session&&Cloud.session.email||'')+'</div></div>'+
     '<p class="hint">Every phone signed in with this login sees the same job cards. Sign a device out when it is lost or leaves the workshop.</p>'+
     '<button class="btn danger" data-act="cloudSignOut">Sign this device out</button></div></div>';
+  h+=regFixList();
+  h+=sectionRefData();
   h+=sectionTimeSettings();
   h+='<div class="card"><div class="card-h"><h2>Bring in your existing records</h2></div><div class="card-b">'+
     '<p class="small muted">Customers, bikes, vendors, inventory with opening stock, and past job cards — from Excel or CSV.</p>'+
@@ -18662,6 +19131,395 @@ function openNotes(){
   S.view={name:'notes'}; window.scrollTo(0,0); render();
 }
 /* a tap on the phone's notification opens that job */
+/* =====================================================================
+   PARTS CATALOGUE (v6, 23 Nov 2026)
+   Genuine parts read from the Royal Enfield EPC (INDIA & SAARC) and from
+   99rpm.com for Bajaj, in the universal format agreed with the owner. It is
+   separate from the Store: nothing here is stock. A part moves into the
+   Store when it is added from here or bought on a purchase bill.
+   Rows: [brand, part no, alternates, description, category, MRP paise incl.
+   GST, NLS flag, bikes, unit]. Bikes: [make, model, version, engine family,
+   name at the source, matched to the bike list].
+   ===================================================================== */
+/* the parts catalogue: from the database (catalogue_parts, catalogue_bikes), see REFERENCE DATA */
+var CATALOG={v:0,brands:[],brandFull:{},bikes:[],cats:[],p:[]};
+var CAT_IDX=null;
+/* =====================================================================
+   REFERENCE DATA FROM THE DATABASE
+   The parts catalogue, the bikes it fits, the fluid capacities and the
+   engine counts live in Supabase (tables catalogue_parts, catalogue_bikes,
+   ref_data; see catalogue.sql), not in this file. Each phone keeps a copy
+   in the browser (IndexedDB), shows it straight away, and fetches again
+   only when the version number in ref_data has moved. Edit the rows in
+   Supabase's Table Editor and every phone picks the change up.
+   ===================================================================== */
+var REF={ver:{}, busy:false, at:0, err:''};
+var REF_KEYS=['bike_fluids','bike_engine','catalogue'];
+function refDb(){
+  if(refDb.p) return refDb.p;
+  refDb.p=new Promise(function(res,rej){
+    try{ var r=indexedDB.open('mtrz-ref',1);
+      r.onupgradeneeded=function(){ r.result.createObjectStore('kv'); };
+      r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); };
+    }catch(e){ rej(e); }
+  });
+  return refDb.p;
+}
+async function refLocal(k,v){
+  try{
+    var db=await refDb();
+    return await new Promise(function(res,rej){
+      var tx=db.transaction('kv',v===undefined?'readonly':'readwrite'), st=tx.objectStore('kv');
+      var q=v===undefined?st.get(k):st.put(v,k);
+      q.onsuccess=function(){ res(v===undefined?q.result:true); }; q.onerror=function(){ rej(q.error); };
+    });
+  }catch(e){ return v===undefined?null:false; }
+}
+function refApply(k,data){
+  if(k==='bike_fluids') BIKE_FLUIDS=data||{};
+  if(k==='bike_engine') BIKE_ENGINE=data||{};
+  if(k==='catalogue'){ CATALOG=data&&data.p?data:{v:0,brands:[],brandFull:{},bikes:[],cats:[],p:[]}; CAT_IDX=null; }
+}
+/* rows from the database -> the compact shape the catalogue screens use */
+function refPackCatalogue(meta,bikes,parts){
+  var brands=[], cats=[], ci={}, bi={};
+  bikes.sort(function(a,b){ return a.id-b.id; });
+  var B=bikes.map(function(b,i){ bi[b.id]=i; return [b.make,b.model,b.version||'',b.engine||'',b.source_name||'',b.matched?1:0]; });
+  var P=parts.map(function(r){
+    var bx=brands.indexOf(r.brand); if(bx<0){ brands.push(r.brand); bx=brands.length-1; }
+    var ck=(r.category||'Unmapped')+'\u0001'+(r.sub_category||'');
+    if(ci[ck]===undefined){ ci[ck]=cats.length; cats.push([r.category||'Unmapped', r.sub_category||'']); }
+    return [bx, r.part_no, r.alternates||'', r.description||'', ci[ck], Math.round((+r.mrp||0)*100), r.discontinued?1:0,
+      (r.fits||[]).map(function(id){ return bi[id]; }).filter(function(x){ return x!==undefined; }), r.unit&&r.unit!=='piece'?r.unit:''];
+  });
+  return {v:1, built:(meta&&meta.built)||'', brands:brands, brandFull:(meta&&meta.brandFull)||{}, bikes:B, cats:cats, p:P};
+}
+async function refPage(table,select,order){
+  var out=[], size=1000, from=0, more=true;
+  while(more){
+    /* five pages at a time */
+    var reqs=[];
+    for(var i=0;i<5;i++){ var f=from+i*size;
+      reqs.push(Cloud.raw('/rest/v1/'+table+'?select='+select+'&order='+order+'&limit='+size+'&offset='+f).then(function(r){ if(!r.ok) throw new Error('Could not read '+table); return r.json(); })); }
+    var pages=await Promise.all(reqs);
+    pages.forEach(function(p){ out=out.concat(p); if(p.length<size) more=false; });
+    from+=5*size;
+  }
+  return out;
+}
+async function refLoad(){
+  if(REF.busy) return; REF.busy=true; REF.err='';
+  try{
+    /* 1. this phone's copy first, so screens work at once and without signal */
+    for(var i=0;i<REF_KEYS.length;i++){
+      var k=REF_KEYS[i];
+      if(REF.ver[k]===undefined){ var c=await refLocal('ref:'+k); if(c){ refApply(k,c.data); REF.ver[k]=c.ver; } }
+    }
+    if(MODE!=='cloud'||!Cloud.session) return;
+    /* 2. what the database has now (a few bytes) */
+    var r=await Cloud.raw('/rest/v1/ref_data?select=key,ver,data->built,data->brandFull');
+    if(!r.ok) throw new Error('reference data not reachable');
+    var rows=await r.json(), changed=false;
+    for(var j=0;j<rows.length;j++){
+      var row=rows[j]; if(REF_KEYS.indexOf(row.key)<0||REF.ver[row.key]===row.ver) continue;
+      var data;
+      if(row.key==='catalogue'){
+        var bikes=await refPage('catalogue_bikes','id,make,model,version,engine,source_name,matched','id');
+        var parts=await refPage('catalogue_parts','brand,part_no,alternates,description,category,sub_category,mrp,discontinued,unit,fits','brand,part_no');
+        data=refPackCatalogue({built:row.built,brandFull:row.brandFull},bikes,parts);
+      }else{
+        var d=await Cloud.raw('/rest/v1/ref_data?key=eq.'+row.key+'&select=data');
+        if(!d.ok) continue; data=((await d.json())[0]||{}).data||{};
+      }
+      refApply(row.key,data); REF.ver[row.key]=row.ver; changed=true;
+      await refLocal('ref:'+row.key,{ver:row.ver,data:data});
+    }
+    REF.at=Date.now();
+    if(changed&&S.user) rerender();
+  }catch(e){ REF.err=e.message||String(e); }
+  finally{ REF.busy=false; }
+}
+/* Settings: what is in the database, and a one-time loader for an empty database */
+function sectionRefData(){
+  if(!(can('settings')||isDev())) return '';
+  var n=CATALOG&&CATALOG.p?CATALOG.p.length:0;
+  return '<div class="card"><div class="card-h"><h2>Reference data</h2></div><div class="card-b">'+
+    '<p class="small" style="margin:0 0 10px">The parts catalogue, bike fluids and engine counts live in the database. '+
+    'Edit them in Supabase (tables <span class="mono">catalogue_parts</span>, <span class="mono">catalogue_bikes</span>, <span class="mono">ref_data</span>); phones refresh by themselves.</p>'+
+    '<table class="lines"><tbody>'+
+      '<tr><td>Catalogue</td><td class="num">'+n.toLocaleString('en-IN')+' parts · '+((CATALOG&&CATALOG.bikes)||[]).length+' bikes</td><td class="mono small">v'+(REF.ver.catalogue||'—')+'</td></tr>'+
+      '<tr><td>Fluids</td><td class="num">'+Object.keys(BIKE_FLUIDS||{}).length+' bikes</td><td class="mono small">v'+(REF.ver.bike_fluids||'—')+'</td></tr>'+
+      '<tr><td>Engine counts</td><td class="num">'+Object.keys(BIKE_ENGINE||{}).length+' bikes</td><td class="mono small">v'+(REF.ver.bike_engine||'—')+'</td></tr>'+
+    '</tbody></table>'+(REF.err?'<p class="small" style="color:var(--red)">'+esc(REF.err)+'</p>':'')+
+    '<div class="btn-row" style="margin-top:10px"><button class="btn" data-act="refReload">Check for updates</button>'+
+    ((isDev()||can('settings'))&&MODE==='cloud'&&!n?'<button class="btn primary" data-act="refSeed">Load starting data</button>':'')+'</div></div></div>';
+}
+async function refSeed(){
+  if(MODE!=='cloud'){ toast('Needs the hosted app','bad'); return; }
+  toast('Loading the starting data into the database…');
+  try{
+    var get=async function(f){ var r=await fetch('seed/'+f,{cache:'no-store'}); if(!r.ok) throw new Error('seed/'+f+' is not on the server'); return r.json(); };
+    var post=async function(table,rows){
+      for(var i=0;i<rows.length;i+=500){
+        var r=await Cloud.raw('/rest/v1/'+table,{method:'POST',headers:{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows.slice(i,i+500))});
+        if(!r.ok) throw new Error(table+': '+(await r.text()).slice(0,140));
+      }
+    };
+    var C=await get('catalogue.json'), FL=await get('bike_fluids.json'), EN=await get('bike_engine.json');
+    await post('ref_data',[{key:'bike_fluids',data:FL},{key:'bike_engine',data:EN},{key:'catalogue',data:{built:C.built,brandFull:C.brandFull}}]);
+    await post('catalogue_bikes',C.bikes);
+    await post('catalogue_parts',C.parts);
+    REF.ver={}; await refLoad(); rerender();
+    toast('Loaded: '+C.parts.length.toLocaleString('en-IN')+' parts, '+Object.keys(FL).length+' fluid rows, '+Object.keys(EN).length+' engine rows','good');
+  }catch(e){ toast('Could not load: '+(e.message||e),'bad'); }
+}
+
+function catN(){ return CATALOG.p.length; }
+function catBrand(i){ return CATALOG.brands[CATALOG.p[i][0]]; }
+function catBrandFull(i){ var b=catBrand(i); return CATALOG.brandFull[b]||b; }
+function catNo(i){ return CATALOG.p[i][1]; }
+function catAlts(i){ var a=CATALOG.p[i][2]; return a?a.split('|'):[]; }
+function catDesc(i){ return CATALOG.p[i][3]; }
+function catCat(i){ return CATALOG.cats[CATALOG.p[i][4]]||['Unmapped','']; }
+function catMrp(i){ return CATALOG.p[i][5]||0; }
+function catNls(i){ return !!CATALOG.p[i][6]; }
+function catBikeIds(i){ return CATALOG.p[i][7]; }
+function catBikes(i){ return catBikeIds(i).map(function(b){ return CATALOG.bikes[b]; }); }
+function catUom(i){ return CATALOG.p[i][8]||'piece'; }
+function catModels(i){ var o=[]; catBikes(i).forEach(function(b){ if(o.indexOf(b[1])<0) o.push(b[1]); }); return o; }
+function catTitle(i){ return titleCase(String(catDesc(i)).replace(/^[\s*#.\-]+/,'')).replace(/\b(\d+)(St|Nd|Rd|Th)\b/g,function(_,n,s){ return n+s.toLowerCase(); }); }
+/* the owner's naming: short brand, every bike it fits, then the part */
+function catName(i){ return catBrand(i)+' '+catModels(i).join(' / ')+' '+catTitle(i); }
+function catRef(i){ return catBrand(i)+':'+catNo(i); }
+function catSource(i){ return catBrand(i)==='RE'?'Royal Enfield EPC (INDIA & SAARC)':'99rpm.com'; }
+function catBuild(){
+  if(CAT_IDX) return CAT_IDX;
+  var byNo={}, hay=[], add=function(k,i){ if(!k) return; (byNo[k]=byNo[k]||[]); if(byNo[k].indexOf(i)<0) byNo[k].push(i); };
+  for(var i=0;i<catN();i++){
+    add(pkey(catNo(i)),i); catAlts(i).forEach(function(a){ add(pkey(a),i); });
+    hay.push(nq(catNo(i)+' '+catAlts(i).join(' ')+' '+catBrand(i)+' '+catModels(i).join(' ')+' '+catDesc(i)+' '+catCat(i).join(' ')));
+  }
+  CAT_IDX={byNo:byNo, hay:hay}; return CAT_IDX;
+}
+function catByNo(no,brand){
+  var l=catBuild().byNo[pkey(no)]; if(!l||!l.length) return -1;
+  if(brand){ var m=l.filter(function(i){ return catBrand(i)===brand||catBrandFull(i)===brand; }); if(m.length) return m[0]; }
+  return l[0];
+}
+function catByRef(ref){ var m=String(ref||'').match(/^([^:]+):(.+)$/); return m?catByNo(m[2],m[1]):-1; }
+/* the Store product for a catalogue part, if it is already there */
+function catInStore(i){
+  var p=partByNo(catNo(i)); if(p) return p;
+  var al=catAlts(i); for(var k=0;k<al.length;k++){ p=partByNo(al[k]); if(p) return p; }
+  return null;
+}
+function catFitsBike(i,make,model){
+  return catBikes(i).some(function(b){ return b[0]===make&&b[1]===model; });
+}
+/* fitment keys the Store understands: the generation where the bike list has it */
+function catFitKeys(i){
+  var out=[];
+  catBikes(i).forEach(function(b){
+    if(!b[5]) return;
+    var k=(b[2]&&genOf(b[0],b[1],b[2]))?genKey(b[0],b[1],b[2]):fitKey(b[0],b[1]);
+    if(out.indexOf(k)<0) out.push(k);
+  });
+  return out;
+}
+/* search: every word typed must appear; part-number hits come first */
+function catSearch(q,f){
+  f=f||{}; var I=catBuild(), words=String(q||'').trim().split(/\s+/).map(nq).filter(Boolean), pk=pkey(q);
+  var top=[], rest=[];
+  for(var i=0;i<catN();i++){
+    var r=CATALOG.p[i];
+    if(f.brand!==undefined&&f.brand!==''&&String(r[0])!==String(f.brand)) continue;
+    if(f.grp||f.sub){ var c=catCat(i); if(f.grp&&c[0]!==f.grp) continue; if(f.sub&&c[1]!==f.sub) continue; }
+    if(f.make||f.model||f.ver){
+      var ok=catBikes(i).some(function(b){ return (!f.make||b[0]===f.make)&&(!f.model||b[1]===f.model)&&(!f.ver||b[2]===f.ver); });
+      if(!ok) continue;
+    }
+    if(words.length){
+      var h=I.hay[i], all=true;
+      for(var w=0;w<words.length;w++) if(h.indexOf(words[w])<0){ all=false; break; }
+      if(!all) continue;
+    }
+    var nk=pkey(r[1]);
+    if(pk&&pk.length>=3&&(nk.indexOf(pk)===0||catAlts(i).some(function(a){ return pkey(a).indexOf(pk)===0; }))) top.push(i); else rest.push(i);
+  }
+  var sorter=f.sort==='bikes'
+    ? function(a,b){ return catBikeIds(b).length-catBikeIds(a).length||catTitle(a).localeCompare(catTitle(b)); }
+    : function(a,b){ return catTitle(a).localeCompare(catTitle(b))||String(catNo(a)).localeCompare(String(catNo(b))); };
+  return top.sort(sorter).concat(rest.sort(sorter));
+}
+function catOpts(list,sel,first){
+  return '<option value="">'+esc(first)+'</option>'+list.map(function(v){
+    return '<option value="'+esc(v)+'"'+(v===sel?' selected':'')+'>'+esc(v)+'</option>'; }).join('');
+}
+function catMakes(){ var o=[]; CATALOG.bikes.forEach(function(b){ if(o.indexOf(b[0])<0) o.push(b[0]); }); return o; }
+function catModelsOf(make){ var o=[]; CATALOG.bikes.forEach(function(b){ if(b[0]===make&&o.indexOf(b[1])<0) o.push(b[1]); }); return o.sort(); }
+function catVersOf(make,model){ var o=[]; CATALOG.bikes.forEach(function(b){ if(b[0]===make&&b[1]===model&&b[2]&&o.indexOf(b[2])<0) o.push(b[2]); }); return o; }
+function catGroups(){ var o=[]; CATALOG.cats.forEach(function(c){ if(o.indexOf(c[0])<0) o.push(c[0]); }); return o.sort(function(a,b){ return a==='Unmapped'?1:b==='Unmapped'?-1:a.localeCompare(b); }); }
+function catSubsOf(g){ var o=[]; CATALOG.cats.forEach(function(c){ if(c[0]===g&&c[1]&&o.indexOf(c[1])<0) o.push(c[1]); }); return o.sort(); }
+function catF(){ return S.catF||(S.catF={q:'',brand:'',make:'',model:'',ver:'',grp:'',sub:'',sort:'az',n:60}); }
+function catCatLabel(i){
+  var c=catCat(i);
+  return c[0]==='Unmapped'?'<span style="color:var(--amber);font-weight:700">Not sorted yet</span>':esc(c[0])+' \u203A '+esc(c[1]);
+}
+function catModelsShort(i){
+  var m=catModels(i); return m.length<=3?m.join(' / '):m.slice(0,3).join(' / ')+' +'+(m.length-3)+' more';
+}
+function viewCatalogue(){
+  var F=catF(), res=catSearch(F.q,F), shown=res.slice(0,F.n);
+  var nRE=0, nBJ=0; CATALOG.p.forEach(function(r){ if(r[0]===0) nRE++; else nBJ++; });
+  var h=pageHead('Store','Parts catalogue',
+    catN().toLocaleString('en-IN')+' genuine parts \u00B7 RE '+nRE.toLocaleString('en-IN')+' \u00B7 Bajaj '+nBJ.toLocaleString('en-IN')+
+    ' \u00B7 '+CATALOG.bikes.length+' bikes. Not stock \u2014 a part joins the Store when you add it or buy it.');
+  h+='<div class="card"><div class="card-b">'+
+    '<div class="field" style="margin:0 0 10px"><input type="text" id="catq" value="'+esc(F.q)+'" placeholder="Part number, name or bike \u2014 e.g. KLP00006, oil filter, NS200 brake pad" autocomplete="off" style="font-size:17px;min-height:54px"></div>'+
+    '<div class="chips" style="margin:0 0 10px">'+[['','All'],['0','RE'],['1','Bajaj']].map(function(b){
+      return '<button class="chip filter" data-act="catBrand" data-v="'+b[0]+'" aria-pressed="'+(String(F.brand)===b[0])+'">'+b[1]+'</button>'; }).join('')+'</div>'+
+    '<div class="catfil">'+
+    '<select data-catf="make">'+catOpts(catMakes(),F.make,'Any make')+'</select>'+
+    (F.make?'<select data-catf="model">'+catOpts(catModelsOf(F.make),F.model,'Any model')+'</select>':'')+
+    (F.model&&catVersOf(F.make,F.model).length?'<select data-catf="ver">'+catOpts(catVersOf(F.make,F.model),F.ver,'Any version')+'</select>':'')+
+    '<select data-catf="grp">'+catOpts(catGroups(),F.grp,'Any category')+'</select>'+
+    (F.grp&&catSubsOf(F.grp).length?'<select data-catf="sub">'+catOpts(catSubsOf(F.grp),F.sub,'Any sub-category')+'</select>':'')+
+    '<select data-catf="sort"><option value="az"'+(F.sort==='az'?' selected':'')+'>A\u2013Z</option><option value="bikes"'+(F.sort==='bikes'?' selected':'')+'>Fits most bikes</option></select>'+
+    '</div></div></div>';
+  h+='<p class="small muted" style="margin:10px 2px">'+res.length.toLocaleString('en-IN')+' match'+(res.length===1?'':'es')+
+    (res.length>shown.length?' \u00B7 showing the first '+shown.length:'')+'</p>';
+  if(!res.length) return h+'<div class="empty"><b>Nothing in the catalogue matches.</b>Try fewer words, or clear a filter.</div>';
+  h+='<div class="card"><div class="card-b tight" style="overflow-x:auto"><table class="lines cattab"><thead><tr>'+
+    '<th>Part no.</th><th>Part</th><th>Category</th><th class="num">Fits</th><th class="num">MRP</th></tr></thead><tbody>';
+  shown.forEach(function(i){
+    var st=catInStore(i);
+    h+='<tr data-act="catOpen" data-ci="'+i+'" style="cursor:pointer">'+
+      '<td class="mono" style="white-space:nowrap"><b>'+esc(catNo(i))+'</b>'+(catAlts(i).length?'<div class="small muted">also '+esc(catAlts(i).join(', '))+'</div>':'')+'</td>'+
+      '<td><div style="font-weight:700"><span class="tag '+(catBrand(i)==='RE'?'t-blue':'t-amber')+'" style="font-size:10px;padding:1px 6px;margin-right:6px">'+esc(catBrand(i))+'</span>'+esc(catTitle(i))+'</div>'+
+        '<div class="small muted">'+esc(catModelsShort(i))+'</div>'+
+        (st?'<div class="small" style="color:var(--green);font-weight:800">In the Store \u00B7 '+stockOf(st.id)+' on the shelf</div>':'')+
+        (catNls(i)?'<div class="small" style="color:var(--red);font-weight:700">Not supplied any more (NLS)</div>':'')+'</td>'+
+      '<td class="small">'+catCatLabel(i)+'</td>'+
+      '<td class="num">'+catBikeIds(i).length+'</td>'+
+      '<td class="num">'+(catMrp(i)?'<b class="money">'+money(catMrp(i))+'</b>':'<span class="muted">\u2014</span>')+'</td></tr>';
+  });
+  h+='</tbody></table></div></div>';
+  if(res.length>shown.length) h+='<div style="text-align:center;margin:12px 0"><button class="btn" data-act="catMore">Show more</button></div>';
+  return h;
+}
+function catOpen(i){
+  i=parseInt(i,10); if(!(i>=0&&i<catN())) return;
+  var st=catInStore(i), c=catCat(i);
+  var rows=catBikes(i).map(function(b){
+    return '<tr><td>'+esc(b[0])+'</td><td><b>'+esc(b[1])+'</b>'+(b[5]?'':' <span class="tag t-amber" style="font-size:9px;padding:1px 4px">not in bike list</span>')+'</td>'+
+      '<td>'+esc(b[2]||'\u2014')+'</td><td class="small">'+esc(b[3]||'')+'</td></tr>'; }).join('');
+  openModal('<h2 style="font-size:19px;line-height:1.3">'+esc(catName(i))+'</h2>'+
+    '<div class="mono" style="margin:6px 0 10px"><b>'+esc(catNo(i))+'</b>'+(catAlts(i).length?' <span class="small muted">also '+esc(catAlts(i).join(', '))+'</span>':'')+'</div>'+
+    kv('Brand',esc(catBrandFull(i)))+
+    kv('Category',catCatLabel(i))+
+    kv('MRP (with GST)',catMrp(i)?'<b class="money">'+money(catMrp(i))+'</b> <span class="small muted">'+esc(catSource(i))+' \u00B7 23 Nov 2026</span>':'<span class="muted">No price yet</span>')+
+    kv('Status',catNls(i)?'<span style="color:var(--red);font-weight:700">Not supplied any more (NLS)</span>':'Active')+
+    kv('Unit',esc(catUom(i)))+
+    kv('As the maker writes it','<span class="small">'+esc(catDesc(i))+'</span>')+
+    kv('Source',esc(catSource(i)))+
+    (st?kv('In the Store','<b>'+esc(st.name)+'</b> \u00B7 '+stockOf(st.id)+' '+esc(st.unit||'')+' on the shelf'):'')+
+    '<div class="eyebrow" style="margin:14px 0 6px">Fits '+catBikeIds(i).length+' bike'+(catBikeIds(i).length===1?'':'s')+'</div>'+
+    '<div style="max-height:260px;overflow:auto"><table class="lines"><thead><tr><th>Make</th><th>Model</th><th>Version</th><th>Engine</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="btn-row" style="margin-top:14px"><button class="btn" data-act="closeModal">Close</button>'+
+    (st?'<button class="btn primary" data-act="catGoPart" data-id="'+st.id+'">Open in the Store</button>'
+       :(can('cat.add')?'<button class="btn primary" data-act="catAddStore" data-ci="'+i+'">Add to the Store</button>':''))+'</div>');
+  labelTables(document.querySelector('.sheet'));
+}
+/* a Store product made from a catalogue part: no stock, fitment filled */
+function catPartRecord(i){
+  var c=catCat(i);
+  return {id:uid('pt'), no:catNo(i), aliases:catAlts(i), name:catName(i), category:(c[0]!=='Unmapped'&&catIsSet(c[1]))?c[1]:'',
+    brand:catBrandFull(i), hsn:'', gst:gstDefault('part'), unit:catUom(i), buyUnit:catUom(i), conv:1,
+    mrp:catMrp(i), sale:catMrp(i), minQty:0, fits:catFitKeys(i), catRef:catRef(i),
+    createdAt:Date.now(), updatedAt:Date.now(), createdBy:S.user?S.user.id:'', from:'catalogue'};
+}
+async function catAddStore(i){
+  i=parseInt(i,10); if(!can('cat.add')){ toast('Only Kunal, Jatin or Lakshay add parts from the catalogue','bad'); return; }
+  var have=catInStore(i);
+  if(have){ closeModal(); S.view={name:'part',id:have.id}; window.scrollTo(0,0); render(); toast('Already in the Store','good'); return; }
+  var p=catPartRecord(i); PARTS.push(p);
+  if(!await saveStore('parts')){ PARTS.pop(); return; }
+  logAudit('Part','Added to the Store from the catalogue',p.no+' '+p.name+' \u00B7 '+(p.category||'category not set')+' \u00B7 '+p.brand,'');
+  closeModal(); S.view={name:'part',id:p.id}; window.scrollTo(0,0); render(); toast('Added to the Store \u2014 0 on the shelf until it is bought','good');
+}
+/* a part bought on a purchase bill picks up the catalogue's fitment */
+function catEnrich(part){
+  if(!part||isLabour(part)) return;
+  var i=catByNo(part.no,part.brand); if(i<0) return;
+  if(!(part.fits||[]).length) part.fits=catFitKeys(i);
+  if(!part.brand) part.brand=catBrandFull(i);
+  if(!part.mrp) part.mrp=catMrp(i);
+  if(!catIsSet(part.category)){ var c=catCat(i); if(c[0]!=='Unmapped'&&catIsSet(c[1])) part.category=c[1]; }
+  if(!part.catRef) part.catRef=catRef(i);
+}
+/* job card picker: catalogue parts that are not in the Store */
+function catPickerHtml(q,batch){
+  var j=S.job, fit=!!(S.fitOnly&&j&&j.make);
+  if(!String(q||'').trim()&&!fit) return '';
+  var res=catSearch(q,fit?{make:j.make,model:j.model}:{}).filter(function(i){ return !catInStore(i); });
+  if(!res.length) return '';
+  return '<div class="eyebrow" style="margin:12px 0 4px">From the catalogue \u2014 not in stock, to order</div>'+
+    res.slice(0,8).map(function(i){
+      return '<button class="partrow" data-act="catPickLine" data-ci="'+i+'" data-batch="'+esc(batch)+'"><div style="flex:1">'+
+        '<div style="font-weight:800">'+esc(catName(i))+'</div>'+
+        '<div class="small muted mono">'+esc(catNo(i))+' \u00B7 '+esc(catBrandFull(i))+'</div>'+
+        '<div class="small" style="color:var(--amber);font-weight:800">Not in stock \u2014 order</div></div>'+
+        (catMrp(i)?'<div class="money">'+money(catMrp(i))+'</div>':'')+'</button>';
+    }).join('');
+}
+function catOrderLine(i,qty,batch,job){
+  return {id:uid('ln'), kind:'part', desc:catName(i), qty:qty||1, unit:catMrp(i), gst:gstDefault('part'), noGst:false,
+    hsn:'', partId:'', partNo:catNo(i), brand:catBrandFull(i), cat:(catCat(i)[0]!=='Unmapped'?catCat(i)[1]:''),
+    order:true, catRef:catRef(i), fromList:true, batch:batch||'main', jobPick:job||undefined,
+    addedBy:S.user.id, addedAt:Date.now(), done:false};
+}
+async function catPickLine(i,batch){
+  i=parseInt(i,10); var j=S.job; if(!j||!(i>=0)) return;
+  var l=catOrderLine(i,1,batch); j.lines.push(l);
+  logIt(j,'Added from the catalogue \u2014 not in stock, to order',l.partNo+' '+l.desc+(l.unit?' at '+money(l.unit)+' each':''));
+  await saveJob(j); rerender(); toast('Added \u2014 not in stock, to order','good');
+  var inp=document.querySelector('.sheet [name="psearch"]'); if(inp){ inp.value=''; inp.focus(); paintPartResults(); }
+}
+/* an order line finds its Store product once the part has been bought */
+function catLinkLines(j){
+  (j&&j.lines||[]).forEach(function(l){
+    if(!l.order||l.partId||!l.partNo) return;
+    var p=partByNo(l.partNo); if(p){ l.partId=p.id; l.linkedAt=Date.now(); }
+  });
+}
+/* New Job Card: when nothing on the shelf fits, offer the catalogue */
+/* only jobs that replace a part get a catalogue offer; a cleaning or a
+   treatment uses a consumable, not a genuine part */
+var CAT_ORDER_SUBS=['Oil Filter','Air Filter','Fuel Filter','Spark Plug','Brake Pads','Brake Shoes','Brake Disc',
+  'Chain Sprocket Kit','Clutch Plates','Clutch Cable','Accelerator Cable','Brake Cable','Battery','Fork Oil Seal & Dust Seal',
+  'Fork Tube','Wheel Bearing','Steering Bearing','Swingarm Bushes','Cush Drive Rubber','Rear Shock Absorber','Headlight Bulb',
+  'Headlight Assembly','Tail Light','Indicators','Mirrors','Brake & Clutch Levers','Footrests & Rubbers','Key Set & Ignition Lock',
+  'Regulator Rectifier','Starter Motor','Horn','Tyre','Tube','Master Cylinder','Brake Caliper','Caliper / Master Cylinder Kit',
+  'Gaskets & Oil Seals','Cam Chain & Tensioner','Piston & Rings','Side Stand & Main Stand'];
+function catIntakeList(tj,job){
+  if(!tj.make||!tj.model) return [];
+  var sub=catGuess(titleCase(job)); if(!sub||CAT_ORDER_SUBS.indexOf(sub)<0) return [];
+  var out=[];
+  for(var i=0;i<catN();i++){
+    var c=catCat(i); if(c[1]!==sub) continue;
+    if(!catFitsBike(i,tj.make,tj.model)||catInStore(i)) continue;
+    out.push(i);
+  }
+  return out.sort(function(a,b){ return catNls(a)-catNls(b)||catTitle(a).localeCompare(catTitle(b)); }).slice(0,12);
+}
+function catFitHtml(p){
+  var i=catByNo(p.no,p.brand); if(i<0) return '';
+  return '<div class="sub"><div class="eyebrow">In the parts catalogue \u2014 fits '+catBikeIds(i).length+' bike'+(catBikeIds(i).length===1?'':'s')+'</div>'+
+    '<div class="chips" style="margin-top:8px">'+catBikes(i).map(function(b){
+      return '<span class="chip">'+esc(b[1])+(b[2]?' \u00B7 '+esc(b[2]):'')+'</span>'; }).join('')+'</div>'+
+    '<div class="small muted" style="margin-top:6px">'+esc(catSource(i))+(catMrp(i)?' \u00B7 MRP '+money(catMrp(i)):'')+
+    ' \u00B7 <a href="#" data-act="catOpen" data-ci="'+i+'">details</a></div></div>';
+}
 function openJobFromHash(){
   var m=String(location.hash||'').match(/^#job=([\w-]+)$/);
   if(!m||!S.user) return;
@@ -18684,6 +19542,7 @@ async function openJob(id){
   try{ j=await DB.get('mz:job:'+id); }
   catch(e){ toast(e.auth?'This device has been signed out.':'No connection \u2014 could not open that job card.','bad'); if(e.auth) render(); return; }
   if(!j){ toast('Could not open that job card','bad'); return; }
+  catLinkLines(j);
   S.job=j; S.view={name:'job',id:id}; window.scrollTo(0,0); render();
 }
 document.addEventListener('click',async function(e){
@@ -18705,6 +19564,8 @@ async function dispatch(a,arg,d,t){
     case 'pinClear': S.pin=''; render(); break;
     case 'loginInfo': loginInfo(); break;
     case 'devPreview': devPreviewToggle(); break;
+    case 'refReload': REF.ver={}; refLoad().then(function(){ rerender(); toast(REF.err?REF.err:'Reference data is up to date',REF.err?'bad':'good'); }); break;
+    case 'refSeed': return refSeed();
     case 'w2': return w2Act(d,t);
     case 'loginSubmit': return loginSubmit();
     case 'logout': if(CHATREC.on) chatRecStop(false); S.user=null; S.pin=''; S.job=null; S.chat=null; NOTIFIED=null; S.q=''; S.pquery=''; S.pq=''; S.chatDraft=''; CHATSEEN={}; document.getElementById('toast').innerHTML=''; render(); break;
@@ -18794,6 +19655,8 @@ async function dispatch(a,arg,d,t){
     case 'incl': segPick(t); paintPCalc(); break;
     case 'supplyType': segPick(t); grabPurchaseHeader(); S.purch.supplyType=d.v; render(); break;
     case 'item': case 'dmg': case 'jobreq': case 'tog': toggle(t); if(d.v==='meterbad'||d.v==='meterrep') paintOdo();
+      if(d.act==='jobreq'&&d.v==='CHAIN ADJUSTMENT'&&t.getAttribute('aria-pressed')==='true'){
+        var ct=(t.closest('#reqwrap')||document).querySelector('.tile[data-v="CHAIN TREATMENT"]'); if(ct) ct.setAttribute('aria-pressed','true'); }
       if(d.act==='jobreq'&&document.getElementById('restpicks')) paintRestPicks();
       if(d.act==='jobreq'&&document.getElementById('intakeform')) paintIntakePicks(); break;
     case 'revealBox': toggle(t); var rb=document.getElementById(d.k); if(rb) rb.hidden=(t.getAttribute('aria-pressed')!=='true'); break;
@@ -18807,7 +19670,9 @@ async function dispatch(a,arg,d,t){
     case 'useKnown': useKnown(); break;
     case 'saveIntake': return saveIntake();
     case 'intakeEst': intakeEstModal(); break;
-    case 'estPrint': if(EST) printDoc(billDocHtml(EST.j,EST.b)); break;
+    case 'estPrint': if(EST&&!estBlocked()) printDoc(billDocHtml(EST.j,EST.b)); break;
+    case 'engineEdit': engineEditModal(); break;
+    case 'engineSave': return engineSave();
     case 'estPdf': return estPdf();
     case 'estWa': return estWa();
     case 'printCard': printCard(); break;
@@ -19034,6 +19899,13 @@ async function dispatch(a,arg,d,t){
     case 'setLang': setLang(d.v); break;
     case 'nav': goNav(d.k); break;
     case 'navGo': goNav(d.k); break;
+    case 'catOpen': catOpen(d.ci); break;
+    case 'catMore': catF().n+=100; rerender(); break;
+    case 'catBrand': catF().brand=d.v; catF().n=60; rerender(); break;
+    case 'catAddStore': return catAddStore(d.ci);
+    case 'catGoPart': closeModal(); S.view={name:'part',id:d.id}; window.scrollTo(0,0); render(); break;
+    case 'catPickLine': return catPickLine(d.ci,d.batch);
+    case 'catFill': catFillInto(d.ci); break;
     case 'printMode': setPrintMode(d.v); break;
     case 'mediaShot': mediaCapture(d.k); break;
     case 'camFlow': camFlow(); break;
@@ -19150,6 +20022,7 @@ document.addEventListener('input',function(e){
   try{ el.setSelectionRange(a,b); }catch(err){}
 });
 document.addEventListener('input',function(e){
+  if(e.target.id==='catq'){ catF().q=e.target.value; catF().n=60; searchRedraw('catq'); return; }
   if(e.target.id==='chatbox'){ onChatInput(e.target); return; }
   if(e.target.id==='adjsearch'){ paintAdjResults(); return; }
   if(e.target.id==='salesq'){ S.salesQ=e.target.value; searchRedraw('salesq'); return; }
@@ -19281,6 +20154,13 @@ async function bootLoad(){
     await saveCore();
   }
   if(!S.core.labourSeeded){ if(seedLabour()) await saveStore('parts'); S.core.labourSeeded=1; await saveCore(); }
+  /* v5: the owner's labour heads and rates; the kit list is parts only */
+  if(!S.core.labour5){
+    S.core.labourBak5=PARTS.filter(isLabour).map(function(p){ return {no:p.no,name:p.name,sale:p.sale}; });
+    if(seedLabourV5()) await saveStore('parts');
+    if(S.core.kitsText){ S.core.kitsTextBak5=S.core.kitsText; S.core.kitsText=null; }
+    S.core.labour5=1; await saveCore();
+  }
   if(!S.core.jobs3){
     if(S.core.kitsText&&/ENGINE SERVICE:/.test(S.core.kitsText)&&!/ENGINE FLUSH \+ OIL:/.test(S.core.kitsText)) S.core.kitsText=null;
     S.core.jobs3=1; await saveCore();
@@ -19300,6 +20180,7 @@ async function bootLoad(){
   if(!S.core.cats2){ if(catsMigrate()) await saveStore('parts'); S.core.cats2=1; await saveCore(); }
   if(!S.core.batchNames){ if(migrateBatchNames()) await DB.set('mz:batches',BATCHES); S.core.batchNames=1; await saveCore(); }
   await loadAtt();
+  refLoad();
   CHATMETA=await ChatStore.meta();
   NOTES=await DB.get('mz:notes')||[];
   registerSw();
