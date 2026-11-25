@@ -2,7 +2,7 @@
 <!--
   ==========================================================================
   Motoreez Workshop System
-  Version: 23 Nov 2026 - v6
+  Version: 25 Nov 2026 - v7
   (c) 2026 Jatin Suri. All rights reserved.
 
   Conceived, designed and owned by Jatin Suri, Gurugram, India.
@@ -20,7 +20,7 @@
   ==========================================================================
 -->
 <!--
-  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 23 NOV 2026 (with the workshop team's updates no. 10 to 13)
+  MOTOREEZ (MTRZ) WORKSHOP APP - LIVE VERSION, 25 NOV 2026 (with the workshop team's updates no. 10 to 13 and v7)
   This file IS the live app at motoreez.netlify.app. It is now the source of truth:
   make new changes on THIS file, not on an older copy.
 
@@ -146,6 +146,16 @@
      which keeps a copy on the phone and refreshes when ref_data.ver changes. Do not paste
      the data back into this file: send new or changed data as a file (Excel / JSON) and
      it goes into the tables. A copy of this file opened on its own has no catalogue.
+  10. Added by the workshop team on 25 Nov (v7), now live:
+     - Full parts catalogue searched on the server: catalogue_parts (111,693 parts, 11 brands),
+       catalogue_fitment (344,446 part x bike rows), zana_products (1,266) and zana_fitment.
+       Setup and load scripts: db/v7/. Tables are read-only for the app (is_member()).
+       The 23 Nov table was renamed catalogue_parts_v6 (kept as a backup).
+     - The catalogue's filter lists (CATMETA) come from ref_data 'catalogue_meta'.
+       Offline, the catalogue falls back to the RE / Bajaj copy a phone kept, if any.
+     - Spares | Zana tabs, part details with fitment, Add to the Store (Zana stock kept as
+       supplier stock), catalogue parts on job cards, new-job estimates and purchase bills,
+       kit fixes (foam wash labour only, air-filter kits under Air Filter), 99 new bikes.
 -->
 <html lang="en">
 <head>
@@ -1297,6 +1307,34 @@ button.stat:active{transform:translateY(1px)}
 .catfil{display:flex;flex-wrap:wrap;gap:8px}
 .catfil select{min-height:44px;font-size:14px;flex:1 1 170px;max-width:260px}
 @media (max-width:640px){ .catfil select{max-width:none;flex:1 1 46%} }
+/* v7 catalogue: tabs, brand chips that scroll, Zana photos, phone rows */
+.cattabs{display:flex;width:100%}
+.cattabs button{flex:1 1 0}
+.catbrands{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;scrollbar-width:thin}
+.catbrands .chip{flex:0 0 auto}
+.cattab td.catimg{width:56px;padding-right:0}
+.cattab td.catimg img{width:48px;height:48px;object-fit:cover;border-radius:8px;background:var(--rule2);display:block}
+.catphoto{margin:0 0 12px;text-align:center;background:var(--rule2);border-radius:12px;overflow:hidden}
+.catphoto img{max-width:100%;max-height:260px;object-fit:contain;display:block;margin:0 auto}
+#catq::-webkit-search-cancel-button{cursor:pointer}
+@media (max-width:640px){
+  table.lines.cattab tr{display:grid !important;grid-template-columns:1fr auto;gap:2px 12px;align-items:start;padding:12px 8px}
+  table.lines.cattab td{margin:0 !important}
+  table.lines.cattab td::before{display:none !important;content:none !important}
+  table.lines.cattab td:nth-child(1){grid-column:1;grid-row:1;font-size:13px}
+  table.lines.cattab td:nth-child(2){grid-column:1 / span 2;grid-row:2}
+  table.lines.cattab td:nth-child(3){grid-column:1;grid-row:3;font-size:12px}
+  table.lines.cattab td:nth-child(4){display:none !important}
+  table.lines.cattab td:nth-child(5){grid-column:2;grid-row:1;text-align:right !important}
+  table.lines.cattab.zanatab tr{grid-template-columns:56px 1fr auto}
+  table.lines.cattab.zanatab td:nth-child(1){grid-column:1;grid-row:1 / span 2}
+  table.lines.cattab.zanatab td:nth-child(2){grid-column:2;grid-row:1}
+  table.lines.cattab.zanatab td:nth-child(3){grid-column:2 / span 2;grid-row:2}
+  table.lines.cattab.zanatab td:nth-child(4){display:block !important;grid-column:3;grid-row:3;font-size:12px;text-align:right !important}
+  table.lines.cattab.zanatab td:nth-child(4)::after{content:' at Zana';color:var(--steel)}
+  table.lines.cattab.zanatab td:nth-child(5){grid-column:3;grid-row:1}
+  .catphoto img{max-height:200px}
+}
 </style>
 </head>
 <body>
@@ -1307,7 +1345,7 @@ button.stat:active{transform:translateY(1px)}
 <script>
 /* JS-MTRZ-2026 */
 /* VERSION: each delivered copy carries its date; the change list for it is kept in the project */
-var APP_VERSION={date:'2026-11-23', label:'23 Nov 2026 \u00B7 v6'};
+var APP_VERSION={date:'2026-11-25', label:'25 Nov 2026 \u00B7 v7'};
 var ORIGIN_FP=['6e51f0fa7f2a91a1','c876fd6219899255','460417af7661eba4','84105052486689fa'].join('');
 var ORIGIN_TEXT="Motoreez Workshop System. (c) 2026 Jatin Suri. All rights reserved. Conceived, designed and owned by Jatin Suri, Gurugram, India. Jatin led the project as the bridge between operations and technology. Contributors: Kunal Bhatia (operations), Himanshu Naik (technology), Lakshay Gaur (technology). First created: November 2026. Use, copying or modification without the owner's written permission is not allowed.";
 
@@ -4036,14 +4074,14 @@ var BIKE_GROUPS=[
    'Triumph','Vespa','Yezdi','Zontes']]
 ];
 var BIKES={
-"Bajaj":"Platina 100|102,Platina 110|115,CT 110X|115,CT 125X|124,Pulsar 125|124,Pulsar N125|125,Pulsar 150|150,Pulsar N150|150,Pulsar NS125|124,Pulsar NS160|160,Pulsar NS200|200,Pulsar NS400Z|373,Pulsar N160|165,Pulsar N250|249,Pulsar RS200|200,Pulsar 220F|220,Pulsar 180|178,Avenger Street 160|160,Avenger Cruise 220|220,Dominar 250|249,Dominar 400|373,Freedom 125|125,Discover 125|125,Discover 110|115,Boxer 150|144,Pulsar N250 SS|249,Avenger Street 220|220,CT 100|102,Pulsar AS150|150,Pulsar AS200|199,Pulsar 180F|178,Pulsar F250|249,Pulsar P150|150,Pulsar 135 LS|135,Pulsar 220S|220,Avenger Street 150|150,Avenger Street 180|180,Avenger 220 DTS-i (pre-2015)|220,V15|150,V12|125,Discover 100|102,Discover 150|145,XCD|125,Kristal|95",
-"Hero MotoCorp":"Splendor Plus|97,Splendor Plus Xtec|97,Splendor iSmart|113,HF Deluxe|97,HF 100|97,Passion Plus|97,Passion Xtec|113,Super Splendor|125,Super Splendor Xtec|125,Glamour|125,Glamour X|125,Xtreme 125R|125,Xtreme 160R|163,Xtreme 160R 4V|163,Xtreme 250R|249,Xpulse 200 4V|200,Xpulse 210|210,Karizma XMR|210,Mavrick 440|440,Destini 125|125,Maestro Edge 110|110,Maestro Edge 125|125,Pleasure Plus|110,Xoom 110|110,Xoom 125|125,Xoom 160|156,CBZ Xtreme|150,Hunk|150,Achiever|150,CD Dawn|97,Splendor NXG|97,Destini 110|110,Destini Prime|125,Super Splendor Xtec 2.0|125,Xpulse 200|200,Xpulse 200T|200,Xtreme 200R|200,Xtreme 200S|200,Xtreme Sports|150,Karizma ZMR|223,Karizma (R)|223,Impulse|150,Ignitor|125,Passion Pro|97,Passion XPro|110,Splendor Pro|97,Splendor Pro Classic|97,HF Dawn|97,CD Deluxe|97,Duet|110,Maestro|110,Pleasure|102",
+"Bajaj":"Platina 100|102,Platina 110|115,CT 110X|115,CT 125X|124,Pulsar 125|124,Pulsar N125|125,Pulsar 150|150,Pulsar N150|150,Pulsar NS125|124,Pulsar NS160|160,Pulsar NS200|200,Pulsar NS400Z|373,Pulsar N160|165,Pulsar N250|249,Pulsar RS200|200,Pulsar 220F|220,Pulsar 180|178,Avenger Street 160|160,Avenger Cruise 220|220,Dominar 250|249,Dominar 400|373,Freedom 125|125,Discover 125|125,Discover 110|115,Boxer 150|144,Pulsar N250 SS|249,Avenger Street 220|220,CT 100|102,Pulsar AS150|150,Pulsar AS200|199,Pulsar 180F|178,Pulsar F250|249,Pulsar P150|150,Pulsar 135 LS|135,Pulsar 220S|220,Avenger Street 150|150,Avenger Street 180|180,Avenger 220 DTS-i (pre-2015)|220,V15|150,V12|125,Discover 100|102,Discover 150|145,XCD|125,Kristal|95,CT110|,Discover 150F|,Discover 150S|,Avenger 220|,Pulsar 180F Neon|,Avenger 180|,Avenger 150 Street|,Discover 100 DTS-Si|,Discover 125M|,Discover 125T|,Discover 100M|,Avenger 200|,Discover 125ST|,Discover 100T|,Discover 100 4G|,Pulsar 200|,Boxer BM150|,XCD 125|,XCD 135|,Pulsar 220DTS-Fi|,Avenger 180 CR|,Platina 125 DTS i|,Pulsar 200 DTS i|,Pulsar 135|",
+"Hero MotoCorp":"Splendor Plus|97,Splendor Plus Xtec|97,Splendor iSmart|113,HF Deluxe|97,HF 100|97,Passion Plus|97,Passion Xtec|113,Super Splendor|125,Super Splendor Xtec|125,Glamour|125,Glamour X|125,Xtreme 125R|125,Xtreme 160R|163,Xtreme 160R 4V|163,Xtreme 250R|249,Xpulse 200 4V|200,Xpulse 210|210,Karizma XMR|210,Mavrick 440|440,Destini 125|125,Maestro Edge 110|110,Maestro Edge 125|125,Pleasure Plus|110,Xoom 110|110,Xoom 125|125,Xoom 160|156,CBZ Xtreme|150,Hunk|150,Achiever|150,CD Dawn|97,Splendor NXG|97,Destini 110|110,Destini Prime|125,Super Splendor Xtec 2.0|125,Xpulse 200|200,Xpulse 200T|200,Xtreme 200R|200,Xtreme 200S|200,Xtreme Sports|150,Karizma ZMR|223,Karizma (R)|223,Impulse|150,Ignitor|125,Passion Pro|97,Passion XPro|110,Splendor Pro|97,Splendor Pro Classic|97,HF Dawn|97,CD Deluxe|97,Duet|110,Maestro|110,Pleasure|102,Pleasure 110|,Passion-HZ|,Xtreme FI 160R|,Xpulse 210LC|,Passion Pro i3S|,Xoom FI|,Xtreme 125|,Xpulse 200T II|,Destini 110 Special Edition|,Xtreme 125 XTEC2|,Xtreme Stealth FI 160R|,Xtreme 200S FF II|,Xpulse 200 2V|,Xpulse 200FI|,Karizma Fighter Edition|,Xpulse 200T 4V FI|,Destini 110 PHB|,Xtreme Stealth 160R|,Xpulse 200T FI|,Passion HZ FI|,Passion Pro iBS|,Passion Pro TR|,Destini Prime PHA B|,HF Dawn FE|",
 "Honda":"Shine 100|99,Shine 100 DX|99,Shine 125|124,SP 125|124,SP 160|163,Livo|110,Unicorn|163,Hornet 2.0|184,NX200|184,CB200X|184,CB300F|294,CB300R|286,CB350|348,CB350 Hness|348,CB350RS|348,CB350C|348,CB650R|649,CBR650R|649,CB750 Hornet|755,CB1000 Hornet|1000,Rebel 500|471,Transalp XL750|755,Gold Wing|1833,Activa 110|110,Activa 125|124,Activa 6G|110,Dio 110|110,Dio 125|124,Grazia 125|124,CD 110 Dream|110,Aviator|110,Twister|110,Stunner|125,CB125 Hornet|124,Rebel 300|286,ADV 160|157,XR300L|294,XR300 Rally|294,NX500|471,CB500|501,CBR1000RR-R Fireblade|1000,X-ADV|745,Africa Twin|1084,CB500X|471,CB1000R|998,CBR1000RR Fireblade|999,CBR650F|649,CBR250R|249,CBR150R|149,CB Hornet 160R|162,X-Blade|162,CB Unicorn 150|150,CB Unicorn 160|162,CB Unicorn Dazzler|150,CB Trigger|150,CB Shine SP|125,Dream Yuga|110,Dream Neo|110,Navi|110,Activa i|110,Cliq|110,VT1300CX|1312,VFR1200F|1237",
-"Royal Enfield":"Classic 350|349,Classic 650|648,Bullet 350|349,Hunter 350|349,Meteor 350|349,Goan Classic 350|349,Himalayan 450|452,Guerrilla 450|452,Scram 440|443,Scram 411|411,Himalayan 411|411,Interceptor 650|648,Continental GT 650|648,Super Meteor 650|648,Shotgun 650|648,Bear 650|648,Thunderbird 350|346,Thunderbird 350X|346,Thunderbird 500|499,Classic 500|499,Electra 350|346,Standard 350|346,Bullet 500|499,Machismo 350|346,Himalayan 440|443,Bullet 650|648,Continental GT 535|535,Thunderbird 500X|499,Bullet Trials 350|346,Bullet Trials 500|499",
+"Royal Enfield":"Classic 350|349,Classic 650|648,Bullet 350|349,Hunter 350|349,Meteor 350|349,Goan Classic 350|349,Himalayan 450|452,Guerrilla 450|452,Scram 440|443,Scram 411|411,Himalayan 411|411,Interceptor 650|648,Continental GT 650|648,Super Meteor 650|648,Shotgun 650|648,Bear 650|648,Thunderbird 350|346,Thunderbird 350X|346,Thunderbird 500|499,Classic 500|499,Electra 350|346,Standard 350|346,Bullet 500|499,Machismo 350|346,Himalayan 440|443,Bullet 650|648,Continental GT 535|535,Thunderbird 500X|499,Bullet Trials 350|346,Bullet Trials 500|499,Thunderbird X 500|,Bullet Trails 500|,Bullet Trails 350|",
 "Suzuki":"Gixxer 150|155,Gixxer SF 150|155,Gixxer 250|249,Gixxer SF 250|249,V-Strom SX 250|249,Intruder 150|155,Access 125|124,Avenis 125|124,Burgman Street 125|124,Burgman Street EX|124,Hayabusa|1340,GSX-8R|776,GSX-S750|749,V-Strom 800DE|776,Katana|999,GS150R|150,Hayate|113,Slingshot|150,V-Strom 650 XT|645,V-Strom 1000|1037,GSX-S1000|999,GSX-S1000F|999,GSX-R1000|999,Intruder M800|805,Intruder M1800R|1783,Bandit 1250|1255,Inazuma 250|248,Swish 125|124,Let's|113",
-"TVS":"Sport|110,Radeon|110,Star City Plus|110,Raider 125|125,Apache RTR 160|160,Apache RTR 160 4V|160,Apache RTR 165 RP|165,Apache RTR 180|177,Apache RTR 200 4V|198,Apache RTR 310|312,Apache RR 310|312,Ronin|226,Jupiter 110|113,Jupiter 125|125,Ntorq 125|125,Zest 110|110,Scooty Pep Plus|88,Victor|110,Wego|110,Star Sport|110,Ntorq 150|150,Apache RTX|299,XL 100|100,XL Super|70,Phoenix 125|125,Jive|110,Scooty Streak|88",
-"Yamaha":"FZ-S Fi V4|149,FZ-S Fi V3|149,FZ-X|149,FZ Fi|149,FZ25|249,FZS 25|249,MT-15 V2|155,R15 V4|155,R15M|155,R15 V3|155,R3|321,MT-03|321,Aerox 155|155,Fascino 125|125,RayZR 125|125,Saluto 125|125,SZ-RR|149,RX 100|98,RX 135|132,RD 350|347,Crux|106,Libero|106,Alba|106,XSR 155|155,R2|204,FZ Rave|149,FZ-S Fi Hybrid|149,R15S|155,MT-15 (V1)|155,R15 V2 / R15 (pre-V3)|150,YZF-R1|998,MT-09|847,Fazer 25|249,FZ16|153,FZ-S (carb)|153,Fazer|153,Fazer Fi V2.0|149,SZ-R|153,SZ-X|153,SZ-S|153,SS 125|123,YBR 125|124,YBR 110|106,Gladiator|123,Ray|113,Ray Z|113,Cygnus Ray ZR (113cc)|113,Alpha|113,Fascino 110|113,Saluto RX|110",
-"Aprilia":"SR 125|124,SR 160|160,SXR 125|124,SXR 160|160,Storm 125|124,RS 457|457,Tuono 457|457,RS 660|659,Tuono 660|659,Tuareg 660|659,RSV4|1099,Tuono V4|1077,SR 175|175,SXR GT 125|124,SXR GT 175|175,SR 150|154,Dorsoduro 900|896,Shiver 900|896,Dorsoduro 1200|1197,Caponord 1200|1197,Mana 850|839",
+"TVS":"Sport|110,Radeon|110,Star City Plus|110,Raider 125|125,Apache RTR 160|160,Apache RTR 160 4V|160,Apache RTR 165 RP|165,Apache RTR 180|177,Apache RTR 200 4V|198,Apache RTR 310|312,Apache RR 310|312,Ronin|226,Jupiter 110|113,Jupiter 125|125,Ntorq 125|125,Zest 110|110,Scooty Pep Plus|88,Victor|110,Wego|110,Star Sport|110,Ntorq 150|150,Apache RTX|299,XL 100|100,XL Super|70,Phoenix 125|125,Jive|110,Scooty Streak|88,Star|,Stryker 125|,Star HLX 150|,Jupiter SMW|",
+"Yamaha":"FZ-S Fi V4|149,FZ-S Fi V3|149,FZ-X|149,FZ Fi|149,FZ25|249,FZS 25|249,MT-15 V2|155,R15 V4|155,R15M|155,R15 V3|155,R3|321,MT-03|321,Aerox 155|155,Fascino 125|125,RayZR 125|125,Saluto 125|125,SZ-RR|149,RX 100|98,RX 135|132,RD 350|347,Crux|106,Libero|106,Alba|106,XSR 155|155,R2|204,FZ Rave|149,FZ-S Fi Hybrid|149,R15S|155,MT-15 (V1)|155,R15 V2 / R15 (pre-V3)|150,YZF-R1|998,MT-09|847,Fazer 25|249,FZ16|153,FZ-S (carb)|153,Fazer|153,Fazer Fi V2.0|149,SZ-R|153,SZ-X|153,SZ-S|153,SS 125|123,YBR 125|124,YBR 110|106,Gladiator|123,Ray|113,Ray Z|113,Cygnus Ray ZR (113cc)|113,Alpha|113,Fascino 110|113,Saluto RX|110,R1|,R15 V2|,Cygnus Alpha|,Vmax 1700|,Fazer Naked|,Cygnus RAY Z|,R1M|,MT-01|,Cygnus RAY|,Fascino S|,RAY ZR Street Rally|,YBR|,XSR|,YZF890|,YBX125|,Tracer 900|,R7|,MT-09 Y-amt|,XSR900|,MTM890|,FZ1-N|,XSR700|,SR400|,YZF-R2 M|,YZF-R2 QS|,YZF-R2|,MT-15 Monster Energy Motogp Edition|,FZ- Blue Flex|,YZ250|,Aerox Vers|,Fz-s Hybrid|,YC150|,Rayzr SR Disc TFT|,Cygnus RAY ZR|,YD125|,Alfa|,Yc-z|",
+"Aprilia":"SR 125|124,SR 160|160,SXR 125|124,SXR 160|160,Storm 125|124,RS 457|457,Tuono 457|457,RS 660|659,Tuono 660|659,Tuareg 660|659,RSV4|1099,Tuono V4|1077,SR 175|175,SXR GT 125|124,SXR GT 175|175,SR 150|154,Dorsoduro 900|896,Shiver 900|896,Dorsoduro 1200|1197,Caponord 1200|1197,Mana 850|839,Race 160|,Carbon 160|,SR Carbon 150|,Race 150|",
 "Benelli":"Imperiale 400|374,TRK 502|500,TRK 502X|500,TRK 702|698,TRK 702X|698,Leoncino 500|500,502C|500,302S|300,TNT 300|300,TRK 552|554,TRK 552X|554,752S|754,302R|300,TNT 600i|600,TNT 600GT|600,TNT 25|249,Leoncino 250|249,TRK 251|249,TNT 899|898,TNT R (1130)|1131",
 "BMW Motorrad":"G 310 R|313,G 310 RR|313,G 310 GS|313,F 450 GS|450,F 900 R|895,F 900 XR|895,F 850 GS|853,R 1300 GS|1300,R 1300 GS Adventure|1300,R 1250 GS Adventure|1254,S 1000 RR|999,S 1000 R|999,S 1000 XR|999,M 1000 RR|999,R 18|1802,R 12 nineT|1170,R 12 GS|1170,R 12|1170,C 400 GT|350,F 900 GS|895,F 900 GS Adventure|895,K 1600|1649,M 1000 R|999,M 1000 XR|999,R 1250 GS|1254,R 1250 RT|1254,R 1250 R|1254,R nineT|1170,R nineT Scrambler|1170,R nineT Racer|1170,F 750 GS|853,F 850 GS Adventure|853,R 1200 GS|1170,R 1200 GS Adventure|1170,R 1200 R|1170,R 1200 RT|1170,R 1200 RS|1170,K 1300 S|1293,K 1300 R|1293",
 "BSA":"Gold Star 650|652,Scrambler 650|652,Bantam 350|334",
@@ -4055,15 +4093,18 @@ var BIKES={
 "Jawa":"Jawa 42|294,Jawa 42 Bobber|334,Jawa 350|334,Jawa 42 FJ|294,Perak|334,Jawa Classic|294",
 "Kawasaki":"Ninja 300|296,Ninja 400|399,Ninja 500|451,Ninja 650|649,Ninja 1100SX|1099,Ninja ZX-4R|399,Ninja ZX-6R|636,Ninja ZX-10R|998,Ninja H2|998,Z650|649,Z650RS|649,Z900|948,Z900RS|948,W175|177,Eliminator 450|451,Versys 650|649,Versys 1100|1099,Vulcan S|649,KLX 230|233,Z300|296,Z1100|1099,Ninja H2 SX|998,Versys-X 300|296,Z H2|998,Ninja ZX-14R|1441,Z1000|1043,Z800|806,Ninja 1000|1043,Versys 1000|1043,ER-6n|649,Z250|249,W800|773,Ninja 250R|249",
 "Keeway":"K-Light 250V|250,Sixties 300i|278,Vieste 300|278,SR250|223,V302C|298,SR125|125,RR300|292,K300 N|292,K300 R|292,K300 SF|292",
-"KTM":"Duke 125|125,Duke 160|164,Duke 200|200,Duke 250|249,Duke 390|399,RC 125|125,RC 200|200,RC 390|373,Adventure 250|249,Adventure 390|399,Adventure 390 X|399,Duke 790|799,890 Adventure R|889,1290 Super Duke R|1301,1390 Super Duke R|1350,390 Duke R|399,RC 160|164,RC 200 GP|200,RC 390 GP|373,390 Adventure S|399,390 Adventure R|399,390 Enduro R|399,1290 Super Adventure S|1301,890 Duke R|889,390 Duke (350cc)|349,390 Adventure (350cc)|349",
+"KTM":"Duke 125|125,Duke 160|164,Duke 200|200,Duke 250|249,Duke 390|399,RC 125|125,RC 200|200,RC 390|373,Adventure 250|249,Adventure 390|399,Adventure 390 X|399,Duke 790|799,890 Adventure R|889,1290 Super Duke R|1301,1390 Super Duke R|1350,390 Duke R|399,RC 160|164,RC 200 GP|200,RC 390 GP|373,390 Adventure S|399,390 Adventure R|399,390 Enduro R|399,1290 Super Adventure S|1301,890 Duke R|889,390 Duke (350cc)|349,390 Adventure (350cc)|349,Adventure Rally 390|",
 "Mahindra":"Mojo 300|295,Centuro|107,Gusto|110,Duro|125,Rodeo|125,Pantero|110,Flyte|125,Kine|70",
 "Moto Morini":"X-Cape 650|649,Seiemmezzo SCR|649,Seiemmezzo STR|649",
 "MV Agusta":"Brutale 800|798,Dragster 800|798,F3 800|798,Turismo Veloce|798,Brutale 1000|998,F4|998,Brutale 1090|1078",
 "Triumph":"Speed 400|398,Speed T4|398,Scrambler 400 X|398,Thruxton 400|398,Trident 660|660,Daytona 660|660,Tiger Sport 660|660,Street Triple 765 RS|765,Speed Triple 1200 RS|1160,Speed Twin 900|900,Speed Twin 1200|1200,Bonneville T100|900,Bonneville T120|1200,Scrambler 900|900,Scrambler 1200 X|1200,Tiger 900 Rally|888,Tiger 1200 GT|1160,Rocket 3 R|2458,Tracker 400|398,Scrambler 400 XC|398,Bonneville T40|398,Street Triple 765 R|765,Bonneville Bobber|1200,Bonneville Speedmaster|1200,Street Twin|900,Street Scrambler|900,Thruxton R|1200,Tiger 850 Sport|888,Tiger 800|800,Tiger Explorer|1215,Daytona 675|675,Street Triple 675|675,Speed Triple (1050)|1050,Thunderbird Storm|1699,Thunderbird LT|1699,Rocket III Roadster|2294",
-"Vespa":"SXL 125|124,SXL 150|150,VXL 125|124,VXL 150|150,ZX 125|124,Vespa 946|155,S 125|124,S 150|150,LX 125|124,VX 125|124",
+"Vespa":"SXL 125|124,SXL 150|150,VXL 125|124,VXL 150|150,ZX 125|124,Vespa 946|155,S 125|124,S 150|150,LX 125|124,VX 125|124,Urban Club|,VX|",
 "Yezdi":"Roadster|334,Scrambler|334,Adventure|334",
 "Zontes":"350R|348,350T|348,350X|348,350D|348,703F|692,GK350|348"
 };
+/* scooter or motorcycle, where the name makes it obvious (v7) */
+var BIKE_SCOOTERS={"Hero MotoCorp":["Destini 125","Maestro Edge 110","Maestro Edge 125","Pleasure Plus","Xoom 110","Xoom 125","Xoom 160","Destini 110","Destini Prime","Duet","Maestro","Pleasure","Pleasure 110","Xoom FI","Destini 110 Special Edition","Destini 110 PHB","Destini Prime PHA B"],"Honda":["Activa 110","Activa 125","Activa 6G","Dio 110","Dio 125","Grazia 125","Aviator","Activa i"],"Suzuki":["Access 125","Avenis 125","Burgman Street 125","Burgman Street EX"],"TVS":["Jupiter 110","Jupiter 125","Ntorq 125","Zest 110","Scooty Pep Plus","Wego","Ntorq 150","Scooty Streak","Jupiter SMW"],"Yamaha":["Aerox 155","Fascino 125","RayZR 125","Ray","Ray Z","Cygnus Ray ZR (113cc)","Alpha","Fascino 110","Cygnus Alpha","Cygnus RAY Z","Cygnus RAY","Fascino S","RAY ZR Street Rally","Aerox Vers","Rayzr SR Disc TFT","Cygnus RAY ZR","Alfa"],"Aprilia":["SR 125","SR 160","SXR 125","SXR 160","Storm 125","SR 175","SXR GT 125","SXR GT 175","SR 150","SR Carbon 150"],"Mahindra":["Gusto","Pantero","Flyte","Kine"],"Vespa":["SXL 125","SXL 150","VXL 125","VXL 150","ZX 125","Vespa 946","S 150","LX 125","VX 125","Urban Club","VX"]};
+function bikeTypeOf(make,model){ var l=BIKE_SCOOTERS[make]||[]; return l.some(function(n){ return pkey(n)===pkey(model); })?'scooter':'motorcycle'; }
 /* Bikes anyone in the workshop has added: kept for everyone, and offered
    everywhere the built-in list is. S.core.customBikes = {make:[{n,cc}]} */
 function customBikes(){ return (S.core&&S.core.customBikes)||{}; }
@@ -4094,7 +4135,7 @@ function modelsFor(make){
       out.push({n:n,cc:cc,fuel:fu.every(function(x){ return x===fu[0]; })?fu[0]:'',gens:gensFor(make,n).length});
     } else {
       var f=F[n]||(V[n]&&V[n][0]?[V[n][0][1],V[n][0][3]]:null);
-      out.push({n:n,cc:cc,fuel:f?f[0]:'',conf:f?f[1]:'',gens:gensFor(make,n).length});
+      out.push({n:n,cc:cc,fuel:f?f[0]:'',conf:f?f[1]:'',gens:gensFor(make,n).length,type:bikeTypeOf(make,n)});
     }
   });
   (customBikes()[make]||[]).forEach(function(m){ if(!out.some(function(x){ return pkey(x.n)===pkey(m.n); })) out.push({n:m.n,cc:m.cc||'',fuel:m.fuel||''}); });
@@ -5840,9 +5881,9 @@ document.addEventListener('change',function(e){
    ===================================================================== */
 var JOB_CATS={
   'ENGINE FLUSH':['Additives'],'ENGINE OIL':['Engine Oil'],'ENGINE FLUSH + OIL':['Engine Oil'],
-  'OIL FILTER':['Oil Filter'],'AIR FILTER':['Air Filter'],
+  'OIL FILTER':['Oil Filter'],'AIR FILTER':['Air Filter','Performance Air Filter'],
   'THROTTLE BODY CLEANING':['Additives'],'THROTTLE BODY + INJECTOR CLEANING':['Additives'],
-  'FOAM WASHING AND POLISHING':['Wash & Shampoo','Polish & Wax'],'CHAIN TREATMENT':['Chain Lube & Cleaner'],
+  'CHAIN TREATMENT':['Chain Lube & Cleaner'],
   'FORK OIL':['Fork Oil'],'BRAKE FLUID':['Brake Fluid'],
   'BRAKE PADS':['Brake Pads'],'BRAKE PAD CHANGE':['Brake Pads'],'PERFORMANCE BRAKE PADS':['Brake Pads']
 };
@@ -5901,15 +5942,21 @@ function defaultQty(j,job,p){
   if(job==='FORK OIL'&&(F.fl||F.fr)) q=unitAmount(p,((F.fl||0)+(F.fr||F.fl||0))/1000);
   return q>0?q:1;
 }
+/* v7: jobs that take no product, and products that belong to one job only */
+var JOB_NOPART=['FOAM WASHING AND POLISHING'];
+var AIR_CARE=/\bfilter\b.*\b(wash|washing|clean|cleaner|cleaning|care|service)\b|\bfilter\s*oil\b|\b(wash|washing|clean|cleaning|care|service)\s*kit\b.*\bfilter\b/i;
+function airCare(p){ return AIR_CARE.test(String(p&&p.name||'')); }
 function jobProducts(j,job,all){
   var fk=(j.make&&j.model)?bikeFK(j):'';
   var cats=JOB_CATS[job], list;
+  if(!all&&JOB_NOPART.indexOf(job)>=0) return [];
   if(all) list=shelfParts().filter(function(p){ return stockOf(p.id)>0; });
-  else if(cats) list=shelfParts().filter(function(p){ return cats.indexOf(p.category)>=0&&stockOf(p.id)>0; });
+  else if(cats) list=shelfParts().filter(function(p){ return (cats.indexOf(p.category)>=0||(job==='AIR FILTER'&&airCare(p)))&&stockOf(p.id)>0; });
   else {
     var kit=(parseKits(kitsText())[job]||[]).filter(function(i){ return i.kind==='part'; });
     list=[]; kit.forEach(function(i){ kitCandidates(i,j).forEach(function(p){ if(stockOf(p.id)>0&&list.indexOf(p)<0) list.push(p); }); });
   }
+  if(!all) list=list.filter(function(p){ return job==='AIR FILTER'||!airCare(p); });
   KITFIT={};
   /* an oil in the grade the bike's manual asks for comes up first */
   var F=bikeFluids(j), g='';
@@ -5932,7 +5979,7 @@ function pickOptions(j,job,sel,all){
 }
 /* the jobs worth a drop-down: a category or a kit part to look for */
 function pickJobs(req){ return (req||[]).map(upReq).filter(function(w){
-  if(w==='INJECTOR CLEANING'||w==='CARBURETTOR CLEANING') return false;
+  if(w==='INJECTOR CLEANING'||w==='CARBURETTOR CLEANING'||JOB_NOPART.indexOf(w)>=0) return false;
   return JOB_CATS[w]||(parseKits(kitsText())[w]||[]).some(function(i){ return i.kind==='part'; }); }); }
 function pickRow(j,job,ctx,cur){
   var sel=cur?cur.partId:'', o=pickOptions(j,job,sel,false), q=cur?qtyNum(cur.qty):'';
@@ -6136,9 +6183,9 @@ function paintIntakePicks(){
         var kc=IPICK[job], csel=(kc&&kc.touched&&String(kc.pid).indexOf('cat:')===0)?kc.pid:'';
         h+='<div class="small" style="flex:1 1 100%;color:var(--amber);font-weight:700">None on the shelf \u2014 order from the catalogue</div>'+
           '<select data-ip="'+esc(job)+'"><option value=""'+(csel===''?' selected':'')+'>\u2014 Not needed \u2014</option>'+
-          cl.map(function(ci){ var v='cat:'+catRef(ci);
-            return '<option value="'+esc(v)+'"'+(v===csel?' selected':'')+'>Order \u00B7 '+esc(catTitle(ci))+' \u00B7 '+esc(catNo(ci))+
-              (catMrp(ci)&&seeMoney()?' \u00B7 '+money(catMrp(ci)):'')+'</option>'; }).join('')+'</select>'+
+          cl.map(function(cr){ var v='cat:'+cr.ref;
+            return '<option value="'+esc(v)+'"'+(v===csel?' selected':'')+'>Order \u00B7 '+(cr.src==='cloud'?esc(cr.brand)+' ':'')+esc(cr.title)+' \u00B7 '+esc(cr.no)+
+              (cr.mrp&&seeMoney()?' \u00B7 '+money(cr.mrp):'')+'</option>'; }).join('')+'</select>'+
           '<input type="number" step="0.01" min="0" inputmode="decimal" data-iq="'+esc(job)+'" value="'+(csel?esc(String((kc&&kc.qty)||1)):'')+'" placeholder="Qty"'+(csel?'':' disabled')+'>';
         IPICK[job]={pid:csel, qty:csel?String((kc&&kc.qty)||1):'', touched:kc&&kc.touched?1:0};
       }
@@ -6171,7 +6218,7 @@ function intakeLines(tj){
   var out=[];
   document.querySelectorAll('#intakeform #jobreq select[data-ip]').forEach(function(s){
     if(!s.value) return;
-    if(s.value.indexOf('cat:')===0){ var ci=catByRef(s.value.slice(4)); if(ci<0) return;
+    if(s.value.indexOf('cat:')===0){ var ci=catLookup(s.value.slice(4)); if(!ci) return;
       var cq=s.parentNode.querySelector('input[data-iq]'), cl=catOrderLine(ci,Math.round((parseFloat(cq&&cq.value)||1)*100)/100,'main',s.dataset.ip);
       cl.id='e'+out.length; out.push(cl); return; }
     var p=partById(s.value); if(!p) return;
@@ -6278,13 +6325,13 @@ async function applyIntakePending(j){
   try{
     var req=(j.required||[]).map(upReq);
     var picks=(P.picks||[]).filter(function(k){ return req.indexOf(upReq(k.job))>=0&&partById(k.pid); });
-    (P.picks||[]).forEach(function(k){
-      if(String(k.pid).indexOf('cat:')!==0||req.indexOf(upReq(k.job))<0) return;
-      var ref=String(k.pid).slice(4), ci=catByRef(ref); if(ci<0) return;
-      if((j.lines||[]).some(function(l){ return l.order&&l.catRef===ref&&l.jobPick===k.job&&!l.void; })) return;
+    for(var pi=0;pi<(P.picks||[]).length;pi++){ var k=P.picks[pi];
+      if(String(k.pid).indexOf('cat:')!==0||req.indexOf(upReq(k.job))<0) continue;
+      var ref=String(k.pid).slice(4), ci=await catLookupAsync(ref); if(!ci) continue;
+      if((j.lines||[]).some(function(l){ return l.order&&l.catRef===ref&&l.jobPick===k.job&&!l.void; })) continue;
       j.lines.push(catOrderLine(ci,k.qty||1,'main',k.job));
-      logIt(j,'Added from the catalogue \u2014 not in stock, to order',catNo(ci)+' '+catName(ci)); n++;
-    });
+      logIt(j,'Added from the catalogue \u2014 not in stock, to order',ci.no+' '+ci.name); n++;
+    }
     j.pickSkip=P.skip||j.pickSkip||[];
     n+=await applyRestPicks(j,picks);
     var before=(j.lines||[]).length;
@@ -8385,6 +8432,7 @@ function catLabel(p){
 var CAT_RULES=[
  [/power\s*-?tronic/i,'PowerTronic'],[/fuel\s*-?x\b/i,'Fuel X'],
  [/remap|fuel\s*controller|piggy\s*back|fuel\s*module/i,'Fuel Controller / Remap'],
+ [/\bair\s*filter\b.*\b(wash|washing|clean|cleaning|care|service)\b|\bfilter\s*(wash|washing|cleaning|care)\s*kit\b|\bfilter\s*oil\b/i,'Air Filter'],
  [/\b(k\s*&\s*n|bmc|dna)\b.*filter/i,'Performance Air Filter'],
  [/aux|fog\s*l(igh|am)p?/i,'Aux Light'],
  [/brake\s*fluid|\bdot\s*[345]\b/i,'Brake Fluid'],
@@ -10844,6 +10892,17 @@ function parseKits(txt){
   return out;
 }
 var KIT_STOP=['labour','labor','and','the','for','with','charge','charges','work'];
+var KIT_NOT={'engine oil':['filter','seal','pump','cooler','spanner'],'fork oil':['seal','dust','tube','bush'],
+  'oil filter':['spanner','wrench','cover','gasket','o-ring','oring'],'air filter':['box','cover','housing','duct','gasket','clamp'],
+  'spark plug':['cap','spanner','socket','wrench'],'tyre':['inflator','polish','shine','lever','gauge','sealant'],
+  'tube':['fork','tubeless','fuel','breather','vent','drain','overflow','purge','canister','throttle','rubber'],
+  'brake pads':['spring','pin','shim','sensor'],'brake fluid':['reservoir','cap','hose'],'coolant':['hose','pipe','tank','reservoir','sensor','pump'],
+  'chain lube':['guard','case','adjuster'],'chain cleaner':['guard','case','adjuster','brush'],'chain sprocket kit':['guard','cover','case'],
+  'clutch cable':['lever','switch'],'throttle cable':['body','sensor','grip'],'mount':['engine','motor','rubber','exhaust','silencer'],
+  'switch':['ignition','neutral','stand','stop','pressure','key'],'battery':['cover','box','tray','cable','terminal','charger'],
+  'crash guard':['bolt','slider'],'wheel bearing':['spacer','seal','collar'],'master cylinder kit':['cap','reservoir','bolt'],
+  'cush rubber':['grommet'],'swing arm bush':['bolt','nut'],'brake shoe':['spring','cam','lever','rod']};
+function kitNot(item,hay){ var n=KIT_NOT[String(item.name||'').toLowerCase().trim()]; return !!(n&&n.some(function(w){ return hay.indexOf(w)>=0; })); }
 function kitWords(name){
   return String(name).toLowerCase().split(/[^a-z0-9]+/).filter(function(w){ return w.length>=3&&KIT_STOP.indexOf(w)<0; });
 }
@@ -10886,6 +10945,9 @@ function kitCandidates(item,job){
     if(item.kind==='labour'&&!isLabour(p)) return false;
     var hay=(p.name+' '+(p.no||'')+' '+(p.aliases||[]).join(' ')).toLowerCase();
     if(!words.every(function(w){ return hay.indexOf(w)>=0||(w.length>4&&hay.indexOf(w.slice(0,-1))>=0); })) return false;
+    if(item.kind==='part'&&kitNot(item,hay)) return false;
+    /* the air filter's care kit is for the Air Filter job only */
+    if(item.kind==='part'&&airCare(p)&&!/air\s*filter/i.test(item.name)) return false;
     /* a part meant for another bike is not offered for this one */
     if(item.kind==='part'&&fk&&kitFit(p,fk)<0) return false;
     return true;
@@ -15557,6 +15619,7 @@ function paintPnoResults(){
     return;
   }
   var ci=catByNo(v);
+  if(catCloud()&&pkey(v).length>=3) catPnoCloud(v,box,ci>=0);
   if(ci>=0){
     box.innerHTML='<div class="banner info small" style="margin:8px 0 0"><b>'+esc(catName(ci))+'</b> \u2014 in the parts catalogue'+
       (catMrp(ci)?' \u00B7 MRP '+money(catMrp(ci)):'')+
@@ -15591,6 +15654,7 @@ function paintBatchPick(costPer){
   }
 }
 function catFillInto(i){
+  if(typeof i==='string'&&i.indexOf(':')>0) return catFillRec(i);
   i=parseInt(i,10); if(!(i>=0&&i<catN())) return;
   var set=function(n,v){ var e=document.querySelector('.sheet [name="'+n+'"]'); if(e&&v!==undefined&&v!==null&&v!=='') e.value=v; };
   var c=catCat(i);
@@ -19161,7 +19225,7 @@ var CAT_IDX=null;
    Supabase's Table Editor and every phone picks the change up.
    ===================================================================== */
 var REF={ver:{}, busy:false, at:0, err:''};
-var REF_KEYS=['bike_fluids','bike_engine','catalogue'];
+var REF_KEYS=['bike_fluids','bike_engine','catalogue','catalogue_meta'];
 function refDb(){
   if(refDb.p) return refDb.p;
   refDb.p=new Promise(function(res,rej){
@@ -19185,6 +19249,7 @@ async function refLocal(k,v){
 function refApply(k,data){
   if(k==='bike_fluids') BIKE_FLUIDS=data||{};
   if(k==='bike_engine') BIKE_ENGINE=data||{};
+  if(k==='catalogue_meta'&&data&&data.brands){ CATMETA=data; }
   if(k==='catalogue'){ CATALOG=data&&data.p?data:{v:0,brands:[],brandFull:{},bikes:[],cats:[],p:[]}; CAT_IDX=null; }
 }
 /* rows from the database -> the compact shape the catalogue screens use */
@@ -19229,6 +19294,7 @@ async function refLoad(){
     var rows=await r.json(), changed=false;
     for(var j=0;j<rows.length;j++){
       var row=rows[j]; if(REF_KEYS.indexOf(row.key)<0||REF.ver[row.key]===row.ver) continue;
+      if(row.key==='catalogue') continue;   /* the full catalogue is searched on the server now (catalogue_parts, v7) */
       var data;
       if(row.key==='catalogue'){
         var bikes=await refPage('catalogue_bikes','id,make,model,version,engine,source_name,matched','id');
@@ -19251,15 +19317,15 @@ function sectionRefData(){
   if(!(can('settings')||isDev())) return '';
   var n=CATALOG&&CATALOG.p?CATALOG.p.length:0;
   return '<div class="card"><div class="card-h"><h2>Reference data</h2></div><div class="card-b">'+
-    '<p class="small" style="margin:0 0 10px">The parts catalogue, bike fluids and engine counts live in the database. '+
-    'Edit them in Supabase (tables <span class="mono">catalogue_parts</span>, <span class="mono">catalogue_bikes</span>, <span class="mono">ref_data</span>); phones refresh by themselves.</p>'+
+    '<p class="small" style="margin:0 0 10px">The parts catalogue (searched on the server), bike fluids and engine counts live in the database. '+
+    'Edit them in Supabase (tables <span class="mono">catalogue_parts</span>, <span class="mono">catalogue_fitment</span>, <span class="mono">zana_products</span>, <span class="mono">ref_data</span>); phones refresh by themselves.</p>'+
     '<table class="lines"><tbody>'+
-      '<tr><td>Catalogue</td><td class="num">'+n.toLocaleString('en-IN')+' parts · '+((CATALOG&&CATALOG.bikes)||[]).length+' bikes</td><td class="mono small">v'+(REF.ver.catalogue||'—')+'</td></tr>'+
+      '<tr><td>Catalogue</td><td class="num">'+(CATMETA&&CATMETA.parts?CATMETA.parts.toLocaleString('en-IN')+' parts on the server':'—')+(n?' · '+n.toLocaleString('en-IN')+' kept on this phone':'')+'</td><td class="mono small">'+esc((CATMETA&&CATMETA.built)||'')+'</td></tr>'+
       '<tr><td>Fluids</td><td class="num">'+Object.keys(BIKE_FLUIDS||{}).length+' bikes</td><td class="mono small">v'+(REF.ver.bike_fluids||'—')+'</td></tr>'+
       '<tr><td>Engine counts</td><td class="num">'+Object.keys(BIKE_ENGINE||{}).length+' bikes</td><td class="mono small">v'+(REF.ver.bike_engine||'—')+'</td></tr>'+
     '</tbody></table>'+(REF.err?'<p class="small" style="color:var(--red)">'+esc(REF.err)+'</p>':'')+
     '<div class="btn-row" style="margin-top:10px"><button class="btn" data-act="refReload">Check for updates</button>'+
-    ((isDev()||can('settings'))&&MODE==='cloud'&&!n?'<button class="btn primary" data-act="refSeed">Load starting data</button>':'')+'</div></div></div>';
+    ((isDev()||can('settings'))&&MODE==='cloud'&&!Object.keys(BIKE_FLUIDS||{}).length?'<button class="btn primary" data-act="refSeed">Load starting data</button>':'')+'</div></div></div>';
 }
 async function refSeed(){
   if(MODE!=='cloud'){ toast('Needs the hosted app','bad'); return; }
@@ -19272,12 +19338,11 @@ async function refSeed(){
         if(!r.ok) throw new Error(table+': '+(await r.text()).slice(0,140));
       }
     };
-    var C=await get('catalogue.json'), FL=await get('bike_fluids.json'), EN=await get('bike_engine.json');
-    await post('ref_data',[{key:'bike_fluids',data:FL},{key:'bike_engine',data:EN},{key:'catalogue',data:{built:C.built,brandFull:C.brandFull}}]);
-    await post('catalogue_bikes',C.bikes);
-    await post('catalogue_parts',C.parts);
+    /* the catalogue itself is loaded with the scripts in db/v7; this only loads the bike tables */
+    var FL=await get('bike_fluids.json'), EN=await get('bike_engine.json');
+    await post('ref_data',[{key:'bike_fluids',data:FL},{key:'bike_engine',data:EN}]);
     REF.ver={}; await refLoad(); rerender();
-    toast('Loaded: '+C.parts.length.toLocaleString('en-IN')+' parts, '+Object.keys(FL).length+' fluid rows, '+Object.keys(EN).length+' engine rows','good');
+    toast('Loaded: '+Object.keys(FL).length+' fluid rows, '+Object.keys(EN).length+' engine rows','good');
   }catch(e){ toast('Could not load: '+(e.message||e),'bad'); }
 }
 
@@ -19367,7 +19432,7 @@ function catModelsOf(make){ var o=[]; CATALOG.bikes.forEach(function(b){ if(b[0]
 function catVersOf(make,model){ var o=[]; CATALOG.bikes.forEach(function(b){ if(b[0]===make&&b[1]===model&&b[2]&&o.indexOf(b[2])<0) o.push(b[2]); }); return o; }
 function catGroups(){ var o=[]; CATALOG.cats.forEach(function(c){ if(o.indexOf(c[0])<0) o.push(c[0]); }); return o.sort(function(a,b){ return a==='Unmapped'?1:b==='Unmapped'?-1:a.localeCompare(b); }); }
 function catSubsOf(g){ var o=[]; CATALOG.cats.forEach(function(c){ if(c[0]===g&&c[1]&&o.indexOf(c[1])<0) o.push(c[1]); }); return o.sort(); }
-function catF(){ return S.catF||(S.catF={q:'',brand:'',make:'',model:'',ver:'',grp:'',sub:'',sort:'az',n:60}); }
+function catF(){ return S.catF||(S.catF={tab:'spares',q:'',brand:'',make:'',model:'',ver:'',grp:'',sub:'',colour:'',priced:'',sort:'az',n:60}); }
 function catCatLabel(i){
   var c=catCat(i);
   return c[0]==='Unmapped'?'<span style="color:var(--amber);font-weight:700">Not sorted yet</span>':esc(c[0])+' \u203A '+esc(c[1]);
@@ -19376,13 +19441,18 @@ function catModelsShort(i){
   var m=catModels(i); return m.length<=3?m.join(' / '):m.slice(0,3).join(' / ')+' +'+(m.length-3)+' more';
 }
 function viewCatalogue(){
-  var F=catF(), res=catSearch(F.q,F), shown=res.slice(0,F.n);
+  if(catCloud()) return viewCatalogueCloud();
+  var F=catF();
+  if(F.tab==='zana') return pageHead('Store','Parts catalogue','Zana accessories')+'<div class="card"><div class="card-b">'+catSourceNote()+catTabs(F)+'</div></div>'+
+    '<div class="empty"><b>Zana accessories need the server.</b>Sign in with the server on to search them.</div>';
+  if(!/^[01]?$/.test(String(F.brand))) F.brand='';
+  var res=catSearch(F.q,F), shown=res.slice(0,F.n);
   var nRE=0, nBJ=0; CATALOG.p.forEach(function(r){ if(CATALOG.brands[r[0]]==='RE') nRE++; else nBJ++; });
   var h=pageHead('Store','Parts catalogue',
     catN().toLocaleString('en-IN')+' genuine parts \u00B7 RE '+nRE.toLocaleString('en-IN')+' \u00B7 Bajaj '+nBJ.toLocaleString('en-IN')+
     ' \u00B7 '+CATALOG.bikes.length+' bikes. Not stock \u2014 a part joins the Store when you add it or buy it.');
-  h+='<div class="card"><div class="card-b">'+
-    '<div class="field" style="margin:0 0 10px"><input type="text" id="catq" value="'+esc(F.q)+'" placeholder="Part number, name or bike \u2014 e.g. KLP00006, oil filter, NS200 brake pad" autocomplete="off" style="font-size:17px;min-height:54px"></div>'+
+  h+='<div class="card"><div class="card-b">'+catSourceNote()+catTabs(F)+
+    '<div class="field" style="margin:0 0 10px"><input type="text" inputmode="search" id="catq" value="'+esc(F.q)+'" placeholder="Part number, name or bike \u2014 e.g. KLP00006, oil filter, NS200 brake pad" autocomplete="off" enterkeyhint="search" style="font-size:17px;min-height:54px"></div>'+
     '<div class="chips" style="margin:0 0 10px">'+[['','All'],['0','RE'],['1','Bajaj']].map(function(b){
       return '<button class="chip filter" data-act="catBrand" data-v="'+b[0]+'" aria-pressed="'+(String(F.brand)===b[0])+'">'+b[1]+'</button>'; }).join('')+'</div>'+
     '<div class="catfil">'+
@@ -19416,26 +19486,7 @@ function viewCatalogue(){
 }
 function catOpen(i){
   i=parseInt(i,10); if(!(i>=0&&i<catN())) return;
-  var st=catInStore(i), c=catCat(i);
-  var rows=catBikes(i).map(function(b){
-    return '<tr><td>'+esc(b[0])+'</td><td><b>'+esc(b[1])+'</b>'+(b[5]?'':' <span class="tag t-amber" style="font-size:9px;padding:1px 4px">not in bike list</span>')+'</td>'+
-      '<td>'+esc(b[2]||'\u2014')+'</td><td class="small">'+esc(b[3]||'')+'</td></tr>'; }).join('');
-  openModal('<h2 style="font-size:19px;line-height:1.3">'+esc(catName(i))+'</h2>'+
-    '<div class="mono" style="margin:6px 0 10px"><b>'+esc(catNo(i))+'</b>'+(catAlts(i).length?' <span class="small muted">also '+esc(catAlts(i).join(', '))+'</span>':'')+'</div>'+
-    kv('Brand',esc(catBrandFull(i)))+
-    kv('Category',catCatLabel(i))+
-    kv('MRP (with GST)',catMrp(i)?'<b class="money">'+money(catMrp(i))+'</b> <span class="small muted">'+esc(catSource(i))+' \u00B7 23 Nov 2026</span>':'<span class="muted">No price yet</span>')+
-    kv('Status',catNls(i)?'<span style="color:var(--red);font-weight:700">Not supplied any more (NLS)</span>':'Active')+
-    kv('Unit',esc(catUom(i)))+
-    kv('As the maker writes it','<span class="small">'+esc(catDesc(i))+'</span>')+
-    kv('Source',esc(catSource(i)))+
-    (st?kv('In the Store','<b>'+esc(st.name)+'</b> \u00B7 '+stockOf(st.id)+' '+esc(st.unit||'')+' on the shelf'):'')+
-    '<div class="eyebrow" style="margin:14px 0 6px">Fits '+catBikeIds(i).length+' bike'+(catBikeIds(i).length===1?'':'s')+'</div>'+
-    '<div style="max-height:260px;overflow:auto"><table class="lines"><thead><tr><th>Make</th><th>Model</th><th>Version</th><th>Engine</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<div class="btn-row" style="margin-top:14px"><button class="btn" data-act="closeModal">Close</button>'+
-    (st?'<button class="btn primary" data-act="catGoPart" data-id="'+st.id+'">Open in the Store</button>'
-       :(can('cat.add')?'<button class="btn primary" data-act="catAddStore" data-ci="'+i+'">Add to the Store</button>':''))+'</div>');
-  labelTables(document.querySelector('.sheet'));
+  catShow(catRec(i));
 }
 /* a Store product made from a catalogue part: no stock, fitment filled */
 function catPartRecord(i){
@@ -19445,19 +19496,10 @@ function catPartRecord(i){
     mrp:catMrp(i), sale:catMrp(i), minQty:0, fits:catFitKeys(i), catRef:catRef(i),
     createdAt:Date.now(), updatedAt:Date.now(), createdBy:S.user?S.user.id:'', from:'catalogue'};
 }
-async function catAddStore(i){
-  i=parseInt(i,10); if(!can('cat.add')){ toast('Only Kunal, Jatin or Lakshay add parts from the catalogue','bad'); return; }
-  var have=catInStore(i);
-  if(have){ closeModal(); S.view={name:'part',id:have.id}; window.scrollTo(0,0); render(); toast('Already in the Store','good'); return; }
-  var p=catPartRecord(i); PARTS.push(p);
-  if(!await saveStore('parts')){ PARTS.pop(); return; }
-  logAudit('Part','Added to the Store from the catalogue',p.no+' '+p.name+' \u00B7 '+(p.category||'category not set')+' \u00B7 '+p.brand,'');
-  closeModal(); S.view={name:'part',id:p.id}; window.scrollTo(0,0); render(); toast('Added to the Store \u2014 0 on the shelf until it is bought','good');
-}
 /* a part bought on a purchase bill picks up the catalogue's fitment */
 function catEnrich(part){
   if(!part||isLabour(part)) return;
-  var i=catByNo(part.no,part.brand); if(i<0) return;
+  var i=catByNo(part.no,part.brand); if(i<0){ catEnrichRec(part); return; }
   if(!(part.fits||[]).length) part.fits=catFitKeys(i);
   if(!part.brand) part.brand=catBrandFull(i);
   if(!part.mrp) part.mrp=catMrp(i);
@@ -19468,6 +19510,7 @@ function catEnrich(part){
 function catPickerHtml(q,batch){
   var j=S.job, fit=!!(S.fitOnly&&j&&j.make);
   if(!String(q||'').trim()&&!fit) return '';
+  if(catCloud()) return catPickerCloud(q,batch);
   var res=catSearch(q,fit?{make:j.make,model:j.model}:{}).filter(function(i){ return !catInStore(i); });
   if(!res.length) return '';
   return '<div class="eyebrow" style="margin:12px 0 4px">From the catalogue \u2014 not in stock, to order</div>'+
@@ -19480,14 +19523,16 @@ function catPickerHtml(q,batch){
     }).join('');
 }
 function catOrderLine(i,qty,batch,job){
+  if(i&&typeof i==='object') return catOrderLineRec(i,qty,batch,job);
   return {id:uid('ln'), kind:'part', desc:catName(i), qty:qty||1, unit:catMrp(i), gst:gstDefault('part'), noGst:false,
     hsn:'', partId:'', partNo:catNo(i), brand:catBrandFull(i), cat:(catCat(i)[0]!=='Unmapped'?catCat(i)[1]:''),
     order:true, catRef:catRef(i), fromList:true, batch:batch||'main', jobPick:job||undefined,
     addedBy:S.user.id, addedAt:Date.now(), done:false};
 }
 async function catPickLine(i,batch){
-  i=parseInt(i,10); var j=S.job; if(!j||!(i>=0)) return;
-  var l=catOrderLine(i,1,batch); j.lines.push(l);
+  var j=S.job; if(!j) return;
+  var r=(typeof i==='string'&&i.indexOf(':')>0)?(catLookup(i)||await catLookupAsync(i)):catRec(i); if(!r) return;
+  var l=catOrderLineRec(r,1,batch); j.lines.push(l);
   logIt(j,'Added from the catalogue \u2014 not in stock, to order',l.partNo+' '+l.desc+(l.unit?' at '+money(l.unit)+' each':''));
   await saveJob(j); rerender(); toast('Added \u2014 not in stock, to order','good');
   var inp=document.querySelector('.sheet [name="psearch"]'); if(inp){ inp.value=''; inp.focus(); paintPartResults(); }
@@ -19511,22 +19556,515 @@ var CAT_ORDER_SUBS=['Oil Filter','Air Filter','Fuel Filter','Spark Plug','Brake 
 function catIntakeList(tj,job){
   if(!tj.make||!tj.model) return [];
   var sub=catGuess(titleCase(job)); if(!sub||CAT_ORDER_SUBS.indexOf(sub)<0) return [];
+  if(catCloud()) return catIntakeCloud(tj,sub);
   var out=[];
   for(var i=0;i<catN();i++){
     var c=catCat(i); if(c[1]!==sub) continue;
     if(!catFitsBike(i,tj.make,tj.model)||catInStore(i)) continue;
     out.push(i);
   }
-  return out.sort(function(a,b){ return catNls(a)-catNls(b)||catTitle(a).localeCompare(catTitle(b)); }).slice(0,12);
+  return out.sort(function(a,b){ return catNls(a)-catNls(b)||catTitle(a).localeCompare(catTitle(b)); }).slice(0,12).map(catRec);
 }
 function catFitHtml(p){
-  var i=catByNo(p.no,p.brand); if(i<0) return '';
+  var z=zanaPartHtml(p), i=(p.from==='zana')?-1:catByNo(p.no,p.brand);
+  if(i<0) return z+((catCloud()&&p.no&&!isLabour(p))?catFitCloud(p):'');
   return '<div class="sub"><div class="eyebrow">In the parts catalogue \u2014 fits '+catBikeIds(i).length+' bike'+(catBikeIds(i).length===1?'':'s')+'</div>'+
     '<div class="chips" style="margin-top:8px">'+catBikes(i).map(function(b){
       return '<span class="chip">'+esc(b[1])+(b[2]?' \u00B7 '+esc(b[2]):'')+'</span>'; }).join('')+'</div>'+
     '<div class="small muted" style="margin-top:6px">'+esc(catSource(i))+(catMrp(i)?' \u00B7 MRP '+money(catMrp(i)):'')+
     ' \u00B7 <a href="#" data-act="catOpen" data-ci="'+i+'">details</a></div></div>';
 }
+/* =====================================================================
+   v7 — THE FULL CATALOGUE, FROM THE SERVER
+   111,693 genuine parts (11 brands) and 1,266 Zana accessories live in
+   Supabase tables (catalogue_parts / catalogue_fitment / zana_products /
+   zana_fitment); the page asks the server for one page at a time. When
+   the server is off or the tables are not loaded, the v6 catalogue built
+   into the app (RE + Bajaj) is used, with a note.
+   Every place that used a catalogue index (detail, Add to the Store, the
+   job card picker, intake offers, purchase lookup, the Store product page)
+   now works on a record, from either source.
+   ===================================================================== */
+/* the catalogue's filter lists (brands, bikes, categories): from the database (ref_data 'catalogue_meta') */
+var CATMETA={built:'',parts:0,fitment:0,brands:{},brandFull:{},bikes:{},zana:{products:0,codes:0,bikes:{},cats:[]},cats:[],colour:0,priced:0};
+var CATR={}, CATR_NO={}, CAT_STATE={state:'', at:0};
+var CAT_BRAND_FULL={RE:'Royal Enfield', Hero:'Hero MotoCorp'};
+function catBrandName(b){ return CAT_BRAND_FULL[b]||(CATALOG.brandFull&&CATALOG.brandFull[b])||b; }
+/* the Store's own brand name for a record: the brand list's spelling when it has one */
+function catPartBrand(r){ return brandFind(r.brandFull)||brandFind(r.brand)||r.brandFull; }
+/* the server catalogue is used when the server is on and its tables answer */
+function catCloud(){ return Cloud.on()&&!!Cloud.session&&CAT_STATE.state!=='missing'&&CAT_STATE.state!=='denied'; }
+function catTitleOf(desc){ return titleCase(String(desc||'').replace(/^[\s*#.\-]+/,'').replace(/(\s+\d+){1,3}(\s+(S|NOS|NO|PCS))?\s*$/i,''))
+  .replace(/\b(\d+)(St|Nd|Rd|Th)\b/g,function(_,n,s){ return n+s.toLowerCase(); }); }
+function catRupees(v){ var n=parseFloat(v); return (n>0)?Math.round(n*100):0; }
+function catRemember(r){ CATR[r.ref]=r; if(r.kind==='part'){ CATR_NO[pkey(r.no)]=r; r.alts.forEach(function(a){ var k=pkey(a); if(k&&!CATR_NO[k]) CATR_NO[k]=r; }); } return r; }
+/* one record, whichever source it came from */
+function catRec(i){
+  i=parseInt(i,10); if(!(i>=0&&i<catN())) return null;
+  var c=catCat(i);
+  return {kind:'part', src:'local', i:i, ref:catRef(i), brand:catBrand(i), brandFull:catBrandFull(i), no:catNo(i), alts:catAlts(i),
+    name:catName(i), title:catTitle(i), desc:catDesc(i), grp:c[0], sub:c[1], mrp:catMrp(i), note:'', nls:catNls(i), uom:catUom(i),
+    colour:'', isColour:false, nbikes:catBikeIds(i).length, models:catModels(i), source:catSource(i), priceDate:catMrp(i)?'23 Nov 2026':'',
+    bikes:catBikes(i).map(function(b){ return {make:b[0], model:b[1], version:b[2]||'', engine:b[3]||'', inList:!!b[5]}; })};
+}
+function catFromRow(r){
+  return catRemember({kind:'part', src:'cloud', ref:r.brand+':'+r.part_number, brand:r.brand, brandFull:catBrandName(r.brand),
+    no:r.part_number, alts:String(r.alt_part_numbers||'').split(/[;|]/).map(function(x){ return x.trim(); }).filter(Boolean),
+    name:r.name||'', title:catTitleOf(r.original_description)||r.name||'', desc:r.original_description||'',
+    grp:r.category||'Unmapped', sub:r.sub_category||'', mrp:catRupees(r.mrp_incl_gst), note:r.price_note||'',
+    nls:/^(nls|discontinued)$/i.test(String(r.status||'')), uom:r.uom||'piece', colour:r.colour||'', isColour:!!r.is_colour,
+    nbikes:parseInt(r.bikes_count,10)||0, models:String(r.models||'').split('; ').filter(Boolean),
+    source:r.price_source||'', priceDate:r.price_date||'', bikes:null});
+}
+function zanaFromRow(r){
+  return catRemember({kind:'zana', src:'cloud', ref:'ZANA:'+r.code_clean+'|'+(r.bike||''), brand:'Zana', brandFull:'Zana',
+    no:r.code_clean, alts:[], name:'Zana '+String(r.name||'').trim()+(r.bike?' — '+r.bike:''), title:String(r.name||'').trim(),
+    desc:r.short_description||'', grp:r.category||'Accessories', sub:r.sub_category||'', mrp:catRupees(r.price_mrp_incl_gst),
+    note:'', nls:r.is_active===false, uom:'piece', bike:r.bike||'', fitsText:r.fits||'', img:r.image_url||'',
+    images:String(r.images||'').split('|').map(function(x){ return x.trim(); }).filter(Boolean), url:r.product_url||'',
+    stock:(r.supplier_stock===null||r.supplier_stock===undefined||r.supplier_stock==='')?null:parseInt(r.supplier_stock,10),
+    specific:!!r.is_bike_specific, merch:!!r.is_merch, source:'Zana (zanamotorcycles.com)', models:[], nbikes:0, bikes:null});
+}
+/* a reference ('RE:KLP00006/A', 'ZANA:ZI-8204|Bear 650') to its record, if known */
+function catLookup(ref){
+  if(!ref) return null;
+  if(CATR[ref]) return CATR[ref];
+  var i=catByRef(ref); return i>=0?catRec(i):null;
+}
+async function catLookupAsync(ref){
+  var r=catLookup(ref); if(r||!catCloud()) return r;
+  try{
+    if(String(ref).indexOf('ZANA:')===0){
+      var m=String(ref).slice(5).split('|');
+      var z=await catApi('/rest/v1/zana_products?select='+ZANA_COLS+'&code_clean=eq.'+encodeURIComponent(m[0])+'&bike=eq.'+encodeURIComponent(m[1]||'')+'&limit=1');
+      return z.rows[0]?zanaFromRow(z.rows[0]):null;
+    }
+    var k=String(ref).match(/^([^:]+):(.+)$/); if(!k) return null;
+    var p=await catApi('/rest/v1/catalogue_parts?select='+CAT_COLS+'&brand=eq.'+encodeURIComponent(k[1])+'&part_number=eq.'+encodeURIComponent(k[2])+'&limit=1');
+    return p.rows[0]?catFromRow(p.rows[0]):null;
+  }catch(e){ return null; }
+}
+var CAT_COLS='brand,part_number,alt_part_numbers,name,category,sub_category,fits,models,bikes_count,uom,mrp_incl_gst,price_source,price_date,price_note,status,is_colour,colour,original_description';
+var ZANA_COLS='code_clean,bike,name,category,sub_category,short_description,price_mrp_incl_gst,supplier_stock,image_url,images,product_url,is_bike_specific,is_merch,is_active,fits';
+/* one server read: rows and the total count. A missing table or a refusal
+   turns the server catalogue off for this session (the built-in one shows). */
+async function catApi(path){
+  var r=await Cloud.raw(path,{headers:{Prefer:'count=exact'}});
+  if(!r.ok){
+    var tx=await r.text().catch(function(){ return ''; });
+    if(r.status===404||/PGRST205|42P01|does not exist|Could not find the table/i.test(tx)){ CAT_STATE={state:'missing',at:Date.now()}; }
+    else if(r.status===401||r.status===403||/permission denied|row-level security/i.test(tx)){ CAT_STATE={state:'denied',at:Date.now()}; }
+    var e=new Error('Server said '+r.status+': '+tx.slice(0,140)); e.status=r.status; throw e;
+  }
+  var rows=await r.json(), cr=r.headers.get('content-range')||'', m=cr.match(/\/(\d+)\s*$/);
+  if(CAT_STATE.state!=='ok') CAT_STATE={state:'ok',at:Date.now()};
+  return {rows:rows||[], total:m?parseInt(m[1],10):(rows||[]).length};
+}
+/* words for a server search: letters, digits and a few joiners only */
+function catWords(q){
+  return String(q||'').toLowerCase().replace(/[^a-z0-9\-\/.& ]+/g,' ').split(/\s+/).map(function(w){ return w.replace(/^[\-\/.]+|[\-\/.]+$/g,''); }).filter(function(w){ return w.length>=1; }).slice(0,6);
+}
+function catSearchFilter(words){
+  if(!words.length) return '';
+  return '&and=('+words.map(function(w){ return 'search_text.ilike.*'+encodeURIComponent(w)+'*'; }).join(',')+')';
+}
+function catEq(col,v){ return '&'+col+'=eq.'+encodeURIComponent(v); }
+/* the server query for the page's filters (spares or Zana) */
+function catPath(F,offset,limit){
+  var w=catWords(F.q), path;
+  if(F.tab==='zana'){
+    var zf=(F.make||F.model)?',zana_fitment!inner(make,model)':'';
+    path='/rest/v1/zana_products?select='+ZANA_COLS+zf+catSearchFilter(w)+
+      (F.make?catEq('zana_fitment.make',F.make):'')+(F.model?catEq('zana_fitment.model',F.model):'')+
+      (F.grp?catEq('category',F.grp):'')+(F.sub?catEq('sub_category',F.sub):'')+
+      (F.priced==='yes'?'&price_mrp_incl_gst=gt.0':'')+
+      '&order='+(F.sort==='price'?'price_mrp_incl_gst.desc.nullslast,':'')+'name.asc,code_clean.asc';
+  } else {
+    var ff=(F.make||F.model||F.ver)?',catalogue_fitment!inner(make,model,version)':'';
+    path='/rest/v1/catalogue_parts?select='+CAT_COLS+ff+catSearchFilter(w)+
+      (F.brand?catEq('brand',F.brand):'')+
+      (F.make?catEq('catalogue_fitment.make',F.make):'')+(F.model?catEq('catalogue_fitment.model',F.model):'')+
+      (F.ver?catEq('catalogue_fitment.version',F.ver):'')+
+      (F.grp?catEq('category',F.grp):'')+(F.sub?catEq('sub_category',F.sub):'')+
+      (F.colour==='yes'?'&is_colour=eq.true':F.colour==='no'?'&is_colour=eq.false':'')+
+      (F.priced==='yes'?'&price_available=eq.true':'')+
+      '&order='+(F.sort==='bikes'?'bikes_count.desc,':F.sort==='price'?'mrp_incl_gst.desc.nullslast,':'')+'name.asc,part_number.asc';
+  }
+  return path+'&offset='+(offset||0)+'&limit='+(limit||60);
+}
+/* a part number typed: exact and starting-with hits first */
+function catPnPath(q,F){
+  var k=String(q||'').trim().toUpperCase().replace(/[^A-Z0-9\-\/.]/g,'');
+  if(k.length<3||!/\d/.test(k)||/\s/.test(String(q).trim())) return '';
+  var e=encodeURIComponent(k);
+  return '/rest/v1/catalogue_parts?select='+CAT_COLS+'&or=(part_number.ilike.'+e+'*,alt_part_numbers.ilike.*'+e+'*)'+
+    (F&&F.brand?catEq('brand',F.brand):'')+'&order=part_number.asc&limit=20';
+}
+function catKey(F){ return JSON.stringify([F.tab||'spares',F.q.trim().toLowerCase(),F.brand,F.make,F.model,F.ver,F.grp,F.sub,F.colour||'',F.priced||'',F.sort]); }
+var CATQ={key:'', rows:[], total:0, loading:false, err:'', more:false, timer:null, seq:0};
+function catLoad(more){
+  var F=catF(), key=catKey(F), seq=++CATQ.seq;
+  if(!more){ CATQ.key=key; CATQ.rows=[]; CATQ.total=0; CATQ.err=''; }
+  CATQ.loading=true; CATQ.more=!!more;
+  var off=more?CATQ.rows.length:0;
+  (async function(){
+    try{
+      var res=await catApi(catPath(F,off,60)), rows=res.rows.map(F.tab==='zana'?zanaFromRow:catFromRow);
+      if(!more&&F.tab!=='zana'){
+        var pp=catPnPath(F.q,F);
+        if(pp){ var top=(await catApi(pp)).rows.map(catFromRow), seen={};
+          top.forEach(function(r){ seen[r.ref]=1; });
+          rows=top.concat(rows.filter(function(r){ return !seen[r.ref]; }));
+          if(res.total<top.length) res.total=top.length; }
+      }
+      if(seq!==CATQ.seq) return;
+      CATQ.rows=more?CATQ.rows.concat(rows):rows; CATQ.total=res.total; CATQ.loading=false;
+    }catch(e){
+      if(seq!==CATQ.seq) return;
+      CATQ.loading=false; CATQ.err=(CAT_STATE.state==='missing'||CAT_STATE.state==='denied')?'':String(e.message||e);
+    }
+    if(S.view&&S.view.name==='catalogue'){
+      var a=document.activeElement, id=a&&a.id==='catq'?'catq':'';
+      if(id) searchRedraw(id); else rerender();
+    }
+  })();
+}
+function catKick(){
+  var F=catF(), key=catKey(F);
+  if(CATQ.key===key) return;
+  clearTimeout(CATQ.timer); CATQ.key=key; CATQ.loading=true; CATQ.rows=[]; CATQ.total=0;
+  CATQ.timer=setTimeout(function(){ if(catKey(catF())===key) catLoad(false); }, F.q?320:0);
+}
+/* the bikes a record fits: built in, or asked for when first needed */
+async function catBikesOf(r){
+  if(!r) return [];
+  if(r.bikes) return r.bikes;
+  if(r.kind==='zana'){
+    var z=await catApi('/rest/v1/zana_fitment?select=make,model,version,matched,year_from,year_to&code_clean=eq.'+encodeURIComponent(r.no)+
+      '&bike=eq.'+encodeURIComponent(r.bike||'')+'&order=make.asc,model.asc&limit=200');
+    r.bikes=z.rows.map(function(b){ return {make:b.make, model:b.model, version:b.version||'', engine:'', inList:!!b.matched}; });
+  } else {
+    var f=await catApi('/rest/v1/catalogue_fitment?select=make,model,version,engine_family,position,qty_per_bike&brand=eq.'+encodeURIComponent(r.brand)+
+      '&part_number=eq.'+encodeURIComponent(r.no)+'&order=make.asc,model.asc,version.asc&limit=1000');
+    r.bikes=f.rows.map(function(b){ return {make:b.make, model:b.model, version:b.version||'', engine:b.engine_family||'', position:b.position||'', qty:b.qty_per_bike||'', inList:true}; });
+  }
+  var ms=[]; r.bikes.forEach(function(b){ if(ms.indexOf(b.model)<0) ms.push(b.model); });
+  if(!r.models.length) r.models=ms;
+  r.nbikes=r.nbikes||ms.length;
+  return r.bikes;
+}
+/* fitment keys the Store understands, from a record's bikes */
+function catRecFitKeys(r){
+  var out=[];
+  (r&&r.bikes||[]).forEach(function(b){
+    if(!b.inList||!b.make||!b.model) return;
+    var k=(b.version&&genOf(b.make,b.model,b.version))?genKey(b.make,b.model,b.version):fitKey(b.make,b.model);
+    if(out.indexOf(k)<0) out.push(k);
+  });
+  return out;
+}
+function catRecInStore(r){
+  if(!r) return null;
+  var p=partByNo(r.no); if(p) return p;
+  for(var k=0;k<r.alts.length;k++){ p=partByNo(r.alts[k]); if(p) return p; }
+  return null;
+}
+function catRecCat(r){ return r.grp==='Unmapped'||!r.grp?'<span style="color:var(--amber);font-weight:700">Not sorted yet</span>':esc(r.grp)+(r.sub?' › '+esc(r.sub):''); }
+function catRecModelsShort(r){
+  var m=r.models||[]; if(r.kind==='zana') return r.fitsText?r.fitsText.split('; ').map(function(x){ return x.split(' · ').pop(); }).join(' / '):(r.bike||(r.specific?'':'Universal — fits any bike'));
+  return m.length<=3?m.join(' / '):m.slice(0,3).join(' / ')+' +'+(m.length-3)+' more';
+}
+function catBrandTag(b){
+  var c={RE:'t-blue',Bajaj:'t-amber',Hero:'t-red',Honda:'t-red',Yamaha:'t-blue',TVS:'t-blue',KTM:'t-amber',Zana:'t-green'}[b]||'t-grey';
+  return '<span class="tag '+c+'" style="font-size:10px;padding:1px 6px;margin-right:6px">'+esc(b)+'</span>';
+}
+/* ---------------------------------------------------------------- the page */
+function catSourceNote(){
+  if(catCloud()) return '';
+  var why=CAT_STATE.state==='missing'?'The catalogue tables are not on the server yet (setup: catalogue_setup.sql).'
+    :CAT_STATE.state==='denied'?'The server did not allow the catalogue for this login.'
+    :!Cloud.on()?'This copy runs without the server.':'Not signed in to the server.';
+  return '<div class="banner info small" style="margin:0 0 10px"><b>Full catalogue needs the server.</b> '+esc(why)+
+    (catN()?' Showing the copy kept on this phone: Royal Enfield and Bajaj only, '+catN().toLocaleString('en-IN')+' parts.':' No copy on this phone yet.')+' Zana accessories need the server.</div>';
+}
+function catTabs(F){
+  return '<div class="seg cattabs" style="margin:0 0 10px">'+[['spares','Spares'],['zana','Zana accessories']].map(function(t){
+    return '<button type="button" data-act="catTab" data-v="'+t[0]+'" aria-pressed="'+((F.tab||'spares')===t[0])+'">'+t[1]+'</button>'; }).join('')+'</div>';
+}
+function catMetaMakes(tab){ var b=tab==='zana'?CATMETA.zana.bikes:CATMETA.bikes; return Object.keys(b).sort(); }
+function catMetaModels(tab,make){ var b=tab==='zana'?CATMETA.zana.bikes:CATMETA.bikes, m=b[make]; if(!m) return []; return (Array.isArray(m)?m.slice():Object.keys(m)).sort(function(a,b){ return a.localeCompare(b,undefined,{numeric:true}); }); }
+function catMetaVers(make,model){ var m=CATMETA.bikes[make]; return (m&&m[model])||[]; }
+function catMetaGroups(tab){ var o=[]; (tab==='zana'?CATMETA.zana.cats:CATMETA.cats).forEach(function(c){ if(o.indexOf(c[0])<0) o.push(c[0]); });
+  return o.sort(function(a,b){ return a==='Unmapped'?1:b==='Unmapped'?-1:a.localeCompare(b); }); }
+function catMetaSubs(tab,g){ var o=[]; (tab==='zana'?CATMETA.zana.cats:CATMETA.cats).forEach(function(c){ if(c[0]===g&&c[1]&&o.indexOf(c[1])<0) o.push(c[1]); }); return o.sort(); }
+function viewCatalogueCloud(){
+  var F=catF(); F.tab=F.tab||'spares'; catKick();
+  var zana=F.tab==='zana', brands=Object.keys(CATMETA.brands).sort(function(a,b){ return CATMETA.brands[b]-CATMETA.brands[a]; });
+  var h=pageHead('Store','Parts catalogue',
+    zana?CATMETA.zana.products.toLocaleString('en-IN')+' Zana accessories · photo, MRP and Zana’s own stock. Not our stock — add one to the Store to sell it.'
+        :CATMETA.parts.toLocaleString('en-IN')+' genuine parts · '+brands.length+' brands · '+Object.keys(CATMETA.bikes).reduce(function(n,m){ return n+Object.keys(CATMETA.bikes[m]).length; },0)+
+         ' bikes. Full catalogue (server). Not stock — a part joins the Store when you add it or buy it.');
+  h+='<div class="card"><div class="card-b">'+catTabs(F)+
+    '<div class="field" style="margin:0 0 10px"><input type="text" inputmode="search" id="catq" value="'+esc(F.q)+'" placeholder="'+(zana?'Product, code or bike — e.g. crash guard, ZI-8204, Himalayan 450':'Part number, name or bike — e.g. KLP00006, oil filter, NS200 brake pad')+
+    '" autocomplete="off" enterkeyhint="search" style="font-size:17px;min-height:54px"></div>'+
+    (zana?'':'<div class="chips catbrands" style="margin:0 0 10px">'+[['','All']].concat(brands.map(function(b){ return [b,b]; })).map(function(b){
+      return '<button class="chip filter" data-act="catBrand" data-v="'+esc(b[0])+'" aria-pressed="'+(String(F.brand)===b[0])+'">'+esc(b[1])+'</button>'; }).join('')+'</div>')+
+    '<div class="catfil">'+
+    '<select data-catf="make" aria-label="Make">'+catOpts(catMetaMakes(F.tab),F.make,'Any make')+'</select>'+
+    (F.make?'<select data-catf="model" aria-label="Model">'+catOpts(catMetaModels(F.tab,F.make),F.model,'Any model')+'</select>':'')+
+    (!zana&&F.model&&catMetaVers(F.make,F.model).length?'<select data-catf="ver" aria-label="Version">'+catOpts(catMetaVers(F.make,F.model),F.ver,'Any version')+'</select>':'')+
+    '<select data-catf="grp" aria-label="Category">'+catOpts(catMetaGroups(F.tab),F.grp,'Any category')+'</select>'+
+    (F.grp&&catMetaSubs(F.tab,F.grp).length?'<select data-catf="sub" aria-label="Sub-category">'+catOpts(catMetaSubs(F.tab,F.grp),F.sub,'Any sub-category')+'</select>':'')+
+    (zana?'':'<select data-catf="colour" aria-label="Colour"><option value="">Painted or not</option><option value="no"'+(F.colour==='no'?' selected':'')+'>Not colour-specific</option><option value="yes"'+(F.colour==='yes'?' selected':'')+'>Colour / painted parts</option></select>')+
+    '<select data-catf="priced" aria-label="Price"><option value="">With or without price</option><option value="yes"'+(F.priced==='yes'?' selected':'')+'>Has a price</option></select>'+
+    '<select data-catf="sort" aria-label="Sort"><option value="az"'+(F.sort==='az'?' selected':'')+'>A–Z</option>'+(zana?'':'<option value="bikes"'+(F.sort==='bikes'?' selected':'')+'>Fits most bikes</option>')+'<option value="price"'+(F.sort==='price'?' selected':'')+'>Highest price</option></select>'+
+    '</div></div></div>';
+  if(CATQ.err) return h+'<div class="banner bad small" style="margin:10px 0"><b>The catalogue could not be read.</b> '+esc(CATQ.err)+
+    ' <button class="btn sm" data-act="catRetry" style="margin-left:8px">Try again</button></div>';
+  if(CATQ.loading&&!CATQ.rows.length) return h+'<p class="small muted catcount" style="margin:10px 2px">Searching the catalogue…</p>';
+  var res=CATQ.rows;
+  h+='<p class="small muted catcount" style="margin:10px 2px">'+CATQ.total.toLocaleString('en-IN')+' match'+(CATQ.total===1?'':'es')+
+    (CATQ.total>res.length?' · showing '+res.length.toLocaleString('en-IN'):'')+(CATQ.loading?' · loading…':'')+'</p>';
+  if(!res.length) return h+'<div class="empty"><b>Nothing in the catalogue matches.</b>Try fewer words, or clear a filter.</div>';
+  h+='<div class="card"><div class="card-b tight" style="overflow-x:auto"><table class="lines cattab'+(zana?' zanatab':'')+'"><thead><tr>'+
+    (zana?'<th></th><th>Code</th><th>Product</th><th class="num">Zana stock</th><th class="num">MRP</th>':'<th>Part no.</th><th>Part</th><th>Category</th><th class="num">Fits</th><th class="num">MRP</th>')+
+    '</tr></thead><tbody>'+res.map(catRowHtml).join('')+'</tbody></table></div></div>';
+  if(CATQ.total>res.length) h+='<div style="text-align:center;margin:12px 0"><button class="btn" data-act="catMore"'+(CATQ.loading?' disabled':'')+'>Show more</button></div>';
+  return h;
+}
+function catRowHtml(r){
+  var st=catRecInStore(r);
+  var inStore=st?'<div class="small" style="color:var(--green);font-weight:800">In the Store · '+stockOf(st.id)+' on the shelf</div>':'';
+  if(r.kind==='zana') return '<tr data-act="catOpenR" data-ref="'+esc(r.ref)+'" style="cursor:pointer">'+
+    '<td class="catimg">'+(r.img?'<img src="'+esc(r.img)+'" alt="" loading="lazy" width="48" height="48">':'')+'</td>'+
+    '<td class="mono" style="white-space:nowrap"><b>'+esc(r.no)+'</b></td>'+
+    '<td><div style="font-weight:700">'+catBrandTag('Zana')+esc(r.title)+'</div><div class="small muted">'+esc(catRecModelsShort(r))+'</div>'+inStore+'</td>'+
+    '<td class="num">'+(r.stock===null?'<span class="muted">—</span>':esc(String(r.stock)))+'</td>'+
+    '<td class="num">'+(r.mrp?'<b class="money">'+money(r.mrp)+'</b>':'<span class="muted">—</span>')+'</td></tr>';
+  return '<tr data-act="catOpenR" data-ref="'+esc(r.ref)+'" style="cursor:pointer">'+
+    '<td class="mono" style="white-space:nowrap"><b>'+esc(r.no)+'</b>'+(r.alts.length?'<div class="small muted">also '+esc(r.alts.join(', '))+'</div>':'')+'</td>'+
+    '<td><div style="font-weight:700">'+catBrandTag(r.brand)+esc(r.title)+(r.colour?' <span class="small muted">· '+esc(r.colour)+'</span>':'')+'</div>'+
+      '<div class="small muted">'+esc(catRecModelsShort(r))+'</div>'+inStore+
+      (r.nls?'<div class="small" style="color:var(--red);font-weight:700">Not supplied any more (NLS)</div>':'')+'</td>'+
+    '<td class="small">'+catRecCat(r)+'</td>'+
+    '<td class="num">'+(r.nbikes||'')+'</td>'+
+    '<td class="num">'+(r.mrp?'<b class="money">'+money(r.mrp)+'</b>'+(r.note?'<div class="small" style="color:var(--amber)">check</div>':''):'<span class="muted">—</span>')+'</td></tr>';
+}
+/* ---------------------------------------------------------------- detail */
+function catBikesTable(r){
+  if(!r.bikes) return '<p class="small muted">Loading the bikes it fits…</p>';
+  if(!r.bikes.length) return '<p class="small muted">'+(r.kind==='zana'?'Universal — not made for one bike.':'No bikes listed.')+'</p>';
+  return '<div style="max-height:260px;overflow:auto"><table class="lines"><thead><tr><th>Make</th><th>Model</th><th>Version</th><th>'+(r.kind==='zana'?'':'Engine')+'</th></tr></thead><tbody>'+
+    r.bikes.map(function(b){
+      return '<tr><td>'+esc(b.make||'—')+'</td><td><b>'+esc(b.model)+'</b>'+(b.inList?'':' <span class="tag t-amber" style="font-size:9px;padding:1px 4px">not in bike list</span>')+'</td>'+
+        '<td>'+esc(b.version||'—')+'</td><td class="small">'+esc(b.engine||b.position||'')+'</td></tr>'; }).join('')+'</tbody></table></div>';
+}
+function catDetailHtml(r){
+  var st=catRecInStore(r), n=r.bikes?r.bikes.length:r.nbikes;
+  var price=r.mrp?'<b class="money">'+money(r.mrp)+'</b> <span class="small muted">'+esc([r.source,r.priceDate].filter(Boolean).join(' · '))+'</span>'+
+      (r.note?'<div class="small" style="color:var(--amber);font-weight:700">'+esc(r.note)+'</div>':''):'<span class="muted">No price yet</span>';
+  var h='<h2 style="font-size:19px;line-height:1.3">'+esc(r.name)+'</h2>'+
+    '<div class="mono" style="margin:6px 0 10px"><b>'+esc(r.no)+'</b>'+(r.alts.length?' <span class="small muted">also '+esc(r.alts.join(', '))+'</span>':'')+'</div>';
+  if(r.kind==='zana'){
+    h+=(r.img?'<div class="catphoto"><img src="'+esc(r.img)+'" alt="'+esc(r.title)+'"></div>':'')+
+      kv('Brand','Zana')+kv('Category',catRecCat(r))+kv('MRP (with GST)',price)+
+      kv('Zana’s stock',r.stock===null?'<span class="muted">Not given</span>':'<b>'+esc(String(r.stock))+'</b> <span class="small muted">at the supplier, not ours</span>')+
+      kv('Made for',esc(r.bike||(r.specific?'—':'Any bike (universal)')))+
+      (r.desc?kv('About','<span class="small">'+esc(r.desc)+'</span>'):'')+
+      (r.url?kv('On Zana’s site','<a href="'+esc(r.url)+'" target="_blank" rel="noopener">Open the product page</a>'):'');
+  } else {
+    h+=kv('Brand',esc(r.brandFull))+kv('Category',catRecCat(r))+kv('MRP (with GST)',price)+
+      kv('Status',r.nls?'<span style="color:var(--red);font-weight:700">Not supplied any more (NLS)</span>':'Active')+
+      (r.colour||r.isColour?kv('Colour',esc(r.colour||'Painted / colour-specific')):'')+
+      kv('Unit',esc(r.uom))+kv('As the maker writes it','<span class="small">'+esc(r.desc)+'</span>')+
+      (r.src==='local'?kv('Source',esc(r.source)):'');
+  }
+  if(st) h+=kv('In the Store','<b>'+esc(st.name)+'</b> · '+stockOf(st.id)+' '+esc(st.unit||'')+' on the shelf');
+  h+='<div class="eyebrow" style="margin:14px 0 6px">'+((r.kind==='zana'&&!r.specific&&!n)?'Fits any bike':'Fits '+(n||0)+' bike'+(n===1?'':'s'))+'</div><div id="catbikes">'+catBikesTable(r)+'</div>'+
+    '<div class="btn-row" style="margin-top:14px"><button class="btn" data-act="closeModal">Close</button>'+
+    (st?'<button class="btn primary" data-act="catGoPart" data-id="'+st.id+'">Open in the Store</button>'
+       :(can('cat.add')?'<button class="btn primary" data-act="catAddStore" data-ref="'+esc(r.ref)+'">Add to the Store</button>':''))+'</div>';
+  return h;
+}
+function catShow(r){
+  if(!r) return;
+  openModal(catDetailHtml(r));
+  labelTables(document.querySelector('.sheet'));
+  if(!r.bikes) catBikesOf(r).then(function(){
+    var box=document.getElementById('catbikes'); if(!box) return;
+    box.innerHTML=catBikesTable(r); labelTables(box);
+    var ey=box.previousElementSibling; if(ey) ey.textContent=(r.kind==='zana'&&!r.specific&&!r.bikes.length)?'Fits any bike':'Fits '+r.bikes.length+' bike'+(r.bikes.length===1?'':'s');
+  }).catch(function(e){ var box=document.getElementById('catbikes'); if(box) box.innerHTML='<p class="small" style="color:var(--red)">Could not load the bikes: '+esc(e.message||e)+'</p>'; });
+}
+async function catOpenR(ref){ var r=catLookup(ref)||await catLookupAsync(ref); if(r) catShow(r); else toast('That part is not in the catalogue','bad'); }
+/* ---------------------------------------------------------------- into the Store */
+function catRecPart(r){
+  var cat=(r.sub&&r.grp!=='Unmapped'&&catIsSet(r.sub))?r.sub:'';
+  var p={id:uid('pt'), no:r.no, aliases:r.alts.slice(), name:r.name, category:cat, brand:catPartBrand(r), hsn:'', gst:gstDefault('part'),
+    unit:r.uom||'piece', buyUnit:r.uom||'piece', conv:1, mrp:r.mrp||0, sale:r.mrp||0, minQty:0, fits:catRecFitKeys(r), catRef:r.ref,
+    createdAt:Date.now(), updatedAt:Date.now(), createdBy:S.user?S.user.id:'', from:r.kind==='zana'?'zana':'catalogue'};
+  if(r.kind==='zana'){ p.supplier='Zana'; p.supplierStock=r.stock; p.supplierStockAt=Date.now(); p.photoUrl=r.img||''; p.productUrl=r.url||''; p.zanaBike=r.bike||''; }
+  return p;
+}
+async function catAddStore(x){
+  if(!can('cat.add')){ toast('Only Kunal, Jatin or Lakshay add parts from the catalogue','bad'); return; }
+  var r=(typeof x==='string'&&x.indexOf(':')>0)?(catLookup(x)||await catLookupAsync(x)):catRec(x);
+  if(!r){ toast('That part is not in the catalogue','bad'); return; }
+  try{ await catBikesOf(r); }catch(e){ toast('Could not read the bikes it fits — try again','bad'); return; }
+  var have=catRecInStore(r);
+  if(have){
+    /* the same Zana code made for another bike: one product, more bikes */
+    var add=catRecFitKeys(r).filter(function(k){ return (have.fits||[]).indexOf(k)<0; });
+    if(add.length&&r.kind==='zana'){ have.fits=(have.fits||[]).concat(add); have.updatedAt=Date.now();
+      if(r.stock!==null&&r.stock!==undefined){ have.supplierStock=r.stock; have.supplierStockAt=Date.now(); }
+      if(!await saveStore('parts')) return;
+      logAudit('Part','Bikes added from the catalogue',have.no+' '+have.name+' · '+add.length+' more bike'+(add.length===1?'':'s'),''); }
+    closeModal(); S.view={name:'part',id:have.id}; window.scrollTo(0,0); render(); toast(add.length&&r.kind==='zana'?'Already in the Store — its bikes were added':'Already in the Store','good'); return;
+  }
+  var p=catRecPart(r); PARTS.push(p);
+  if(!await saveStore('parts')){ PARTS.pop(); return; }
+  logAudit('Part','Added to the Store from the catalogue',p.no+' '+p.name+' · '+(p.category||'category not set')+' · '+p.brand+(r.kind==='zana'?' · Zana stock '+(r.stock===null?'not given':r.stock):''),'');
+  closeModal(); S.view={name:'part',id:p.id}; window.scrollTo(0,0); render(); toast('Added to the Store — 0 on the shelf until it is bought','good');
+}
+/* ---------------------------------------------------------------- job card picker */
+var CATPICK={key:'', html:'', timer:null};
+function catPickRow(r,batch){
+  return '<button class="partrow" data-act="catPickLine" data-ref="'+esc(r.ref)+'" data-batch="'+esc(batch)+'"><div style="flex:1;min-width:0">'+
+    '<div style="font-weight:800">'+esc(r.name)+'</div>'+
+    '<div class="small muted mono">'+esc(r.no)+' · '+esc(r.brandFull)+'</div>'+
+    '<div class="small" style="color:var(--amber);font-weight:800">Not in stock — order</div></div>'+
+    (r.mrp?'<div class="money">'+money(r.mrp)+'</div>':'')+'</button>';
+}
+function catPickHead(){ return '<div class="eyebrow" style="margin:12px 0 4px">From the catalogue — not in stock, to order</div>'; }
+function catPickerCloud(q,batch){
+  var j=S.job, fit=!!(S.fitOnly&&j&&j.make);
+  var key=JSON.stringify([String(q||'').trim().toLowerCase(),fit?j.make:'',fit?j.model:'',batch]);
+  if(CATPICK.key===key) return '<div id="catpick">'+CATPICK.html+'</div>';
+  clearTimeout(CATPICK.timer);
+  CATPICK.timer=setTimeout(async function(){
+    var F={tab:'spares',q:String(q||''),brand:'',make:fit?j.make:'',model:fit?j.model:'',ver:'',grp:'',sub:'',sort:'az'};
+    var html='';
+    try{
+      var rows=[], pp=catPnPath(F.q,F);
+      if(pp) rows=(await catApi(pp)).rows.map(catFromRow);
+      var more=(await catApi(catPath(F,0,12))).rows.map(catFromRow), seen={};
+      rows.forEach(function(r){ seen[r.ref]=1; }); rows=rows.concat(more.filter(function(r){ return !seen[r.ref]; }));
+      rows=rows.filter(function(r){ return !catRecInStore(r); }).slice(0,8);
+      html=rows.length?catPickHead()+rows.map(function(r){ return catPickRow(r,batch); }).join(''):'';
+    }catch(e){ html=''; }
+    CATPICK.key=key; CATPICK.html=html;
+    var box=document.getElementById('catpick'); if(box) box.innerHTML=html;
+  }, 280);
+  return '<div id="catpick"><div class="small muted" style="margin:10px 2px">Looking in the catalogue…</div></div>';
+}
+function catOrderLineRec(r,qty,batch,job){
+  return {id:uid('ln'), kind:'part', desc:r.name, qty:qty||1, unit:r.mrp||0, gst:gstDefault('part'), noGst:false,
+    hsn:'', partId:'', partNo:r.no, brand:catPartBrand(r), cat:(r.grp!=='Unmapped'?r.sub:''),
+    order:true, catRef:r.ref, fromList:true, batch:batch||'main', jobPick:job||undefined,
+    addedBy:S.user.id, addedAt:Date.now(), done:false};
+}
+/* ---------------------------------------------------------------- intake offers */
+var CATINTAKE={};
+function catIntakeCloud(tj,sub){
+  var key=pkey(tj.make)+'|'+pkey(tj.model)+'|'+sub, c=CATINTAKE[key];
+  if(c&&c.rows) return c.rows.filter(function(r){ return !catRecInStore(r); }).slice(0,12);
+  if(c&&c.loading) return [];
+  CATINTAKE[key]={loading:true};
+  (async function(){
+    var rows=[];
+    try{
+      var F={tab:'spares',q:'',brand:'',make:tj.make,model:tj.model,ver:'',grp:'',sub:sub,sort:'az'};
+      rows=(await catApi(catPath(F,0,40))).rows.map(catFromRow).sort(function(a,b){ return (a.nls-b.nls)||a.title.localeCompare(b.title); });
+    }catch(e){ rows=[]; }
+    CATINTAKE[key]={rows:rows};
+    if(rows.length&&document.getElementById('intakeform')) paintIntakePicks();
+  })();
+  return [];
+}
+/* ---------------------------------------------------------------- purchase entry */
+var CATPNO={v:'', timer:null};
+function catPnoCloud(v,box,already){
+  clearTimeout(CATPNO.timer); CATPNO.v=v;
+  CATPNO.timer=setTimeout(async function(){
+    var inp=document.getElementById('plno'); if(!inp||inp.value.trim()!==v) return;
+    var rows=[];
+    try{ var pp=catPnPath(v,{}); if(pp) rows=(await catApi(pp)).rows.map(catFromRow); }catch(e){ rows=[]; }
+    inp=document.getElementById('plno'); box=document.getElementById('pnores'); if(!inp||!box||inp.value.trim()!==v) return;
+    var exact=rows.filter(function(r){ return pkey(r.no)===pkey(v)||r.alts.some(function(a){ return pkey(a)===pkey(v); }); })[0];
+    if(exact&&!already){
+      box.innerHTML='<div class="banner info small" style="margin:8px 0 0"><b>'+esc(exact.name)+'</b> — in the parts catalogue'+
+        (exact.mrp?' · MRP '+money(exact.mrp):'')+
+        '<button class="btn sm" style="margin-left:10px;background:var(--surface)" data-act="catFill" data-ref="'+esc(exact.ref)+'">Fill it in</button></div>';
+      return;
+    }
+    var extra=rows.filter(function(r){ return !catRecInStore(r); }).slice(0,5).map(function(r){
+      return '<button class="partrow" data-act="catFill" data-ref="'+esc(r.ref)+'"><div style="flex:1">'+
+        '<div style="font-weight:800">'+esc(r.name)+'</div><div class="small muted mono">'+esc(r.no)+' · catalogue</div></div></button>'; }).join('');
+    if(!extra) return;
+    var list=box.querySelector('.presults');
+    if(list) list.insertAdjacentHTML('beforeend',extra);
+    else box.innerHTML='<div class="presults" style="max-height:190px">'+extra+'</div>';
+  }, 300);
+}
+async function catFillRec(ref){
+  var r=catLookup(ref)||await catLookupAsync(ref); if(!r) return;
+  var set=function(n,v){ var e=document.querySelector('.sheet [name="'+n+'"]'); if(e&&v!==undefined&&v!==null&&v!=='') e.value=v; };
+  set('pno',r.no); set('pname',r.name);
+  if(r.grp!=='Unmapped'&&catIsSet(r.sub)) set('pcat',r.sub);
+  var bs=document.querySelector('.sheet [name="pbrand"]'), bn=catPartBrand(r);
+  if(bs&&bs.tagName==='SELECT'&&![].some.call(bs.options,function(o){ return o.value===bn; })){ var o=document.createElement('option'); o.value=bn; o.textContent=bn; bs.insertBefore(o,bs.options[2]||null); }
+  set('pbrand',bn); set('pbuyunit',r.uom); set('punit',r.uom);
+  if(r.mrp){ set('pmrp',paiseToInput(r.mrp)); set('psale',paiseToInput(r.mrp)); }
+  var box=document.getElementById('pnores'); if(box) box.innerHTML='<div class="banner ok small" style="margin:8px 0 0">Filled from the catalogue — its fitment goes on when the bill is saved.</div>';
+  try{ paintPCalc(); }catch(e){}
+  try{ await catBikesOf(r); }catch(e){}
+}
+/* a bought part picks up fitment from a server record already looked at */
+function catEnrichRec(part){
+  var r=CATR_NO[pkey(part.no)]; if(!r||r.kind!=='part'||!r.bikes) return false;
+  if(!(part.fits||[]).length) part.fits=catRecFitKeys(r);
+  if(!part.brand) part.brand=catPartBrand(r);
+  if(!part.mrp) part.mrp=r.mrp;
+  if(!catIsSet(part.category)&&r.grp!=='Unmapped'&&catIsSet(r.sub)) part.category=r.sub;
+  if(!part.catRef) part.catRef=r.ref;
+  return true;
+}
+/* ---------------------------------------------------------------- Store product page */
+function catFitCloud(p){
+  var id='catfit_'+String(p.id).replace(/[^\w-]/g,'');
+  setTimeout(async function(){
+    var ref=p.catRef||'', r=null;
+    try{
+      if(ref) r=await catLookupAsync(ref);
+      if(!r&&p.no){ var pp=catPnPath(p.no,{}); if(pp){ var rows=(await catApi(pp)).rows.map(catFromRow);
+        r=rows.filter(function(x){ return pkey(x.no)===pkey(p.no); })[0]||null; } }
+      if(r) await catBikesOf(r);
+    }catch(e){ r=null; }
+    var box=document.getElementById(id); if(!box) return;
+    box.innerHTML=r?catFitInner(r):'';
+  },0);
+  return '<div id="'+id+'"></div>';
+}
+function catFitInner(r){
+  var b=r.bikes||[];
+  return '<div class="sub"><div class="eyebrow">In the '+(r.kind==='zana'?'Zana':'parts')+' catalogue — fits '+b.length+' bike'+(b.length===1?'':'s')+'</div>'+
+    (b.length?'<div class="chips" style="margin-top:8px">'+b.map(function(x){
+      return '<span class="chip">'+esc(x.model)+(x.version?' · '+esc(x.version):'')+'</span>'; }).join('')+'</div>':'')+
+    '<div class="small muted" style="margin-top:6px">'+esc(r.src==='local'?r.source:(r.source||r.brandFull))+(r.mrp?' · MRP '+money(r.mrp):'')+
+    ' · <a href="#" data-act="catOpenR" data-ref="'+esc(r.ref)+'">details</a></div></div>';
+}
+/* a Zana product in the Store: its photo, Zana's stock and the link */
+function zanaPartHtml(p){
+  if(p.from!=='zana'&&!(p.catRef&&String(p.catRef).indexOf('ZANA:')===0)) return '';
+  return '<div class="sub"><div class="eyebrow">Supplier stock — Zana</div>'+
+    '<div style="display:flex;gap:12px;align-items:center;margin-top:8px">'+
+    (p.photoUrl?'<img src="'+esc(p.photoUrl)+'" alt="" width="64" height="64" style="border-radius:8px;object-fit:cover;background:var(--rule2)">':'')+
+    '<div><div><b>'+(p.supplierStock===null||p.supplierStock===undefined?'Not given':esc(String(p.supplierStock)))+'</b> at Zana'+
+    (p.supplierStockAt?' <span class="small muted">as of '+esc(new Date(p.supplierStockAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}))+'</span>':'')+'</div>'+
+    '<div class="small muted">Theirs, not ours — our shelf has '+stockOf(p.id)+'.'+
+    (p.productUrl?' <a href="'+esc(p.productUrl)+'" target="_blank" rel="noopener">Zana’s page</a>':'')+'</div></div></div></div>';
+}
+
 function openJobFromHash(){
   var m=String(location.hash||'').match(/^#job=([\w-]+)$/);
   if(!m||!S.user) return;
@@ -19907,12 +20445,15 @@ async function dispatch(a,arg,d,t){
     case 'nav': goNav(d.k); break;
     case 'navGo': goNav(d.k); break;
     case 'catOpen': catOpen(d.ci); break;
-    case 'catMore': catF().n+=100; rerender(); break;
+    case 'catOpenR': return catOpenR(d.ref);
+    case 'catMore': if(catCloud()){ catLoad(true); rerender(); } else { catF().n+=100; rerender(); } break;
     case 'catBrand': catF().brand=d.v; catF().n=60; rerender(); break;
-    case 'catAddStore': return catAddStore(d.ci);
+    case 'catTab': var cf=catF(); cf.tab=d.v; cf.make=''; cf.model=''; cf.ver=''; cf.grp=''; cf.sub=''; cf.n=60; if(cf.sort==='bikes'&&d.v==='zana') cf.sort='az'; rerender(); break;
+    case 'catRetry': CATQ.key=''; CAT_STATE={state:'',at:0}; rerender(); break;
+    case 'catAddStore': return catAddStore(d.ref||d.ci);
     case 'catGoPart': closeModal(); S.view={name:'part',id:d.id}; window.scrollTo(0,0); render(); break;
-    case 'catPickLine': return catPickLine(d.ci,d.batch);
-    case 'catFill': catFillInto(d.ci); break;
+    case 'catPickLine': return catPickLine(d.ref||d.ci,d.batch);
+    case 'catFill': return catFillInto(d.ref||d.ci);
     case 'printMode': setPrintMode(d.v); break;
     case 'mediaShot': mediaCapture(d.k); break;
     case 'camFlow': camFlow(); break;
