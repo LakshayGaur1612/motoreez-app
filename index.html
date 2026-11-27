@@ -1106,10 +1106,6 @@ img.logo{display:block; width:auto; max-width:100%; object-fit:contain}
 .dock-actions{max-width:1080px; margin:0 auto; display:flex; gap:10px; padding:11px 16px}
 .dock-actions + .dock-nav{border-top:1px solid var(--rule2)}
 .dock-nav{max-width:1080px; margin:0 auto; display:flex; align-items:center; gap:2px; padding:5px 10px 6px}
-/* v9: big screens use the width, up to 1600px; laptops and phones as before */
-@media (min-width:1700px){
-  .wrap, .topbar-in, .dock-actions, .dock-nav, .v2{max-width:1600px}
-}
 .navbtn{flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:3px; min-height:50px; padding:5px 2px; border:0; background:none; cursor:pointer; color:var(--steel);
   font-family:inherit; font-weight:600; font-size:11px; border-radius:var(--r-sm); position:relative;
@@ -1160,6 +1156,14 @@ img.logo{display:block; width:auto; max-width:100%; object-fit:contain}
   .page-head h1{font-size:29px}
 }
 @media(min-width:1400px){ .wrap,.topbar-in,.dock-actions{max-width:1320px} }
+/* v9: on a big screen the page content uses up to 1,600px beside the
+   sidebar; laptops and phones are as before */
+@media(min-width:1700px){
+  .wrap{max-width:calc(1600px + var(--sidebar) + 44px)}
+  .topbar-in{max-width:1600px}
+  .dock-actions{max-width:1644px}
+  .v2{max-width:1600px}
+}
 
 /* ---------- days on site ---------- */
 .dwell{display:inline-flex; align-items:center; gap:4px; font-family:var(--mono); font-size:11px; font-weight:650;
@@ -6067,6 +6071,8 @@ function pickOptions(j,job,sel,all){
   var c=jobProducts(j,job,all);
   /* v9: nothing on the shelf fits — offer the exact catalogue part, to order */
   var cl=(!all&&!c.length&&!TYRE_JOBS[job])?catIntakeList(j,job):[];
+  /* the catalogue part already chosen for this head stays in its list */
+  if(String(sel).indexOf('cat:')===0&&!cl.some(function(cr){ return 'cat:'+cr.ref===sel; })){ var cs=catLookup(String(sel).slice(4)); if(cs) cl=cl.concat([cs]); }
   var h='<option value="">\u2014 no part \u2014</option>'+c.map(function(x){
     var p=x.p;
     return '<option value="'+p.id+'"'+(p.id===sel?' selected':'')+'>'+(x.fit>0?'\u2713 fits \u00B7 ':(x.fit<0?'other bike \u00B7 ':''))+(x.g?'recommended grade \u00B7 ':'')+
